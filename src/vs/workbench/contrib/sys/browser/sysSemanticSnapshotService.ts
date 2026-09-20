@@ -6,6 +6,7 @@ class SysSemanticSnapshotService implements ISysSemanticSnapshotService {
 	readonly _serviceBrand: undefined;
 
 	getSnapshot(): Promise<SysProjectSnapshot> {
+		// Live contract wiring lands with the platform firewall. Keep the gap explicit.
 		return Promise.resolve(CINEMA_BOOKING_SNAPSHOT);
 	}
 }

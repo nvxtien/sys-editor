@@ -173,8 +173,10 @@ export class SysSemanticWorkbenchView extends ViewPane {
 
 		const summary = DOM.append(parent, this._section('Project'));
 		const summaryGrid = DOM.append(summary, $('div.sys-summary-grid'));
-		this._metric(summaryGrid, 'Governed intent', snapshot.governedIntent);
-		this._metric(summaryGrid, 'Recovered source meaning', snapshot.recoveredSourceMeaning);
+		this._metric(summaryGrid, 'Governed exactly', String(snapshot.semanticItems.filter(i => i.disposition === 'SUPPORTED_EXACT').length));
+		this._metric(summaryGrid, 'Unsupported', String(snapshot.semanticItems.filter(i => i.disposition === 'UNSUPPORTED').length));
+		this._metric(summaryGrid, 'Unresolved', String(snapshot.semanticItems.filter(i => i.disposition === 'UNRESOLVED').length));
+		this._metric(summaryGrid, 'Recovered source meaning', snapshot.recoveredMeaning.state);
 		this._metric(summaryGrid, 'Sync', snapshot.sync);
 
 		// Count unresolved and confirmed from intent items
@@ -185,16 +187,16 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		this._metric(summaryGrid, 'Confirmed human intent', String(confirmedCount));
 		this._metric(summaryGrid, 'Reviews requiring attention', String(snapshot.reviewsRequiringAttention));
 
-		const intent = DOM.append(parent, this._section('Intent'));
-		for (const operation of snapshot.operations) {
-			const operationBlock = DOM.append(intent, $('div.sys-operation'));
-			DOM.append(operationBlock, $('h3.sys-operation-title')).textContent = operation.name;
-			for (const rule of operation.rules) {
-				const ruleEl = DOM.append(operationBlock, $('div.sys-rule'));
-				DOM.append(ruleEl, $('span.sys-status.sys-status-known')).textContent = 'KNOWN';
-				DOM.append(ruleEl, $('span.sys-rule-description')).textContent = rule.description;
-			}
+		if (snapshot.integration !== 'READY') {
+			const gap = DOM.append(parent, this._section('Integration')); DOM.append(gap, $('p')).textContent = snapshot.integration;
 		}
+		const intent = DOM.append(parent, this._section('Governed Meaning'));
+		this._renderSemanticItems(intent, 'SUPPORTED_EXACT', snapshot.semanticItems);
+		this._renderSemanticItems(DOM.append(parent, this._section('Unsupported Meaning')), 'UNSUPPORTED', snapshot.semanticItems);
+		this._renderSemanticItems(DOM.append(parent, this._section('Unresolved Meaning')), 'UNRESOLVED', snapshot.semanticItems);
+		const recovered = DOM.append(parent, this._section('Recovered Source Meaning'));
+		this._metric(recovered, 'State', snapshot.recoveredMeaning.state);
+		this._metric(recovered, 'Operations', snapshot.recoveredMeaning.operations.join(', ') || 'None');
 
 		// Unresolved intent - now clickable
 		this._listSection(intent, 'Unresolved intent', this.intentItems, 'sys-unresolved', true);
@@ -236,15 +238,14 @@ export class SysSemanticWorkbenchView extends ViewPane {
 
 		const sync = DOM.append(parent, this._section('Semantic Sync'));
 		const table = DOM.append(sync, $('div.sys-sync-table'));
-		const headings = ['Rule', 'Governed', 'Recovered', 'State'];
+		const headings = ['Rule', 'State', 'Eligibility'];
 		for (const heading of headings) {
 			DOM.append(table, $('div.sys-sync-heading')).textContent = heading;
 		}
 		for (const item of snapshot.syncItems) {
 			DOM.append(table, $('div.sys-sync-cell')).textContent = item.label;
-			DOM.append(table, $('div.sys-sync-cell.sys-status-known')).textContent = item.governed;
-			DOM.append(table, $('div.sys-sync-cell.sys-status-unknown')).textContent = item.recovered;
-			DOM.append(table, $('div.sys-sync-cell.sys-status-partial')).textContent = item.state;
+			DOM.append(table, $('div.sys-sync-cell')).textContent = item.state;
+			DOM.append(table, $('div.sys-sync-cell')).textContent = item.eligible ? 'ELIGIBLE' : 'NOT ELIGIBLE';
 		}
 
 		const reviews = DOM.append(parent, this._section('Reviews'));
@@ -265,6 +266,19 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		this._metric(evidenceGrid, 'False greens', String(snapshot.evidence.falseGreens));
 		if (snapshot.evidence.sourceLocation) {
 			this._detail(evidence, 'Source location', snapshot.evidence.sourceLocation);
+		}
+	}
+
+	private _renderSemanticItems(parent: HTMLElement, disposition: 'SUPPORTED_EXACT' | 'UNSUPPORTED' | 'UNRESOLVED', items: readonly SysProjectSnapshot['semanticItems'][number][]): void {
+		const matches = items.filter(item => item.disposition === disposition);
+		if (!matches.length) { DOM.append(parent, $('p')).textContent = 'None'; return; }
+		for (const item of matches) {
+			const row = DOM.append(parent, $('div.sys-rule'));
+			DOM.append(row, $('span.sys-status')).textContent = disposition === 'SUPPORTED_EXACT' ? 'SUPPORTED EXACT' : disposition;
+			DOM.append(row, $('span.sys-rule-description')).textContent = item.displayText;
+			if (item.reason) {
+				DOM.append(row, $('span.sys-detail-value')).textContent = `(${item.reason})`;
+			}
 		}
 	}
 
