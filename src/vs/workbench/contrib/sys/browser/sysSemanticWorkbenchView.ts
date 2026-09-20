@@ -23,6 +23,7 @@ const $ = DOM.$;
 export class SysSemanticWorkbenchView extends ViewPane {
 	private intentItems: readonly SysIntentItem[] = [];
 	private snapshot: SysProjectSnapshot | undefined;
+	private bodyContainer: HTMLElement | undefined;
 	private currentDetailId: string | undefined;
 	private currentDetails: SysIntentItemDetails | undefined;
 
@@ -72,6 +73,7 @@ export class SysSemanticWorkbenchView extends ViewPane {
 
 	protected override renderBody(parent: HTMLElement): void {
 		console.info('[SYS_LOAD_01] renderBody entered');
+		this.bodyContainer = parent;
 		super.renderBody(parent);
 		parent.classList.add('sys-semantic-workbench');
 
@@ -117,13 +119,17 @@ export class SysSemanticWorkbenchView extends ViewPane {
 
 				this.loadState = 'READY';
 				console.info('[SYS_LOAD_09] renderSnapshot entered');
-				this._renderSnapshot(this.getContainerDomNode(), snapshot);
+				if (this.bodyContainer) {
+					this._renderSnapshot(this.bodyContainer, snapshot);
+				}
 				console.info('[SYS_LOAD_10] READY rendered');
 			} catch (error) {
 				this.loadState = 'ERROR';
 				this.loadError = 'Unable to load semantic snapshot';
 				console.error('[SYS_LOAD_ERR] load', error instanceof Error ? error.message : 'unknown error');
-				this.renderBody(this.getContainerDomNode());
+				if (this.bodyContainer) {
+					this.renderBody(this.bodyContainer);
+				}
 			} finally {
 				this.loadPromise = undefined;
 			}
