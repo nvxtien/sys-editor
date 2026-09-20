@@ -30,31 +30,46 @@ class SysIntentActionService extends Disposable implements ISysIntentActionServi
 
 	private intentItems: Map<string, SysIntentItem> = new Map();
 	private replacementStates: Map<string, ReplacementState> = new Map();
+	private initializationPromise: Promise<void> | undefined;
 
 	constructor(
 		@IStorageService private readonly storageService: IStorageService
 	) {
 		super();
-		// Initialize from storage or fixture
-		void this.initialize();
 	}
 
 	private async initialize(): Promise<void> {
-		// Try to load from storage
-		const stored = this.storageService.getObject<SysIntentItem[]>(SYS_INTENT_ITEMS_KEY, StorageScope.WORKSPACE);
-		if (stored && stored.length > 0) {
-			// Validate and load stored items
-			for (const item of stored) {
-				if (this.isValidIntentItem(item)) {
+		if (this.initializationPromise) {
+			return this.initializationPromise;
+		}
+		
+		this.initializationPromise = (async () => {
+			try {
+				// Try to load from storage
+				const stored = this.storageService.getObject<SysIntentItem[]>(SYS_INTENT_ITEMS_KEY, StorageScope.WORKSPACE);
+				if (stored && stored.length > 0) {
+					// Validate and load stored items
+					for (const item of stored) {
+						if (this.isValidIntentItem(item)) {
+							this.intentItems.set(item.id, { ...item });
+						}
+					}
+				} else {
+					// Initialize from fixture
+					for (const item of CINEMA_BOOKING_INTENT_ITEMS) {
+						this.intentItems.set(item.id, { ...item });
+					}
+				}
+			} catch (error) {
+				// If storage fails, fall back to fixture
+				console.error('SysIntentActionService: failed to load from storage, using fixture:', error);
+				for (const item of CINEMA_BOOKING_INTENT_ITEMS) {
 					this.intentItems.set(item.id, { ...item });
 				}
 			}
-		} else {
-			// Initialize from fixture
-			for (const item of CINEMA_BOOKING_INTENT_ITEMS) {
-				this.intentItems.set(item.id, { ...item });
-			}
-		}
+		})();
+		
+		return this.initializationPromise;
 	}
 
 	private isValidIntentItem(item: unknown): item is SysIntentItem {
@@ -87,10 +102,15 @@ class SysIntentActionService extends Disposable implements ISysIntentActionServi
 	}
 
 	async getIntentItems(): Promise<readonly SysIntentItem[]> {
+		// Ensure initialization has completed
+		await this.initialize();
 		return Array.from(this.intentItems.values());
 	}
 
 	async getIntentItemDetails(id: string): Promise<SysIntentItemDetails | undefined> {
+		// Ensure initialization has completed
+		await this.initialize();
+		
 		const item = this.intentItems.get(id);
 		if (!item) {
 			return undefined;

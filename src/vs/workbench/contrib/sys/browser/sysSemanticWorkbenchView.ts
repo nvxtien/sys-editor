@@ -38,39 +38,86 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		
 		// Subscribe to intent item changes
 		this._register(this.intentActionService.onDidChangeIntentItems(() => {
-			void this.refresh();
+			void this.load();
 		}));
 	}
 
 	private async refresh(): Promise<void> {
-		const snapshot = await this.snapshotService.getSnapshot();
-		const items = await this.intentActionService.getIntentItems();
-		this.intentItems = items;
-		
-		// If we're showing a detail, refresh it
-		if (this.currentDetailId) {
-			this.currentDetails = await this.intentActionService.getIntentItemDetails(this.currentDetailId);
-		}
-		
-		this._renderSnapshot(this.getContainerDomNode(), snapshot);
+		// Use load() to properly handle errors and loading state
+		await this.load();
 	}
+
+	private isLoading = true;
+	private loadError: string | undefined;
 
 	protected override renderBody(parent: HTMLElement): void {
 		super.renderBody(parent);
 		parent.classList.add('sys-semantic-workbench');
 		
-		// If showing detail, render detail; otherwise render list
+		// If showing detail, render detail; otherwise render list or error
 		if (this.currentDetailId && this.currentDetails) {
+			this.isLoading = false;
 			this._renderDetail(parent, this.currentDetails);
-		} else {
+		} else if (this.loadError) {
+			this._renderError(parent);
+		} else if (this.isLoading) {
 			this._renderLoading(parent);
-			void this.refresh();
+			void this.load();
+		} else {
+			// Should not happen, but render loading as fallback
+			this._renderLoading(parent);
+			void this.load();
+		}
+	}
+
+	private async load(): Promise<void> {
+		this.isLoading = true;
+		this.loadError = undefined;
+		
+		try {
+			const snapshot = await this.snapshotService.getSnapshot();
+			const items = await this.intentActionService.getIntentItems();
+			this.intentItems = items;
+			
+			// If we're showing a detail, refresh it
+			if (this.currentDetailId) {
+				this.currentDetails = await this.intentActionService.getIntentItemDetails(this.currentDetailId);
+			}
+			
+			this.isLoading = false;
+			this._renderSnapshot(this.getContainerDomNode(), snapshot);
+		} catch (error) {
+			this.isLoading = false;
+			this.loadError = 'Unable to load semantic snapshot';
+			console.error('Sys Semantic Workbench load error:', error);
+			this.renderBody(this.getContainerDomNode());
 		}
 	}
 
 	private _renderLoading(parent: HTMLElement): void {
 		parent.textContent = 'Loading semantic snapshot...';
 		parent.classList.add('sys-loading');
+	}
+
+	private _renderError(parent: HTMLElement): void {
+		parent.textContent = '';
+		parent.classList.remove('sys-loading');
+		
+		const errorContainer = DOM.append(parent, $('div.sys-error-container'));
+		
+		const errorTitle = DOM.append(errorContainer, $('h2.sys-error-title'));
+		errorTitle.textContent = 'Unable to load semantic snapshot';
+		
+		const errorMessage = DOM.append(errorContainer, $('p.sys-error-message'));
+		errorMessage.textContent = this.loadError ?? 'An error occurred while loading the semantic workbench.';
+		
+		const retryBtn = DOM.append(errorContainer, $('button.sys-error-retry-btn'));
+		retryBtn.textContent = 'Retry';
+		retryBtn.addEventListener('click', () => {
+			this.isLoading = true;
+			this.loadError = undefined;
+			void this.load();
+		});
 	}
 
 	private _renderSnapshot(parent: HTMLElement, snapshot: SysProjectSnapshot): void {
@@ -228,13 +275,13 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		// Show detail inline
 		this.currentDetailId = id;
 		this.currentDetails = await this.intentActionService.getIntentItemDetails(id);
-		void this.refresh();
+		void this.load();
 	}
 
 	private showList(): void {
 		this.currentDetailId = undefined;
 		this.currentDetails = undefined;
-		void this.refresh();
+		void this.load();
 	}
 
 	private _detail(parent: HTMLElement, label: string, value: string): void {
