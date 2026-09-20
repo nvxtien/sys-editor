@@ -11,12 +11,18 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import { IViewDescriptorService } from '../../../common/views.js';
 import { ViewPane, IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { ISysSemanticSnapshotService, SysProjectSnapshot } from '../common/sysSemanticSnapshot.js';
-import { ISysIntentActionService, SysIntentItem, SysIntentItemDetails, SysIntentStatus } from '../common/sysIntentAction.js';
+import {
+	ISysIntentActionService,
+	SysIntentItem,
+	SysIntentItemDetails,
+	SysIntentStatus
+} from '../common/sysIntentAction.js';
 
 const $ = DOM.$;
 
 export class SysSemanticWorkbenchView extends ViewPane {
 	private intentItems: readonly SysIntentItem[] = [];
+	private snapshot: SysProjectSnapshot | undefined;
 	private currentDetailId: string | undefined;
 	private currentDetails: SysIntentItemDetails | undefined;
 
@@ -32,14 +38,27 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		@IThemeService themeService: IThemeService,
 		@IHoverService hoverService: IHoverService,
 		@ISysSemanticSnapshotService private readonly snapshotService: ISysSemanticSnapshotService,
-		@ISysIntentActionService private readonly intentActionService: ISysIntentActionService,
+		@ISysIntentActionService private readonly intentActionService: ISysIntentActionService
 	) {
-		super(options, keybindingService, contextMenuService, configurationService, contextKeyService, viewDescriptorService, instantiationService, openerService, themeService, hoverService);
-		
+		super(
+			options,
+			keybindingService,
+			contextMenuService,
+			configurationService,
+			contextKeyService,
+			viewDescriptorService,
+			instantiationService,
+			openerService,
+			themeService,
+			hoverService
+		);
+
 		// Subscribe to intent item changes
-		this._register(this.intentActionService.onDidChangeIntentItems(() => {
-			void this.load();
-		}));
+		this._register(
+			this.intentActionService.onDidChangeIntentItems(() => {
+				void this.load();
+			})
+		);
 	}
 
 	private async refresh(): Promise<void> {
@@ -47,51 +66,69 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		await this.load();
 	}
 
-	private isLoading = true;
+	private loadState: 'IDLE' | 'LOADING' | 'READY' | 'ERROR' = 'IDLE';
+	private loadPromise: Promise<void> | undefined;
 	private loadError: string | undefined;
 
 	protected override renderBody(parent: HTMLElement): void {
+		console.info('[SYS_LOAD_01] renderBody entered');
 		super.renderBody(parent);
 		parent.classList.add('sys-semantic-workbench');
-		
+
 		// If showing detail, render detail; otherwise render list or error
 		if (this.currentDetailId && this.currentDetails) {
-			this.isLoading = false;
 			this._renderDetail(parent, this.currentDetails);
-		} else if (this.loadError) {
+		} else if (this.loadState === 'READY' && this.snapshot) {
+			this._renderSnapshot(parent, this.snapshot);
+		} else if (this.loadState === 'ERROR') {
 			this._renderError(parent);
-		} else if (this.isLoading) {
+		} else if (this.loadState === 'LOADING') {
 			this._renderLoading(parent);
-			void this.load();
 		} else {
-			// Should not happen, but render loading as fallback
 			this._renderLoading(parent);
 			void this.load();
 		}
 	}
 
 	private async load(): Promise<void> {
-		this.isLoading = true;
-		this.loadError = undefined;
-		
-		try {
-			const snapshot = await this.snapshotService.getSnapshot();
-			const items = await this.intentActionService.getIntentItems();
-			this.intentItems = items;
-			
-			// If we're showing a detail, refresh it
-			if (this.currentDetailId) {
-				this.currentDetails = await this.intentActionService.getIntentItemDetails(this.currentDetailId);
-			}
-			
-			this.isLoading = false;
-			this._renderSnapshot(this.getContainerDomNode(), snapshot);
-		} catch (error) {
-			this.isLoading = false;
-			this.loadError = 'Unable to load semantic snapshot';
-			console.error('Sys Semantic Workbench load error:', error);
-			this.renderBody(this.getContainerDomNode());
+		if (this.loadPromise) {
+			return this.loadPromise;
 		}
+		this.loadState = 'LOADING';
+		this.loadError = undefined;
+		this.loadPromise = (async () => {
+			console.info('[SYS_LOAD_02] load() entered');
+			try {
+				console.info('[SYS_LOAD_03] snapshotService.getSnapshot START');
+				const snapshot = await this.snapshotService.getSnapshot();
+				console.info('[SYS_LOAD_04] snapshotService.getSnapshot DONE');
+				console.info('[SYS_LOAD_05] intentActionService.getIntentItems START');
+				const items = await this.intentActionService.getIntentItems();
+				console.info('[SYS_LOAD_06] intentActionService.getIntentItems DONE');
+				this.intentItems = items;
+				this.snapshot = snapshot;
+
+				// If we're showing a detail, refresh it
+				if (this.currentDetailId) {
+					console.info('[SYS_LOAD_07] current-detail load START');
+					this.currentDetails = await this.intentActionService.getIntentItemDetails(this.currentDetailId);
+					console.info('[SYS_LOAD_08] current-detail load DONE');
+				}
+
+				this.loadState = 'READY';
+				console.info('[SYS_LOAD_09] renderSnapshot entered');
+				this._renderSnapshot(this.getContainerDomNode(), snapshot);
+				console.info('[SYS_LOAD_10] READY rendered');
+			} catch (error) {
+				this.loadState = 'ERROR';
+				this.loadError = 'Unable to load semantic snapshot';
+				console.error('[SYS_LOAD_ERR] load', error instanceof Error ? error.message : 'unknown error');
+				this.renderBody(this.getContainerDomNode());
+			} finally {
+				this.loadPromise = undefined;
+			}
+		})();
+		return this.loadPromise;
 	}
 
 	private _renderLoading(parent: HTMLElement): void {
@@ -102,20 +139,19 @@ export class SysSemanticWorkbenchView extends ViewPane {
 	private _renderError(parent: HTMLElement): void {
 		parent.textContent = '';
 		parent.classList.remove('sys-loading');
-		
+
 		const errorContainer = DOM.append(parent, $('div.sys-error-container'));
-		
+
 		const errorTitle = DOM.append(errorContainer, $('h2.sys-error-title'));
 		errorTitle.textContent = 'Unable to load semantic snapshot';
-		
+
 		const errorMessage = DOM.append(errorContainer, $('p.sys-error-message'));
 		errorMessage.textContent = this.loadError ?? 'An error occurred while loading the semantic workbench.';
-		
+
 		const retryBtn = DOM.append(errorContainer, $('button.sys-error-retry-btn'));
 		retryBtn.textContent = 'Retry';
 		retryBtn.addEventListener('click', () => {
-			this.isLoading = true;
-			this.loadError = undefined;
+			this.loadState = 'IDLE';
 			void this.load();
 		});
 	}
@@ -134,11 +170,11 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		this._metric(summaryGrid, 'Governed intent', snapshot.governedIntent);
 		this._metric(summaryGrid, 'Recovered source meaning', snapshot.recoveredSourceMeaning);
 		this._metric(summaryGrid, 'Sync', snapshot.sync);
-		
+
 		// Count unresolved and confirmed from intent items
 		const unresolvedCount = this.intentItems.filter(i => i.status === 'UNRESOLVED').length;
 		const confirmedCount = this.intentItems.filter(i => i.status === 'CONFIRMED').length;
-		
+
 		this._metric(summaryGrid, 'Unresolved intent', String(unresolvedCount));
 		this._metric(summaryGrid, 'Confirmed human intent', String(confirmedCount));
 		this._metric(summaryGrid, 'Reviews requiring attention', String(snapshot.reviewsRequiringAttention));
@@ -153,34 +189,35 @@ export class SysSemanticWorkbenchView extends ViewPane {
 				DOM.append(ruleEl, $('span.sys-rule-description')).textContent = rule.description;
 			}
 		}
-		
+
 		// Unresolved intent - now clickable
 		this._listSection(intent, 'Unresolved intent', this.intentItems, 'sys-unresolved', true);
-		
+
 		// Confirmed human intent section
 		const confirmedItems = this.intentItems.filter(i => i.status === 'CONFIRMED');
 		if (confirmedItems.length > 0) {
 			const confirmedSection = DOM.append(intent, $('div.sys-list-section'));
-			DOM.append(confirmedSection, $('h3.sys-subsection-title')).textContent = 'Confirmed human intent (not yet governed)';
-			
+			DOM.append(confirmedSection, $('h3.sys-subsection-title')).textContent =
+				'Confirmed human intent (not yet governed)';
+
 			for (const item of confirmedItems) {
 				const itemEl = DOM.append(confirmedSection, $('div.sys-list-item.sys-confirmed'));
-				
+
 				// Show title with status
 				const titleSpan = DOM.append(itemEl, $('span.sys-confirmed-title'));
 				titleSpan.textContent = item.title;
-				
+
 				// Show governance badge
 				const governanceBadge = DOM.append(itemEl, $('span.sys-governance-badge'));
 				governanceBadge.textContent = 'NOT YET GOVERNED';
 				governanceBadge.classList.add('sys-governance-not-governed');
-				
+
 				// Show meaning preview
 				if (item.confirmedMeaning) {
 					const meaningSpan = DOM.append(itemEl, $('span.sys-confirmed-meaning'));
 					meaningSpan.textContent = ` - ${item.confirmedMeaning}`;
 				}
-				
+
 				// Make clickable to view
 				itemEl.classList.add('sys-list-item-clickable');
 				itemEl.style.cursor = 'pointer';
@@ -237,10 +274,16 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		DOM.append(metric, $('strong.sys-metric-value')).textContent = value;
 	}
 
-	private _listSection(parent: HTMLElement, title: string, items: readonly SysIntentItem[], className: string, clickable: boolean): void {
+	private _listSection(
+		parent: HTMLElement,
+		title: string,
+		items: readonly SysIntentItem[],
+		className: string,
+		clickable: boolean
+	): void {
 		const list = DOM.append(parent, $('div.sys-list-section'));
 		DOM.append(list, $('h3.sys-subsection-title')).textContent = title;
-		
+
 		// Only show unresolved items
 		const unresolvedItems = items.filter(i => i.status === 'UNRESOLVED');
 		if (unresolvedItems.length === 0) {
@@ -248,18 +291,18 @@ export class SysSemanticWorkbenchView extends ViewPane {
 			emptyEl.textContent = 'None';
 			return;
 		}
-		
+
 		for (const item of unresolvedItems) {
 			const itemEl = DOM.append(list, $(`div.sys-list-item.${className}`));
 			itemEl.textContent = item.title;
-			
+
 			// Add status indicator for leftOpenByHuman
 			if (item.leftOpenByHuman) {
 				const statusBadge = DOM.append(itemEl, $('span.sys-item-status'));
 				statusBadge.textContent = 'LEFT OPEN';
 				statusBadge.classList.add('sys-status-left-open');
 			}
-			
+
 			if (clickable) {
 				itemEl.classList.add('sys-list-item-clickable');
 				itemEl.style.cursor = 'pointer';
@@ -292,13 +335,13 @@ export class SysSemanticWorkbenchView extends ViewPane {
 
 	private _renderDetail(parent: HTMLElement, details: SysIntentItemDetails): void {
 		parent.textContent = '';
-		
+
 		const item = details.item;
 		const isReplacing = details.isReplacing;
 
 		// Header with back button
 		const header = DOM.append(parent, $('div.sys-intent-detail-header'));
-		
+
 		const backBtn = DOM.append(header, $('button.sys-intent-back-btn'));
 		backBtn.textContent = '← Back';
 		backBtn.title = 'Back to intent list';
@@ -324,10 +367,15 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		}
 	}
 
-	private _renderDetailStatus(parent: HTMLElement, status: SysIntentStatus, governanceState: 'NOT_GOVERNED' | 'GOVERNED', leftOpenByHuman: boolean): void {
+	private _renderDetailStatus(
+		parent: HTMLElement,
+		status: SysIntentStatus,
+		governanceState: 'NOT_GOVERNED' | 'GOVERNED',
+		leftOpenByHuman: boolean
+	): void {
 		const statusBadge = DOM.append(parent, $('span.sys-status-badge'));
 		statusBadge.className = 'sys-status-badge';
-		
+
 		if (leftOpenByHuman) {
 			statusBadge.textContent = 'LEFT OPEN BY HUMAN';
 			statusBadge.classList.add('sys-status-left-open');
@@ -340,7 +388,7 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		const governanceBadge = DOM.append(parent, $('span.sys-governance-badge'));
 		governanceBadge.className = 'sys-governance-badge';
 		governanceBadge.textContent = governanceState === 'GOVERNED' ? 'GOVERNED' : 'NOT YET GOVERNED';
-		
+
 		if (governanceState === 'GOVERNED') {
 			governanceBadge.classList.add('sys-governance-governed');
 		} else {
@@ -382,7 +430,8 @@ export class SysSemanticWorkbenchView extends ViewPane {
 			DOM.append(reviewSection, $('h4.sys-intent-review-title')).textContent = 'Proposed human meaning';
 			const meaningEl = DOM.append(reviewSection, $('div.sys-intent-meaning'));
 			meaningEl.textContent = item.candidateMeaning ?? '';
-			DOM.append(reviewSection, $('p.sys-intent-review-note')).textContent = 'This confirmation records your intended meaning. It does not yet make the rule governed.';
+			DOM.append(reviewSection, $('p.sys-intent-review-note')).textContent =
+				'This confirmation records your intended meaning. It does not yet make the rule governed.';
 		} else {
 			// UNRESOLVED state - show input and leave unresolved option
 			const leaveBtn = DOM.append(actions, $('button.sys-intent-btn.sys-intent-btn-secondary'));
@@ -408,7 +457,7 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		// Show confirmed meaning
 		const confirmedSection = DOM.append(parent, $('div.sys-intent-detail-section'));
 		DOM.append(confirmedSection, $('h3.sys-intent-section-title')).textContent = 'Status:';
-		
+
 		const statusValue = DOM.append(confirmedSection, $('div.sys-intent-status-value'));
 		statusValue.textContent = 'CONFIRMED HUMAN INTENT';
 		statusValue.classList.add('sys-status-confirmed');
@@ -446,7 +495,10 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		// Show old meaning
 		const oldMeaningSection = DOM.append(replaceSection, $('div.sys-intent-replacement-part'));
 		DOM.append(oldMeaningSection, $('h4.sys-intent-replacement-label')).textContent = 'Existing confirmed meaning:';
-		const oldMeaningEl = DOM.append(oldMeaningSection, $('div.sys-intent-replacement-value.sys-intent-replacement-old'));
+		const oldMeaningEl = DOM.append(
+			oldMeaningSection,
+			$('div.sys-intent-replacement-value.sys-intent-replacement-old')
+		);
 		oldMeaningEl.textContent = details.replacementOldMeaning ?? '';
 
 		// Show new meaning (editable)

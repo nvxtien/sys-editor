@@ -6,7 +6,12 @@ import { InstantiationType, registerSingleton } from '../../../../platform/insta
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import { CINEMA_BOOKING_INTENT_ITEMS, ISysIntentActionService, SysGovernanceState, SysIntentItem, SysIntentItemDetails, SysIntentStatus } from '../common/sysIntentAction.js';
+import {
+	CINEMA_BOOKING_INTENT_ITEMS,
+	ISysIntentActionService,
+	SysIntentItem,
+	SysIntentItemDetails
+} from '../common/sysIntentAction.js';
 
 const SYS_INTENT_ITEMS_KEY = 'sys.intentItems';
 
@@ -22,7 +27,7 @@ interface ReplacementState {
  * Service that manages human intent interaction state.
  * Uses workspace storage for persistence across sessions.
  */
-class SysIntentActionService extends Disposable implements ISysIntentActionService {
+export class SysIntentActionService extends Disposable implements ISysIntentActionService {
 	declare readonly _serviceBrand: undefined;
 
 	private readonly _onDidChangeIntentItems = this._register(new Emitter<void>());
@@ -32,9 +37,7 @@ class SysIntentActionService extends Disposable implements ISysIntentActionServi
 	private replacementStates: Map<string, ReplacementState> = new Map();
 	private initializationPromise: Promise<void> | undefined;
 
-	constructor(
-		@IStorageService private readonly storageService: IStorageService
-	) {
+	constructor(@IStorageService private readonly storageService: IStorageService) {
 		super();
 	}
 
@@ -42,7 +45,7 @@ class SysIntentActionService extends Disposable implements ISysIntentActionServi
 		if (this.initializationPromise) {
 			return this.initializationPromise;
 		}
-		
+
 		this.initializationPromise = (async () => {
 			try {
 				// Try to load from storage
@@ -61,14 +64,11 @@ class SysIntentActionService extends Disposable implements ISysIntentActionServi
 					}
 				}
 			} catch (error) {
-				// If storage fails, fall back to fixture
-				console.error('SysIntentActionService: failed to load from storage, using fixture:', error);
-				for (const item of CINEMA_BOOKING_INTENT_ITEMS) {
-					this.intentItems.set(item.id, { ...item });
-				}
+				console.error('SysIntentActionService: failed to load from storage:', error);
+				throw error;
 			}
 		})();
-		
+
 		return this.initializationPromise;
 	}
 
@@ -92,12 +92,7 @@ class SysIntentActionService extends Disposable implements ISysIntentActionServi
 		for (const item of this.intentItems.values()) {
 			items.push({ ...item });
 		}
-		this.storageService.store(
-			SYS_INTENT_ITEMS_KEY,
-			JSON.stringify(items),
-			StorageScope.WORKSPACE,
-			StorageTarget.USER
-		);
+		this.storageService.store(SYS_INTENT_ITEMS_KEY, JSON.stringify(items), StorageScope.WORKSPACE, StorageTarget.USER);
 		this._onDidChangeIntentItems.fire();
 	}
 
@@ -110,7 +105,7 @@ class SysIntentActionService extends Disposable implements ISysIntentActionServi
 	async getIntentItemDetails(id: string): Promise<SysIntentItemDetails | undefined> {
 		// Ensure initialization has completed
 		await this.initialize();
-		
+
 		const item = this.intentItems.get(id);
 		if (!item) {
 			return undefined;
