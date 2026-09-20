@@ -1,0 +1,502 @@
+.sys-semantic-workbench {
+	height: 100%;
+	overflow: auto;
+	padding: 0 12px 24px;
+	box-sizing: border-box;
+	background: var(--vscode-sideBar-background);
+	color: var(--vscode-foreground);
+	font-family: var(--vscode-font-family);
+	font-size: 12px;
+}
+
+.sys-loading {
+	padding-top: 16px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.sys-header {
+	padding: 14px 0 12px;
+	border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border));
+}
+
+.sys-eyebrow {
+	color: var(--vscode-descriptionForeground);
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+}
+
+.sys-title {
+	margin: 4px 0 2px;
+	font-size: 18px;
+	font-weight: 600;
+}
+
+.sys-subtitle {
+	margin: 0;
+	color: var(--vscode-descriptionForeground);
+}
+
+.sys-section {
+	padding: 14px 0;
+	border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border));
+}
+
+.sys-section-title,
+.sys-subsection-title,
+.sys-operation-title,
+.sys-review-title {
+	margin: 0;
+	font-weight: 600;
+}
+
+.sys-section-title {
+	font-size: 13px;
+}
+
+.sys-subsection-title,
+.sys-operation-title,
+.sys-review-title {
+	font-size: 12px;
+}
+
+.sys-summary-grid,
+.sys-evidence-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 8px;
+	margin-top: 10px;
+}
+
+.sys-metric {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	min-width: 0;
+}
+
+.sys-metric-label,
+.sys-detail-label {
+	color: var(--vscode-descriptionForeground);
+}
+
+.sys-metric-value {
+	font-weight: 600;
+	word-break: break-word;
+}
+
+.sys-operation,
+.sys-list-section,
+.sys-review {
+	margin-top: 10px;
+}
+
+.sys-rule,
+.sys-list-item,
+.sys-detail {
+	display: flex;
+	gap: 7px;
+	align-items: baseline;
+	padding: 5px 0;
+}
+
+.sys-status {
+	flex: 0 0 auto;
+	font-size: 10px;
+	font-weight: 600;
+}
+
+.sys-status-known {
+	color: var(--vscode-testing-iconPassed, var(--vscode-charts-green));
+}
+
+.sys-status-unknown,
+.sys-unresolved {
+	color: var(--vscode-charts-yellow, var(--vscode-descriptionForeground));
+}
+
+.sys-status-partial {
+	color: var(--vscode-charts-orange, var(--vscode-descriptionForeground));
+}
+
+.sys-rule-description,
+.sys-detail-value {
+	min-width: 0;
+	line-height: 1.4;
+}
+
+.sys-unresolved::before {
+	content: 'UNRESOLVED';
+	flex: 0 0 auto;
+	font-size: 10px;
+	font-weight: 600;
+}
+
+.sys-sync-table {
+	display: grid;
+	grid-template-columns: minmax(0, 1.6fr) repeat(3, minmax(48px, 0.8fr));
+	margin-top: 10px;
+	border-top: 1px solid var(--vscode-panel-border);
+}
+
+.sys-sync-heading,
+.sys-sync-cell {
+	padding: 6px 4px;
+	border-bottom: 1px solid var(--vscode-panel-border);
+	min-width: 0;
+	word-break: break-word;
+}
+
+.sys-sync-heading {
+	color: var(--vscode-descriptionForeground);
+	font-size: 10px;
+	font-weight: 600;
+}
+
+.sys-sync-cell {
+	line-height: 1.35;
+}
+
+.sys-review {
+	padding: 9px;
+	border-left: 2px solid var(--vscode-charts-orange, var(--vscode-focusBorder));
+	background: var(--vscode-textBlockQuote-background);
+}
+
+.sys-review .sys-detail {
+	padding: 3px 0;
+}
+
+.sys-detail-label {
+	flex: 0 0 auto;
+	font-weight: 600;
+}
+
+@media (max-width: 280px) {
+	.sys-summary-grid,
+	.sys-evidence-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.sys-sync-table {
+		font-size: 11px;
+	}
+}
+
+/* ============================================================================
+ * Sys Intent Detail View Styles
+ * ============================================================================*/
+
+.sys-intent-detail {
+	height: 100%;
+	overflow: auto;
+	padding: 16px;
+	box-sizing: border-box;
+	background: var(--vscode-sideBar-background);
+	color: var(--vscode-foreground);
+	font-family: var(--vscode-font-family);
+	font-size: 12px;
+}
+
+.sys-intent-detail-empty {
+	color: var(--vscode-descriptionForeground);
+	padding: 20px;
+	text-align: center;
+}
+
+.sys-intent-detail-header {
+	padding-bottom: 16px;
+	border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border));
+	margin-bottom: 16px;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+.sys-intent-back-btn {
+	background: none;
+	border: none;
+	color: var(--vscode-foreground);
+	cursor: pointer;
+	padding: 4px 8px;
+	font-size: 12px;
+	border-radius: 4px;
+}
+
+.sys-intent-back-btn:hover {
+	background: var(--vscode-list-activeSelectionBackground);
+}
+
+.sys-intent-detail-title {
+	margin: 0;
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.sys-intent-detail-status {
+	margin-bottom: 16px;
+	padding: 8px 12px;
+	background: var(--vscode-textBlockQuote-background);
+	border-radius: 4px;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	align-items: center;
+}
+
+.sys-intent-detail-section {
+	margin-top: 16px;
+	padding-top: 16px;
+	border-top: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border));
+}
+
+.sys-intent-section-title {
+	margin: 0 0 8px;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--vscode-foreground);
+}
+
+.sys-intent-question {
+	margin: 0;
+	line-height: 1.5;
+	color: var(--vscode-descriptionForeground);
+	white-space: pre-wrap;
+}
+
+.sys-intent-input-container {
+	margin: 8px 0;
+}
+
+.sys-intent-textarea {
+	width: 100%;
+	min-height: 100px;
+	padding: 8px;
+	box-sizing: border-box;
+	background: var(--vscode-input-background);
+	color: var(--vscode-input-foreground);
+	border: 1px solid var(--vscode-input-border);
+	border-radius: 4px;
+	font-family: var(--vscode-font-family);
+	font-size: 12px;
+	resize: vertical;
+}
+
+.sys-intent-textarea:focus {
+	outline: none;
+	border-color: var(--vscode-focusBorder);
+}
+
+.sys-intent-textarea::placeholder {
+	color: var(--vscode-input-placeholderForeground);
+}
+
+.sys-intent-actions {
+	display: flex;
+	gap: 8px;
+	margin-top: 16px;
+}
+
+.sys-intent-btn {
+	padding: 8px 16px;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 12px;
+	font-weight: 500;
+	transition: background-color 0.2s;
+}
+
+.sys-intent-btn-primary {
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+}
+
+.sys-intent-btn-primary:hover {
+	background: var(--vscode-button-hoverBackground);
+}
+
+.sys-intent-btn-secondary {
+	background: var(--vscode-button-secondaryBackground);
+	color: var(--vscode-button-secondaryForeground);
+}
+
+.sys-intent-btn-secondary:hover {
+	background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.sys-intent-review {
+	margin-top: 16px;
+	padding: 12px;
+	background: var(--vscode-textBlockQuote-background);
+	border-radius: 4px;
+}
+
+.sys-intent-review-title {
+	margin: 0 0 8px;
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.sys-intent-review-note {
+	margin: 8px 0 0;
+	font-size: 11px;
+	color: var(--vscode-descriptionForeground);
+	font-style: italic;
+}
+
+.sys-intent-meaning {
+	margin: 8px 0;
+	padding: 8px;
+	background: var(--vscode-input-background);
+	border: 1px solid var(--vscode-input-border);
+	border-radius: 4px;
+	white-space: pre-wrap;
+	line-height: 1.5;
+}
+
+.sys-intent-status-value {
+	font-weight: 600;
+	font-size: 13px;
+}
+
+.sys-intent-governance-value {
+	font-weight: 600;
+	padding: 4px 8px;
+	border-radius: 4px;
+	font-size: 11px;
+}
+
+.sys-intent-replacement-part {
+	margin-top: 12px;
+}
+
+.sys-intent-replacement-label {
+	margin: 0 0 4px;
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--vscode-descriptionForeground);
+}
+
+.sys-intent-replacement-value {
+	padding: 8px;
+	background: var(--vscode-input-background);
+	border: 1px solid var(--vscode-input-border);
+	border-radius: 4px;
+	white-space: pre-wrap;
+	line-height: 1.5;
+}
+
+.sys-intent-replacement-old {
+	border-color: var(--vscode-charts-orange, var(--vscode-descriptionForeground));
+}
+
+/* Status badges */
+.sys-status-badge {
+	font-size: 10px;
+	font-weight: 600;
+	padding: 2px 6px;
+	border-radius: 3px;
+	text-transform: uppercase;
+}
+
+.sys-governance-badge {
+	font-size: 10px;
+	font-weight: 600;
+	padding: 2px 6px;
+	border-radius: 3px;
+	text-transform: uppercase;
+}
+
+.sys-governance-governed {
+	color: var(--vscode-charts-green);
+	background: rgba(0, 255, 0, 0.1);
+}
+
+.sys-governance-not-governed {
+	color: var(--vscode-charts-orange, var(--vscode-descriptionForeground));
+	background: rgba(255, 165, 0, 0.1);
+}
+
+.sys-status-unresolved {
+	color: var(--vscode-charts-yellow, var(--vscode-descriptionForeground));
+	background: rgba(255, 255, 0, 0.1);
+}
+
+.sys-status-candidate {
+	color: var(--vscode-charts-blue);
+	background: rgba(0, 0, 255, 0.1);
+}
+
+.sys-status-confirmed {
+	color: var(--vscode-charts-green);
+	background: rgba(0, 255, 0, 0.1);
+}
+
+.sys-status-left-open {
+	color: var(--vscode-charts-orange, var(--vscode-descriptionForeground));
+	background: rgba(255, 165, 0, 0.15);
+}
+
+/* Clickable list items */
+.sys-list-item-clickable {
+	padding: 5px 0;
+	border-radius: 3px;
+}
+
+.sys-list-item-clickable:hover {
+	background: var(--vscode-list-hoverBackground);
+}
+
+.sys-list-empty {
+	color: var(--vscode-descriptionForeground);
+	font-style: italic;
+	padding: 5px 0;
+}
+
+.sys-item-status {
+	font-size: 9px;
+	padding: 1px 4px;
+	border-radius: 2px;
+	margin-left: 8px;
+	font-weight: 600;
+}
+
+.sys-confirmed-title {
+	flex: 1;
+}
+
+.sys-confirmed-meaning {
+	color: var(--vscode-descriptionForeground);
+	font-size: 11px;
+	font-style: italic;
+}
+
+/* Accessibility: Ensure focus is visible */
+.sys-intent-btn:focus,
+.sys-intent-back-btn:focus,
+.sys-list-item-clickable:focus {
+	outline: 2px solid var(--vscode-focusBorder);
+	outline-offset: 2px;
+}
+
+/* High contrast support */
+.vscode-high-contrast .sys-intent-textarea {
+	border: 2px solid;
+}
+
+.vscode-high-contrast .sys-intent-btn {
+	border: 2px solid;
+}
+
+/* Dark theme adjustments */
+.vscode-dark .sys-intent-textarea {
+	background: var(--vscode-input-background);
+	color: var(--vscode-input-foreground);
+}
+
+/* Light theme adjustments */
+.vscode-light .sys-intent-textarea {
+	background: var(--vscode-input-background);
+	color: var(--vscode-input-foreground);
+}

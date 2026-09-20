@@ -214,6 +214,9 @@ import './contrib/search/browser/searchView.js';
 // Sidex Chat
 import './contrib/sidexChat/browser/sidexChat.contribution.js';
 
+// Sys Semantic Workbench
+import './contrib/sys/browser/sys.contribution.js';
+
 // Sidex Complete
 import './contrib/sidexComplete/browser/sidexComplete.contribution.js';
 
