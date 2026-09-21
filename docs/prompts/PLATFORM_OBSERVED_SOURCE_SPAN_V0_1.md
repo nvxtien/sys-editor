@@ -14,9 +14,20 @@
 - `Function.name` is `BookingService.createBooking`, the same string as the manifest `target_operation` and anchor label;
 - no downstream serde struct uses `deny_unknown_fields`, so an added IR field is ignored by older readers.
 
+Scaling findings that shape this design:
+
+- `contract::build` calls `recover_observed_project` once per rule, so N rules mean N full javac + `semantic-core` +
+  `ontology-core` runs for the same `target_operation`. This cost already exists; the span work must not thread its
+  data through that loop in a way that entrenches it;
+- `SourceFile` keeps only the file name, so matching by function name alone breaks for overloads, nested classes with
+  the same name, and same-named classes in different packages;
+- a span on `ProgramIr.Function` supports method-level anchors only. Statement-level anchors would need spans on every
+  IR node and pass-through in `semantic-core` / `ontology-core`. That is a deliberate limit here, not an oversight;
+- javac `LineMap.getColumnNumber` is believed to expand tab characters. This has not been verified in this repo.
+
 Goal of the parent mission, unchanged:
 
-    Anchor range = observed source location, not an authored or inferred one.
+    Anchor location = observed source location, not an authored or inferred one.
 
 This mission makes the platform observe and carry the source span. The editor consuming it is a separate step
 (see "Follow-up").
@@ -24,10 +35,11 @@ This mission makes the platform observe and carry the source span. The editor co
 ## Mission
 
 Make the Java frontend record the source span of each function declaration, carry it to `spec-code-sync`, and emit it
-as the `range` of the matching SOURCE anchor in `verification.v0.1`, only when it was observed.
+as the `span` of the matching SOURCE anchor in `verification.v0.1` (the existing string `range` is left unchanged),
+only when it was observed.
 
 It must NOT change verdicts, dispositions, comparator semantics, semantic recovery, proof rules, or B-rule intent.
-It must NOT let the manifest author a range.
+It must NOT let the manifest author a range or span.
 
 ## Design
 
@@ -38,30 +50,49 @@ Preferred path (smallest that stays honest): the span rides the program IR only.
       -> JsonRenderer emits it
       -> spec-code-sync pipeline.rs already holds the program IR string; it reads functions[].span for the
          target operation and keeps it beside the recovered result
-      -> contract.rs fills the SOURCE anchor `range` from that span
+      -> contract.rs fills the SOURCE anchor `span` from that data
 
 `semantic-core` and `ontology-core` do not need to change, since they ignore unknown fields. Do not thread the span
 through them unless that turns out to be false; if it is false, record why.
 
+Scale requirements:
+
+- **Recover once per operation.** Change the pipeline so the recovered result and the observed span come from one
+  run per `target_operation` and are reused for every rule that targets it. Do not add a second javac run just to
+  fetch the span. Report the number of subprocess runs per `verification-v0.1` call before and after.
+- **Identity is more than the name.** The IR function must carry enough to identify it: the source file (full path
+  relative to the project, not only the file name) and a signature (parameter types). Match an anchor by
+  file + qualified name (+ signature when the manifest supplies it). Ambiguity means no range.
+- **Store character offsets.** Record `startOffset` / `endOffset` (UTF-16 code units, as the editor counts) and derive
+  line and column from the file content yourself. Do not use `LineMap.getColumnNumber` for columns. Add a test with a
+  tab-indented method and a non-ASCII character before the declaration to prove columns match the editor's.
+- **Staleness is explicit.** Include a content digest of the source file the span was computed from
+  (for example `sha256`) so a consumer can tell that the file changed since the run. The editor's use of it is a
+  follow-up; the platform must emit it now.
+- **Method level only, on purpose.** Do not add spans to statements or expressions in this mission. Record in the
+  report what would be required (per-node spans plus pass-through in the two Rust stages).
+
 Rules:
 
 1. A span is emitted only when javac reported valid positions (`Diagnostic.NOPOS` means absent). Otherwise omit it.
-2. Span means the method declaration, from the start of the modifiers or return type to the end of the signature/body
-   (decide and record which: declaration name range vs whole method). For navigation, prefer the range of the
-   method **name** identifier; record the choice and why.
-3. Match a span to an anchor by the function identity the platform already has (`target_operation` /
-   `Function.name`), never by searching text or comparing labels loosely. If more than one function matches
-   (overloads), emit no range and record it.
-4. The manifest may still carry `symbol`/`file`. The platform ignores any `range` the manifest supplies and
-   overwrites it with the observed span, or drops it if none was observed. Record this decision.
+2. Emit the range of the method **name** identifier (the navigation target). If the whole-declaration range is also
+   useful, add it as a separate field rather than overloading one. Record the choice and why.
+3. Match a span to an anchor by file + qualified name (+ signature), never by searching text or comparing labels
+   loosely. If more than one function matches (overloads, same-named classes), emit no span and record it.
+4. The manifest may still carry `symbol`/`file`. The platform ignores any `range` or `span` the manifest supplies and
+   replaces it with the observed span, or drops it if none was observed. Record this decision.
 5. Range shape (additive, structured; 1-based line and column):
 
-       "range": { "startLine": 29, "startColumn": 19, "endLine": 29, "endColumn": 32 }
+       "span": {
+         "startLine": 29, "startColumn": 19, "endLine": 29, "endColumn": 32,
+         "startOffset": 812, "endOffset": 825,
+         "sourceDigest": "sha256:..."
+       }
 
-   `Anchor.range` is currently `Option<String>`. Choose either a new structured field or a structured replacement,
-   keep old readers working, and record the compatibility reasoning. The editor decoder currently reads `range` as an
-   optional string, so a bare object would make it reject the contract today. Verify the decoder behavior before
-   choosing, and do not break the editor.
+   `Anchor.range` is `Option<String>` and the editor decoder reads it with `optStr`, which rejects a non-string.
+   Therefore keep `range` unchanged and unused, and add the structured data under the new anchor field `span`.
+   Decoders that read only known fields ignore it. Confirm with a test that the current editor decoder still accepts a
+   contract containing `span`.
 6. No Java-specific or rule-specific logic in `spec-code-sync` beyond reading a generic `span` from the IR.
 7. Spec anchors: only add a spec range if the spec parser already retains positions. If it does not, leave spec
    anchors unchanged and report it. Do not widen scope to build one.
@@ -70,12 +101,18 @@ Rules:
 
 ### sys-platform
 
-1. Add the span to `ProgramIr.Function` and `JsonRenderer`; populate it in `JavaFrontend.lowerFunction`.
-2. In `pipeline.rs`, keep the target function span from the program IR; pass it to the contract builder.
-3. In `contract.rs`, set the SOURCE anchor range from the observed span. Ignore any manifest-authored range.
+1. Add file, signature and span (offsets, plus derived line/column, plus source digest) to `ProgramIr.Function` and
+   `JsonRenderer`; populate them in `JavaFrontend.lowerFunction`. The frontend currently loses the full path
+   (`SourceFile` keeps the name only); fix that for this data without changing recovered semantics.
+2. In `pipeline.rs`, return the recovered result and the target function span from one run; reuse them across rules
+   in `contract::build` (recover once per operation).
+3. In `contract.rs`, set the SOURCE anchor `span` from the observed data. Ignore any manifest-authored range or span.
 4. Tests:
-   - frontend: a fixture with a known method declaration yields the expected line and columns;
-   - overloads: two functions with the same name yield no range;
+   - frontend: a fixture with a known method declaration yields the expected offsets, line and columns;
+   - tab-indented method and a non-ASCII character before the declaration: columns match UTF-16 counting;
+   - overloads and same-named classes in two packages: no span;
+   - source digest changes when the file changes;
+   - subprocess runs per `verification-v0.1` call: once per operation, not once per rule;
    - contract: anchor with observed span, anchor without, manifest-authored range ignored, serialization unchanged
      when absent;
    - existing suites still pass, including the golden verification output where it applies.
@@ -83,8 +120,8 @@ Rules:
 
 ### sys-editor (only what is needed to keep it working)
 
-1. Confirm the current decoder does not reject the new `range` shape; if it would, make the minimal decoder change
-   so an object range is accepted and, for now, ignored by navigation.
+1. Add a test that the current decoder accepts a contract whose anchors carry `span` and ignores it. Make no decoder
+   change unless that test fails.
 2. Refresh the golden `verification-v0.1.cinema.json` only from real platform output. Do not hand-edit it.
 
 ## Verification
@@ -94,10 +131,12 @@ Automated (exact commands and counts):
 - sys-platform: new tests, existing suite;
 - sys-editor: all verification node tests, Rust UTF-8 tests, targeted `tsc` and eslint for changed files;
 - real-binary probe: `spec-code-sync verification-v0.1 <manifest>` exits 0, and the B2 SOURCE anchor now carries a
-  range that points at `createBooking` in `BookingService.java`.
+  `span` that points at `createBooking` in `BookingService.java`;
+- wall time and subprocess count for the manifest (5 rules) before and after the recover-once change.
 
-Independent check of the observed span: read the actual line/column from the file and confirm the emitted range
-covers `createBooking`. Report the file line and the emitted range side by side. Do not rely on the emitted value alone.
+Independent check of the observed span: read the actual line/column and the character offsets from the file and
+confirm the emitted span covers `createBooking`. Report the file line and the emitted span side by side. Do not rely on
+the emitted value alone.
 
 Regression: verdicts for B1, B2, B3, B8 and STATE_EFFECT are identical before and after, including B8 CONFLICTED.
 
@@ -117,6 +156,8 @@ scenario from `PLATFORM_ANCHOR_RANGE_V0_1` (Java extension absent, language mode
 ## Safety invariants (must still hold)
 
     RANGE_FROM_MANIFEST = 0
+    SPAN_ON_STATEMENTS = 0
+    EXTRA_JAVAC_RUNS_FOR_SPAN = 0
     RANGE_FROM_TEXT_SEARCH = 0
     RANGE_FROM_SYMBOL_NAME_GUESS = 0
     VERDICT_CHANGES = 0
@@ -125,13 +166,15 @@ scenario from `PLATFORM_ANCHOR_RANGE_V0_1` (Java extension absent, language mode
 ## Stop conditions
 
 - `IR_SPAN_UNAVAILABLE`: javac cannot give a position for the target declaration. Report what it returns.
+- `RECOVER_ONCE_BLOCKED`: recovering once per operation cannot be done without changing recovered semantics. Report why;
+  do not fall back to a second javac run for the span.
 - `IDENTITY_MISMATCH`: the function in the IR cannot be tied to the manifest target operation without guessing.
 - `CONTRACT_BREAK`: the change alters existing `verification.v0.1` fields or their meaning, or breaks the editor decoder.
 - `STOP_UNSOUND`: success would require fabricating a range or letting the manifest supply one.
 
 ## Required final report
 
-MISSION_RESULT: SUCCESS | IR_SPAN_UNAVAILABLE | IDENTITY_MISMATCH | CONTRACT_BREAK | STOP_UNSOUND
+MISSION_RESULT: SUCCESS | IR_SPAN_UNAVAILABLE | RECOVER_ONCE_BLOCKED | IDENTITY_MISMATCH | CONTRACT_BREAK | STOP_UNSOUND
 
 SYS_PLATFORM_COMMIT / SYS_EDITOR_COMMIT:
 ...
@@ -145,8 +188,14 @@ EMITTED_RANGE (real output) vs FILE_LINE (read from the file):
 
 STAGES_CHANGED: which of frontend / IR / semantic-core / ontology-core / spec-code-sync / contract
 
-OVERLOAD_BEHAVIOR:
+OVERLOAD_BEHAVIOR / SAME_NAME_BEHAVIOR:
 ...
+
+SUBPROCESS_RUNS_PER_CALL: before -> after (5 rules)
+
+COLUMN_UNITS_TEST: tab and non-ASCII result
+
+STATEMENT_LEVEL_REQUIREMENTS: what per-node spans would need (not implemented)
 
 VERDICT_REGRESSION: identical | explain
 
