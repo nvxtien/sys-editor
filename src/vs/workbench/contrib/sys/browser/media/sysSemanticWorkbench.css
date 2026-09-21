@@ -812,3 +812,58 @@
 	font-size: 10px;
 	color: var(--vscode-descriptionForeground);
 }
+
+.sys-semantic-workbench .sys-req-row {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	gap: 2px 8px;
+	padding: 6px 0;
+	border-bottom: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.25));
+}
+
+.sys-semantic-workbench .sys-req-main {
+	display: flex;
+	gap: 8px;
+	min-width: 0;
+	cursor: pointer;
+}
+
+.sys-semantic-workbench .sys-req-id {
+	flex: none;
+	font-weight: 600;
+}
+
+.sys-semantic-workbench .sys-req-title {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.sys-semantic-workbench .sys-req-status {
+	grid-column: 1;
+	font-size: 11px;
+	opacity: 0.75;
+}
+
+.sys-semantic-workbench .sys-req-actions {
+	grid-column: 2;
+	grid-row: 1 / span 2;
+	display: flex;
+	gap: 4px;
+	align-items: center;
+}
+
+.sys-semantic-workbench .sys-req-action {
+	padding: 2px 8px;
+	font: inherit;
+	font-size: 11px;
+	color: var(--vscode-button-secondaryForeground);
+	background: var(--vscode-button-secondaryBackground);
+	border: none;
+	border-radius: 2px;
+	cursor: pointer;
+}
+
+.sys-semantic-workbench .sys-req-action:hover {
+	background: var(--vscode-button-secondaryHoverBackground);
+}

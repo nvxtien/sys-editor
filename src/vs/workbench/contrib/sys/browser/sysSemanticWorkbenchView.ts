@@ -11,7 +11,9 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import { IViewDescriptorService } from '../../../common/views.js';
 import { ViewPane, IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { ISysProjectService } from './sysProjectService.js';
-import { SysProjectState } from '../common/sysProject.js';
+import { SysRequirementRow } from '../common/sysProject.js';
+import { IEditorService } from '../../../services/editor/common/editorService.js';
+import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { ISysSemanticSnapshotService, SysProjectSnapshot } from '../common/sysSemanticSnapshot.js';
 import {
 	ISysIntentActionService,
@@ -42,7 +44,9 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		@IHoverService hoverService: IHoverService,
 		@ISysSemanticSnapshotService private readonly snapshotService: ISysSemanticSnapshotService,
 		@ISysIntentActionService private readonly intentActionService: ISysIntentActionService,
-		@ISysProjectService private readonly projectService: ISysProjectService
+		@ISysProjectService private readonly projectService: ISysProjectService,
+		@IEditorService private readonly editorService: IEditorService,
+		@IDialogService private readonly dialogService: IDialogService
 	) {
 		super(
 			options,
@@ -124,56 +128,67 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		}
 		parent.textContent = '';
 		parent.classList.remove('sys-loading');
-		const header = DOM.append(parent, $('div.sys-header'));
-		DOM.append(header, $('div.sys-eyebrow')).textContent = 'SYS';
+		DOM.append(DOM.append(parent, $('div.sys-header')), $('div.sys-eyebrow')).textContent = 'SYS';
 		const note = (text: string) => { DOM.append(parent, $('p')).textContent = text; };
-		const button = (host: HTMLElement, label: string, run: () => Promise<void>) => {
-			const b = DOM.append(host, $('button.sys-error-retry-btn'));
-			b.textContent = label;
-			b.addEventListener('click', () => { void run().catch(e => this._renderProjectError(parent, e)); });
-			return b;
-		};
 		switch (state.kind) {
 			case 'NO_WORKSPACE': note('Open a folder to start a Sys project.'); return;
 			case 'UNSUPPORTED_MULTI_ROOT_WORKSPACE': note('Sys projects are not supported in multi-root workspaces yet.'); return;
 			case 'MALFORMED_SYS_PROJECT': note(`.sys/project.json is malformed: ${state.reason}`); return;
 			case 'IO_ERROR': note(`Cannot read Sys project state: ${state.reason}`); return;
-			case 'NO_SYS_PROJECT_YET':
-				this._renderCreateForm(parent, state, 'No governed requirements yet. Create the first requirement for this workspace.', button);
+			case 'NO_SYS_PROJECT_YET': {
+				const section = DOM.append(parent, this._section('Get started'));
+				DOM.append(section, $('p')).textContent = 'No governed requirements yet. Create the first requirement for this workspace.';
+				this._action(section, 'Create first requirement', 'sys-error-retry-btn', () => this._createRequirement());
 				return;
-			case 'READY':
-				this._renderRequirements(parent, state, button);
-				this._renderCreateForm(parent, state, undefined, button);
-				return;
-		}
-	}
-
-	private _renderProjectError(parent: HTMLElement, e: unknown): void {
-		DOM.append(parent, $('p.sys-error-message')).textContent = `Save failed: ${e instanceof Error ? e.message : String(e)}`;
-	}
-
-	private _renderRequirements(parent: HTMLElement, state: Extract<SysProjectState, { kind: 'READY' }>, button: (host: HTMLElement, label: string, run: () => Promise<void>) => HTMLElement): void {
-		const section = DOM.append(parent, this._section('Requirements'));
-		for (const r of state.project.requirements) {
-			const item = DOM.append(section, $('div.sys-list-item'));
-			DOM.append(item, $('strong')).textContent = `${r.id} `;
-			DOM.append(item, $('span')).textContent = r.text;
-			DOM.append(item, $('div.sys-subtitle')).textContent = r.status === 'DRAFT_UNFORMALIZED' ? 'DRAFT · unformalized · needs review' : 'Intent approved by human · unformalized · not verified';
-			if (r.status === 'DRAFT_UNFORMALIZED') {
-				button(item, 'Approve governed intent', () => this.projectService.approveRequirement(r.id));
+			}
+			case 'READY': {
+				const section = DOM.append(parent, this._section('Requirements'));
+				for (const row of state.rows) {
+					this._renderRequirementRow(section, row);
+				}
+				this._action(section, 'New requirement', 'sys-error-retry-btn', () => this._createRequirement());
 			}
 		}
 	}
 
-	private _renderCreateForm(parent: HTMLElement, _state: SysProjectState, intro: string | undefined, button: (host: HTMLElement, label: string, run: () => Promise<void>) => HTMLElement): void {
-		const form = DOM.append(parent, this._section(intro ? 'Get started' : 'New requirement'));
-		if (intro) {
-			DOM.append(form, $('p')).textContent = intro;
+	private _action(host: HTMLElement, label: string, cls: string, run: () => Promise<void>): HTMLButtonElement {
+		const b = DOM.append(host, $(`button.${cls}`)) as HTMLButtonElement;
+		b.textContent = label;
+		b.addEventListener('click', e => {
+			e.stopPropagation();
+			void run().catch(err => {
+				const slot = host.querySelector('.sys-form-error') ?? DOM.append(host, $('p.sys-error-message.sys-form-error'));
+				slot.textContent = `${label} failed: ${err instanceof Error ? err.message : String(err)}`;
+			});
+		});
+		return b;
+	}
+
+	private async _createRequirement(): Promise<void> {
+		await this.editorService.openEditor({ resource: await this.projectService.createRequirement() });
+	}
+
+	private _renderRequirementRow(host: HTMLElement, row: SysRequirementRow): void {
+		const el = DOM.append(host, $('div.sys-req-row'));
+		const main = DOM.append(el, $('div.sys-req-main'));
+		main.tabIndex = 0;
+		main.title = 'Open in editor';
+		DOM.append(main, $('span.sys-req-id')).textContent = row.id;
+		DOM.append(main, $('span.sys-req-title')).textContent = row.title;
+		const open = () => void this.editorService.openEditor({ resource: this.projectService.resourceOf(row.id) });
+		main.addEventListener('click', open);
+		main.addEventListener('keydown', e => { if (e.key === 'Enter') { open(); } });
+		DOM.append(el, $('div.sys-req-status')).textContent = row.status === 'APPROVED_UNFORMALIZED'
+			? 'Intent approved · unformalized · not verified'
+			: 'Draft · unformalized · needs review';
+		const actions = DOM.append(el, $('div.sys-req-actions'));
+		if (row.status === 'DRAFT_UNFORMALIZED' && !row.missing) {
+			this._action(actions, 'Approve', 'sys-req-action', () => this.projectService.approveRequirement(row.id));
 		}
-		const input = DOM.append(form, $('textarea')) as HTMLTextAreaElement;
-		input.rows = 3;
-		input.placeholder = 'What should this software do?';
-		button(form, intro ? 'Create first requirement' : 'Add requirement', () => this.projectService.createRequirement(input.value));
+		this._action(actions, 'Delete', 'sys-req-action', async () => {
+			const { confirmed } = await this.dialogService.confirm({ message: `Delete ${row.id}?`, detail: 'The requirement file is removed from .sys/requirements/.', primaryButton: 'Delete' });
+			if (confirmed) { await this.projectService.deleteRequirement(row.id); }
+		});
 	}
 
 	private async load(): Promise<void> {

@@ -1,61 +1,94 @@
-/** Workspace-owned Sys project state: `<workspace>/.sys/project.json`. Human-authored text only; nothing here is formalized or verified. */
+/**
+ * Workspace-owned Sys project state.
+ *   .sys/requirements/<id>.md  human-authored text (edited in the normal editor)
+ *   .sys/project.json          tool-owned: which requirements exist and the exact text a human approved
+ * Nothing here is formalized or verified.
+ */
 export const SYS_PROJECT_FILE = '.sys/project.json';
+export const SYS_REQUIREMENTS_DIR = '.sys/requirements';
+export const requirementFile = (id: string) => `${SYS_REQUIREMENTS_DIR}/${id}.md`;
 
 export type SysRequirementStatus = 'DRAFT_UNFORMALIZED' | 'APPROVED_UNFORMALIZED';
-export interface SysRequirement { readonly id: string; readonly text: string; readonly status: SysRequirementStatus }
-export interface SysProject { readonly version: 1; readonly requirements: readonly SysRequirement[] }
+export interface SysRequirementRef { readonly id: string; readonly approvedText?: string }
+export interface SysProject { readonly version: 1; readonly requirements: readonly SysRequirementRef[] }
+export interface SysRequirementRow { readonly id: string; readonly title: string; readonly status: SysRequirementStatus; readonly missing: boolean }
 
 export type SysProjectState =
 	| { readonly kind: 'NO_WORKSPACE' }
 	| { readonly kind: 'UNSUPPORTED_MULTI_ROOT_WORKSPACE' }
 	| { readonly kind: 'NO_SYS_PROJECT_YET' }
-	| { readonly kind: 'READY'; readonly project: SysProject }
+	| { readonly kind: 'READY'; readonly project: SysProject; readonly rows: readonly SysRequirementRow[] }
 	| { readonly kind: 'MALFORMED_SYS_PROJECT'; readonly reason: string }
 	| { readonly kind: 'IO_ERROR'; readonly reason: string };
 
-const STATUSES: readonly string[] = ['DRAFT_UNFORMALIZED', 'APPROVED_UNFORMALIZED'];
+export const EMPTY_PROJECT: SysProject = { version: 1, requirements: [] };
 
-export function parseProject(text: string): SysProjectState {
-	const bad = (reason: string): SysProjectState => ({ kind: 'MALFORMED_SYS_PROJECT', reason });
+export function parseProject(text: string): SysProject | { readonly malformed: string } {
+	const bad = (malformed: string) => ({ malformed });
 	let raw: unknown;
 	try { raw = JSON.parse(text); } catch (e) { return bad(`not valid JSON: ${(e as Error).message}`); }
 	const p = raw as { version?: unknown; requirements?: unknown } | null;
 	if (!p || p.version !== 1 || !Array.isArray(p.requirements)) { return bad('expected {"version":1,"requirements":[...]}'); }
 	const ids = new Set<string>();
 	for (const r of p.requirements as Record<string, unknown>[]) {
-		if (!r || typeof r.id !== 'string' || typeof r.text !== 'string' || !STATUSES.includes(r.status as string)) { return bad('requirement needs string id, string text and a known status'); }
+		if (!r || typeof r.id !== 'string' || !/^REQ-\d+$/.test(r.id) || (r.approvedText !== undefined && typeof r.approvedText !== 'string')) { return bad('requirement needs an id like REQ-001 and an optional string approvedText'); }
 		if (ids.has(r.id)) { return bad(`duplicate requirement id ${r.id}`); }
 		ids.add(r.id);
 	}
-	return { kind: 'READY', project: p as SysProject };
+	return p as SysProject;
 }
 
 export function serializeProject(project: SysProject): string {
 	return JSON.stringify(project, null, 2) + '\n';
 }
 
-export const EMPTY_PROJECT: SysProject = { version: 1, requirements: [] };
-
-/** Ids are sequential (REQ-001, ...): stable, deterministic, independent of the text. */
-export function addRequirement(project: SysProject, text: string): SysProject {
-	const trimmed = text.trim();
-	if (!trimmed) { throw new Error('requirement text is empty'); }
-	const next = project.requirements.reduce((max, r) => Math.max(max, Number(/^REQ-(\d+)$/.exec(r.id)?.[1] ?? 0)), 0) + 1;
+/** Ids are sequential and never reused within a project's lifetime of ids present: REQ-001, ... independent of text. */
+export function addRequirement(project: SysProject): { project: SysProject; id: string } {
+	const next = project.requirements.reduce((max, r) => Math.max(max, Number(r.id.slice(4))), 0) + 1;
 	const id = `REQ-${String(next).padStart(3, '0')}`;
-	return { ...project, requirements: [...project.requirements, { id, text: trimmed, status: 'DRAFT_UNFORMALIZED' }] };
+	return { id, project: { ...project, requirements: [...project.requirements, { id }] } };
 }
 
-/** Human approval of intent. Still unformalized: this never implies EXACT/SPECIFIED/SYNCED. */
-export function approveRequirement(project: SysProject, id: string): SysProject {
+/** A human approves the exact current text. */
+export function approveRequirement(project: SysProject, id: string, currentText: string): SysProject {
 	if (!project.requirements.some(r => r.id === id)) { throw new Error(`unknown requirement ${id}`); }
-	return { ...project, requirements: project.requirements.map(r => r.id === id ? { ...r, status: 'APPROVED_UNFORMALIZED' } : r) };
+	if (!currentText.trim()) { throw new Error('cannot approve an empty requirement'); }
+	return { ...project, requirements: project.requirements.map(r => r.id === id ? { ...r, approvedText: currentText } : r) };
 }
 
-/** `read` returns undefined when the file does not exist and throws on any other I/O failure. */
+export function removeRequirement(project: SysProject, id: string): SysProject {
+	return { ...project, requirements: project.requirements.filter(r => r.id !== id) };
+}
+
+/** Derived, never stored: an approval only counts while the text is exactly what was approved. */
+export function statusOf(ref: SysRequirementRef, currentText: string | undefined): SysRequirementStatus {
+	return currentText !== undefined && currentText.trim() !== '' && ref.approvedText === currentText ? 'APPROVED_UNFORMALIZED' : 'DRAFT_UNFORMALIZED';
+}
+
+export function titleOf(text: string): string {
+	return text.split(/\r?\n/).map(l => l.replace(/^#+\s*/, '').trim()).find(l => l) ?? '(empty)';
+}
+
+/**
+ * `read` returns undefined when the file does not exist and throws on any other I/O failure.
+ * `folders` are workspace folder paths/URIs; the file is resolved under the single folder.
+ */
 export async function loadProjectState(folders: readonly string[], read: (path: string) => Promise<string | undefined>): Promise<SysProjectState> {
 	if (folders.length === 0) { return { kind: 'NO_WORKSPACE' }; }
 	if (folders.length > 1) { return { kind: 'UNSUPPORTED_MULTI_ROOT_WORKSPACE' }; }
-	let text: string | undefined;
-	try { text = await read(`${folders[0].replace(/\/$/, '')}/${SYS_PROJECT_FILE}`); } catch (e) { return { kind: 'IO_ERROR', reason: String(e) }; }
-	return text === undefined ? { kind: 'NO_SYS_PROJECT_YET' } : parseProject(text);
+	const root = folders[0].replace(/\/$/, '');
+	try {
+		const text = await read(`${root}/${SYS_PROJECT_FILE}`);
+		if (text === undefined) { return { kind: 'NO_SYS_PROJECT_YET' }; }
+		const project = parseProject(text);
+		if ('malformed' in project) { return { kind: 'MALFORMED_SYS_PROJECT', reason: project.malformed }; }
+		const rows: SysRequirementRow[] = [];
+		for (const ref of project.requirements) {
+			const body = await read(`${root}/${requirementFile(ref.id)}`);
+			rows.push({ id: ref.id, title: body === undefined ? '(file missing)' : titleOf(body), status: statusOf(ref, body), missing: body === undefined });
+		}
+		return { kind: 'READY', project, rows };
+	} catch (e) {
+		return { kind: 'IO_ERROR', reason: String(e) };
+	}
 }
