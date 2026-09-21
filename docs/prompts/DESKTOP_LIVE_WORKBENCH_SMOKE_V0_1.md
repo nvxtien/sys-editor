@@ -83,6 +83,15 @@ Safety invariants currently hold:
     PROSE_PARSING = 0
     SILENT_FIXTURE_FALLBACK = 0
 
+The latest live probe against examples/cinema-booking-verification/manifest.json also established the current manifest-specific B8 state:
+
+    aggregate = CONFLICTED
+    guard = NOT_OBSERVED
+    guard reason = WRONG_OPERATION_SCOPE
+    effect = NOT_OBSERVED
+
+Treat that value as manifest-specific observed state, not as a shared UI expectation.
+
 The remaining unproven gap is real desktop runtime interaction.
 
 ## Mission
@@ -120,7 +129,9 @@ Do not ask for approval between small fixes.
 
 # Precondition: reproducible checkpoints
 
-Before smoke testing, verify both repositories are on reproducible states.
+Before smoke testing, verify both repositories are on reproducible committed states.
+
+This is mandatory for claiming product E2E. Do not run the final proof from dirty implementation changes and then report only a working-tree result.
 
 ## sys-platform
 
@@ -134,11 +145,15 @@ Required changed implementation areas previously included:
 
 Do not include unrelated .DS_Store files.
 
+If the proof-evidence implementation is still uncommitted, commit only the intended platform implementation changes first.
+
 Record the exact sys-platform commit SHA used for the smoke.
 
 ## sys-editor
 
 The live provider, decoder, formatter, workbench, and UTF-8 transport changes must be committed.
+
+If the live provider / decoder / formatter / workbench / UTF-8 implementation is still uncommitted, commit only those intended changes first.
 
 Record the exact sys-editor commit SHA used for the smoke.
 
@@ -312,16 +327,22 @@ Verify the aggregate verdict is:
 
 Verify the guard obligation reflects live data.
 
-For the current canonical pilot manifest, expected live state has previously been observed as:
+For the exact current pilot manifest:
 
+    examples/cinema-booking-verification/manifest.json
+
+the latest provider-level live probe observed:
+
+    aggregate = CONFLICTED
     guard = NOT_OBSERVED
     reason = WRONG_OPERATION_SCOPE
+    effect = NOT_OBSERVED
 
-The effect obligation must be whatever the live contract returns for the exact committed manifest.
+Desktop smoke should confirm that the real UI displays the same live output from that exact manifest.
 
-Do not hard-code SYNCED or NOT_OBSERVED.
+This is still not permission to hard-code B8 outcomes in shared UI logic. The values must come from the contract.
 
-Record the observed effect disposition.
+Record the observed effect disposition and compare it with the provider-level probe.
 
 The aggregate must never appear green merely because one child obligation is green.
 
