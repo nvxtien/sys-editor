@@ -515,6 +515,257 @@
 	outline-offset: 2px;
 }
 
+/* ============================================================================
+ * Sys Verification Workbench styles
+ * ============================================================================*/
+
+.sys-verification-filters {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-top: 10px;
+}
+
+.sys-verification-filter-btn {
+	background: var(--vscode-button-secondaryBackground);
+	color: var(--vscode-button-secondaryForeground);
+	border: none;
+	border-radius: 3px;
+	padding: 3px 8px;
+	font-size: 10px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.sys-verification-filter-btn.sys-verification-filter-active {
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+}
+
+.sys-verification-rule-list {
+	margin-top: 10px;
+}
+
+.sys-verification-rule-row {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	padding: 6px 4px;
+	border-radius: 3px;
+	cursor: pointer;
+}
+
+.sys-verification-rule-row:hover,
+.sys-verification-rule-row.sys-verification-rule-selected {
+	background: var(--vscode-list-hoverBackground);
+}
+
+.sys-verification-rule-row.sys-verification-rule-selected {
+	background: var(--vscode-list-activeSelectionBackground);
+}
+
+.sys-verification-rule-id {
+	flex: 0 0 auto;
+	color: var(--vscode-descriptionForeground);
+	font-size: 10px;
+	font-weight: 600;
+}
+
+.sys-verification-rule-title {
+	flex: 1;
+	min-width: 0;
+}
+
+/* Disposition badges: shape and label always differ so PARTIAL/UNSUPPORTED/NOT_OBSERVED
+ * can never be visually confused with SYNCED, per soundness UX rules 1-3. */
+.sys-disposition-badge {
+	flex: 0 0 auto;
+	font-size: 9px;
+	font-weight: 700;
+	letter-spacing: 0.03em;
+	padding: 2px 6px;
+	border-radius: 3px;
+	text-transform: uppercase;
+	white-space: nowrap;
+}
+
+.sys-disposition-SYNCED {
+	color: var(--vscode-testing-iconPassed, var(--vscode-charts-green));
+	background: rgba(0, 200, 0, 0.12);
+	border: 1px solid var(--vscode-testing-iconPassed, var(--vscode-charts-green));
+}
+
+.sys-disposition-DRIFTED {
+	color: var(--vscode-charts-orange, var(--vscode-descriptionForeground));
+	background: rgba(255, 140, 0, 0.12);
+	border: 1px dashed var(--vscode-charts-orange, var(--vscode-descriptionForeground));
+}
+
+.sys-disposition-CONFLICTED {
+	color: var(--vscode-errorForeground);
+	background: rgba(255, 0, 0, 0.1);
+	border: 1px solid var(--vscode-errorForeground);
+}
+
+.sys-disposition-PARTIAL {
+	color: var(--vscode-charts-yellow, var(--vscode-descriptionForeground));
+	background: repeating-linear-gradient(45deg, rgba(200, 170, 0, 0.12), rgba(200, 170, 0, 0.12) 4px, transparent 4px, transparent 8px);
+	border: 1px dotted var(--vscode-charts-yellow, var(--vscode-descriptionForeground));
+}
+
+.sys-disposition-NOT_OBSERVED {
+	color: var(--vscode-descriptionForeground);
+	background: transparent;
+	border: 1px dashed var(--vscode-descriptionForeground);
+}
+
+.sys-disposition-UNSUPPORTED {
+	color: var(--vscode-descriptionForeground);
+	background: transparent;
+	border: 1px solid var(--vscode-descriptionForeground);
+	opacity: 0.75;
+}
+
+.sys-disposition-WRONG_OPERATION_SCOPE {
+	color: var(--vscode-charts-purple, var(--vscode-descriptionForeground));
+	background: rgba(150, 0, 200, 0.1);
+	border: 1px solid var(--vscode-charts-purple, var(--vscode-descriptionForeground));
+}
+
+.sys-verification-aggregate-note {
+	margin: 4px 0 0;
+	font-size: 10px;
+	color: var(--vscode-descriptionForeground);
+	font-style: italic;
+}
+
+.sys-obligation {
+	margin-top: 10px;
+	border: 1px solid var(--vscode-panel-border);
+	border-radius: 4px;
+	overflow: hidden;
+}
+
+.sys-obligation-header {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	padding: 6px 8px;
+	cursor: pointer;
+	background: var(--vscode-sideBarSectionHeader-background, transparent);
+}
+
+.sys-obligation-kind {
+	flex: 0 0 auto;
+	font-size: 10px;
+	font-weight: 600;
+	color: var(--vscode-descriptionForeground);
+}
+
+.sys-obligation-body {
+	padding: 8px;
+	border-top: 1px solid var(--vscode-panel-border);
+}
+
+.sys-verification-view-tabs {
+	display: flex;
+	gap: 4px;
+	margin-bottom: 8px;
+}
+
+.sys-verification-view-tab {
+	background: none;
+	border: 1px solid var(--vscode-panel-border);
+	color: var(--vscode-foreground);
+	border-radius: 3px;
+	padding: 2px 8px;
+	font-size: 10px;
+	cursor: pointer;
+}
+
+.sys-verification-view-tab.sys-verification-view-tab-active {
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+	border-color: var(--vscode-button-background);
+}
+
+.sys-semantic-view-block {
+	padding: 8px;
+	background: var(--vscode-textBlockQuote-background);
+	border-radius: 4px;
+}
+
+.sys-semantic-view-summary {
+	line-height: 1.5;
+}
+
+.sys-semantic-view-expression {
+	margin-top: 6px;
+	padding: 6px 8px;
+	background: var(--vscode-textCodeBlock-background, var(--vscode-input-background));
+	border-radius: 3px;
+	font-family: var(--vscode-editor-font-family, monospace);
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.sys-semantic-view-evidence {
+	margin-top: 6px;
+	padding: 6px 8px;
+	font-family: var(--vscode-editor-font-family, monospace);
+	white-space: pre-wrap;
+	color: var(--vscode-descriptionForeground);
+}
+
+.sys-provenance-badge {
+	margin-left: 6px;
+	font-size: 9px;
+	font-weight: 600;
+	padding: 1px 5px;
+	border-radius: 3px;
+	text-transform: uppercase;
+}
+
+.sys-provenance-SPECIFIED {
+	color: var(--vscode-charts-blue);
+	background: rgba(0, 100, 255, 0.1);
+}
+
+.sys-provenance-DERIVED {
+	color: var(--vscode-charts-purple, var(--vscode-descriptionForeground));
+	background: rgba(150, 0, 200, 0.08);
+}
+
+.sys-verification-unavailable {
+	padding: 8px;
+	color: var(--vscode-descriptionForeground);
+	font-style: italic;
+	border: 1px dashed var(--vscode-panel-border);
+	border-radius: 4px;
+}
+
+.sys-verification-anchor {
+	display: block;
+	background: none;
+	border: none;
+	color: var(--vscode-textLink-foreground);
+	cursor: pointer;
+	text-align: left;
+	padding: 3px 0;
+	font-family: var(--vscode-editor-font-family, monospace);
+	font-size: 11px;
+}
+
+.sys-verification-anchor:hover {
+	text-decoration: underline;
+}
+
+.sys-verification-anchor:disabled {
+	color: var(--vscode-descriptionForeground);
+	cursor: default;
+	text-decoration: none;
+}
+
 /* Accessibility: Ensure focus is visible */
 .sys-intent-btn:focus,
 .sys-intent-back-btn:focus,

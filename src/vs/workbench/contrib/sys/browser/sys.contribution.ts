@@ -6,11 +6,14 @@ import { SyncDescriptor } from '../../../../platform/instantiation/common/descri
 import { ViewPaneContainer } from '../../../browser/parts/views/viewPaneContainer.js';
 import { Extensions as ViewExtensions, IViewContainersRegistry, IViewsRegistry, ViewContainerLocation } from '../../../common/views.js';
 import { SysSemanticWorkbenchView } from './sysSemanticWorkbenchView.js';
+import { SysVerificationWorkbenchView } from './sysVerificationWorkbenchView.js';
 import './sysSemanticSnapshotService.js';
 import './sysIntentActionService.js';
+import './sysVerificationProviderService.js';
 
 export const SYS_VIEW_CONTAINER_ID = 'workbench.view.sys';
 export const SYS_VIEW_ID = 'workbench.view.sys.semanticWorkbench';
+export const SYS_VERIFICATION_VIEW_ID = 'workbench.view.sys.verificationWorkbench';
 
 const sysIcon = registerIcon('sys-icon', Codicon.symbolStructure, nls.localize('sysIcon', 'Sys semantic workbench icon'));
 
@@ -33,6 +36,15 @@ Registry.as<IViewsRegistry>(ViewExtensions.ViewsRegistry).registerViews([
 		name: nls.localize2('sysSemanticWorkbench', 'Semantic Workbench'),
 		containerIcon: sysIcon,
 		ctorDescriptor: new SyncDescriptor(SysSemanticWorkbenchView),
+		canToggleVisibility: false,
+		canMoveView: false,
+		hideByDefault: false,
+	},
+	{
+		id: SYS_VERIFICATION_VIEW_ID,
+		name: nls.localize2('sysVerificationWorkbench', 'Verification'),
+		containerIcon: sysIcon,
+		ctorDescriptor: new SyncDescriptor(SysVerificationWorkbenchView),
 		canToggleVisibility: false,
 		canMoveView: false,
 		hideByDefault: false,
