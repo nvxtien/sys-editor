@@ -128,7 +128,6 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		}
 		parent.textContent = '';
 		parent.classList.remove('sys-loading');
-		DOM.append(DOM.append(parent, $('div.sys-header')), $('div.sys-eyebrow')).textContent = 'SYS';
 		const note = (text: string) => { DOM.append(parent, $('p')).textContent = text; };
 		switch (state.kind) {
 			case 'NO_WORKSPACE': note('Open a folder to start a Sys project.'); return;
