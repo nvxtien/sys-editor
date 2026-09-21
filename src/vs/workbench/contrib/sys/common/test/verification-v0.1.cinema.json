@@ -1,0 +1,1440 @@
+{
+  "schemaVersion": "verification.v0.1",
+  "projectId": "cinema-booking",
+  "rules": [
+    {
+      "id": "B1",
+      "title": "Requested seats non-empty",
+      "aggregateDisposition": "SYNCED",
+      "obligations": [
+        {
+          "id": "B1:guard",
+          "kind": "guard",
+          "disposition": "SYNCED",
+          "governed": {
+            "kind": "COLLECTION_EMPTINESS",
+            "data": {
+              "collection": "requested",
+              "comparison": "IS",
+              "kind": "COLLECTION_EMPTINESS",
+              "property": "seats"
+            },
+            "provenance": "SPECIFIED",
+            "completeness": "EXACT"
+          },
+          "recovered": {
+            "kind": "OR",
+            "data": {
+              "kind": "OR",
+              "terms": [
+                {
+                  "kind": "UNKNOWN"
+                },
+                {
+                  "collection": "requestedSeats",
+                  "comparison": "IS",
+                  "kind": "COLLECTION_EMPTINESS",
+                  "property": null
+                }
+              ]
+            },
+            "provenance": "DERIVED",
+            "completeness": "EXACT"
+          },
+          "reasons": [],
+          "evidence": [
+            {
+              "kind": "comparison",
+              "data": {
+                "items": [],
+                "semanticComparison": "UNCHANGED"
+              },
+              "anchors": [
+                {
+                  "kind": "SOURCE",
+                  "label": "BookingService.createBooking",
+                  "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+                  "symbol": "createBooking"
+                },
+                {
+                  "kind": "SPEC",
+                  "label": "b1.spec",
+                  "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b1.spec"
+                }
+              ]
+            }
+          ],
+          "anchors": [
+            {
+              "kind": "SOURCE",
+              "label": "BookingService.createBooking",
+              "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+              "symbol": "createBooking"
+            },
+            {
+              "kind": "SPEC",
+              "label": "b1.spec",
+              "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b1.spec"
+            }
+          ]
+        },
+        {
+          "id": "B1:effects",
+          "kind": "effects",
+          "disposition": "SYNCED",
+          "governed": {
+            "kind": "FAILURE",
+            "data": {
+              "canonicalTypeId": null,
+              "kind": "FAILURE",
+              "type": "com.example.cinema.BookingRejectedException"
+            },
+            "provenance": "SPECIFIED",
+            "completeness": "EXACT"
+          },
+          "recovered": {
+            "kind": "FAILURE",
+            "data": {
+              "canonicalTypeId": "com.example.cinema.BookingRejectedException",
+              "kind": "FAILURE",
+              "type": "BookingRejectedException"
+            },
+            "provenance": "DERIVED",
+            "completeness": "EXACT"
+          },
+          "reasons": [],
+          "evidence": [
+            {
+              "kind": "comparison",
+              "data": {
+                "items": [],
+                "semanticComparison": "UNCHANGED"
+              },
+              "anchors": [
+                {
+                  "kind": "SOURCE",
+                  "label": "BookingService.createBooking",
+                  "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+                  "symbol": "createBooking"
+                },
+                {
+                  "kind": "SPEC",
+                  "label": "b1.spec",
+                  "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b1.spec"
+                }
+              ]
+            }
+          ],
+          "anchors": [
+            {
+              "kind": "SOURCE",
+              "label": "BookingService.createBooking",
+              "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+              "symbol": "createBooking"
+            },
+            {
+              "kind": "SPEC",
+              "label": "b1.spec",
+              "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b1.spec"
+            }
+          ]
+        }
+      ],
+      "governed": {
+        "kind": "BEHAVIOR",
+        "data": {
+          "elseEffects": [],
+          "guard": {
+            "collection": "requested",
+            "comparison": "IS",
+            "kind": "COLLECTION_EMPTINESS",
+            "property": "seats"
+          },
+          "kind": "BEHAVIOR",
+          "thenEffects": [
+            {
+              "canonicalTypeId": null,
+              "kind": "FAILURE",
+              "type": "com.example.cinema.BookingRejectedException"
+            }
+          ]
+        },
+        "provenance": "SPECIFIED",
+        "completeness": "EXACT"
+      },
+      "recovered": {
+        "kind": "BEHAVIOR",
+        "data": {
+          "elseEffects": [],
+          "guard": {
+            "kind": "OR",
+            "terms": [
+              {
+                "kind": "UNKNOWN"
+              },
+              {
+                "collection": "requestedSeats",
+                "comparison": "IS",
+                "kind": "COLLECTION_EMPTINESS",
+                "property": null
+              }
+            ]
+          },
+          "kind": "BEHAVIOR",
+          "thenEffects": [
+            {
+              "canonicalTypeId": "com.example.cinema.BookingRejectedException",
+              "kind": "FAILURE",
+              "type": "BookingRejectedException"
+            }
+          ],
+          "witnesses": []
+        },
+        "provenance": "DERIVED",
+        "completeness": "EXACT"
+      },
+      "reasons": [],
+      "evidence": [
+        {
+          "kind": "comparison",
+          "data": {
+            "items": [],
+            "semanticComparison": "UNCHANGED"
+          },
+          "anchors": [
+            {
+              "kind": "SOURCE",
+              "label": "BookingService.createBooking",
+              "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+              "symbol": "createBooking"
+            },
+            {
+              "kind": "SPEC",
+              "label": "b1.spec",
+              "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b1.spec"
+            }
+          ]
+        }
+      ],
+      "anchors": [
+        {
+          "kind": "SOURCE",
+          "label": "BookingService.createBooking",
+          "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+          "symbol": "createBooking"
+        },
+        {
+          "kind": "SPEC",
+          "label": "b1.spec",
+          "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b1.spec"
+        }
+      ]
+    },
+    {
+      "id": "B2",
+      "title": "Requested seats distinct by Seat.id",
+      "aggregateDisposition": "SYNCED",
+      "obligations": [
+        {
+          "id": "B2:guard",
+          "kind": "guard",
+          "disposition": "SYNCED",
+          "governed": {
+            "kind": "DISTINCT_BY",
+            "data": {
+              "by": [
+                "id"
+              ],
+              "collection": "requested",
+              "comparison": "IS_NOT",
+              "kind": "DISTINCT_BY",
+              "property": "seats"
+            },
+            "provenance": "SPECIFIED",
+            "completeness": "EXACT"
+          },
+          "recovered": {
+            "kind": "EXISTS_DUPLICATE_BY",
+            "data": {
+              "by": [
+                "id"
+              ],
+              "collection": "requestedSeats",
+              "kind": "EXISTS_DUPLICATE_BY",
+              "property": null
+            },
+            "provenance": "DERIVED",
+            "completeness": "EXACT"
+          },
+          "reasons": [],
+          "evidence": [
+            {
+              "kind": "comparison",
+              "data": {
+                "items": [],
+                "semanticComparison": "UNCHANGED"
+              },
+              "anchors": [
+                {
+                  "kind": "SOURCE",
+                  "label": "BookingService.createBooking",
+                  "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+                  "symbol": "createBooking"
+                },
+                {
+                  "kind": "SPEC",
+                  "label": "b2.spec",
+                  "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b2.spec"
+                }
+              ]
+            },
+            {
+              "kind": "EXISTS_WITNESS",
+              "data": {
+                "binders": [
+                  {
+                    "binder": {
+                      "display_name": "i",
+                      "operation": "BookingService.createBooking",
+                      "ordinal": 0,
+                      "scope": [
+                        1
+                      ]
+                    },
+                    "binderId": "binder:BookingService.createBooking:1:0",
+                    "domain": {
+                      "end_exclusive": {
+                        "collection": {
+                          "id": 1,
+                          "kind": "parameter",
+                          "name": "requestedSeats"
+                        },
+                        "kind": "cardinality"
+                      },
+                      "kind": "range",
+                      "start": {
+                        "kind": "literal",
+                        "value": "0"
+                      },
+                      "step": {
+                        "kind": "literal",
+                        "value": "1"
+                      }
+                    }
+                  },
+                  {
+                    "binder": {
+                      "display_name": "j",
+                      "operation": "BookingService.createBooking",
+                      "ordinal": 1,
+                      "scope": [
+                        1
+                      ]
+                    },
+                    "binderId": "binder:BookingService.createBooking:1:1",
+                    "domain": {
+                      "end_exclusive": {
+                        "collection": {
+                          "id": 1,
+                          "kind": "parameter",
+                          "name": "requestedSeats"
+                        },
+                        "kind": "cardinality"
+                      },
+                      "kind": "range",
+                      "start": {
+                        "kind": "add",
+                        "left": {
+                          "binder": {
+                            "display_name": "i",
+                            "operation": "BookingService.createBooking",
+                            "ordinal": 0,
+                            "scope": [
+                              1
+                            ]
+                          },
+                          "binderId": "binder:BookingService.createBooking:1:0",
+                          "kind": "ref"
+                        },
+                        "right": {
+                          "kind": "literal",
+                          "value": "1"
+                        }
+                      },
+                      "step": {
+                        "kind": "literal",
+                        "value": "1"
+                      }
+                    }
+                  }
+                ],
+                "completeness": "EXACT",
+                "evidence": {
+                  "exit": {
+                    "kind": "return",
+                    "value": {
+                      "kind": "literal",
+                      "value": "true"
+                    }
+                  }
+                },
+                "predicate": {
+                  "kind": "equal",
+                  "left": {
+                    "kind": "property",
+                    "property": "id",
+                    "receiver": {
+                      "collection": {
+                        "id": 1,
+                        "kind": "parameter",
+                        "name": "requestedSeats"
+                      },
+                      "index": {
+                        "binder": {
+                          "display_name": "i",
+                          "operation": "BookingService.createBooking",
+                          "ordinal": 0,
+                          "scope": [
+                            1
+                          ]
+                        },
+                        "binderId": "binder:BookingService.createBooking:1:0",
+                        "kind": "ref"
+                      },
+                      "kind": "indexedaccess"
+                    }
+                  },
+                  "right": {
+                    "kind": "property",
+                    "property": "id",
+                    "receiver": {
+                      "collection": {
+                        "id": 1,
+                        "kind": "parameter",
+                        "name": "requestedSeats"
+                      },
+                      "index": {
+                        "binder": {
+                          "display_name": "j",
+                          "operation": "BookingService.createBooking",
+                          "ordinal": 1,
+                          "scope": [
+                            1
+                          ]
+                        },
+                        "binderId": "binder:BookingService.createBooking:1:1",
+                        "kind": "ref"
+                      },
+                      "kind": "indexedaccess"
+                    }
+                  }
+                },
+                "provenance": "DERIVED"
+              },
+              "anchors": [
+                {
+                  "kind": "SOURCE",
+                  "label": "BookingService.createBooking",
+                  "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+                  "symbol": "createBooking"
+                },
+                {
+                  "kind": "SPEC",
+                  "label": "b2.spec",
+                  "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b2.spec"
+                }
+              ]
+            }
+          ],
+          "proof": {
+            "kind": "RELATIONAL_EQUIVALENCE",
+            "relation": "VIOLATION_EQUIVALENCE",
+            "governed": {
+              "kind": "DISTINCT_BY",
+              "data": {
+                "by": [
+                  "id"
+                ],
+                "collection": "requested",
+                "comparison": "IS_NOT",
+                "kind": "DISTINCT_BY",
+                "property": "seats"
+              },
+              "provenance": "SPECIFIED",
+              "completeness": "EXACT"
+            },
+            "recovered": {
+              "kind": "EXISTS_DUPLICATE_BY",
+              "data": {
+                "by": [
+                  "id"
+                ],
+                "collection": "requestedSeats",
+                "kind": "EXISTS_DUPLICATE_BY",
+                "property": null
+              },
+              "provenance": "DERIVED",
+              "completeness": "EXACT"
+            },
+            "obligations": [
+              "SAME_COLLECTION",
+              "SAME_PROJECTION",
+              "PAIRWISE_DOMAIN",
+              "EQUALITY_PREDICATE",
+              "CORRECT_POLARITY",
+              "COMPATIBLE_FAILURE_EFFECT"
+            ],
+            "result": "PROVEN"
+          },
+          "anchors": [
+            {
+              "kind": "SOURCE",
+              "label": "BookingService.createBooking",
+              "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+              "symbol": "createBooking"
+            },
+            {
+              "kind": "SPEC",
+              "label": "b2.spec",
+              "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b2.spec"
+            }
+          ]
+        },
+        {
+          "id": "B2:effects",
+          "kind": "effects",
+          "disposition": "SYNCED",
+          "governed": {
+            "kind": "FAILURE",
+            "data": {
+              "canonicalTypeId": null,
+              "kind": "FAILURE",
+              "type": "com.example.cinema.BookingRejectedException"
+            },
+            "provenance": "SPECIFIED",
+            "completeness": "EXACT"
+          },
+          "recovered": {
+            "kind": "FAILURE",
+            "data": {
+              "canonicalTypeId": "com.example.cinema.BookingRejectedException",
+              "kind": "FAILURE",
+              "type": "BookingRejectedException"
+            },
+            "provenance": "DERIVED",
+            "completeness": "EXACT"
+          },
+          "reasons": [],
+          "evidence": [
+            {
+              "kind": "comparison",
+              "data": {
+                "items": [],
+                "semanticComparison": "UNCHANGED"
+              },
+              "anchors": [
+                {
+                  "kind": "SOURCE",
+                  "label": "BookingService.createBooking",
+                  "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+                  "symbol": "createBooking"
+                },
+                {
+                  "kind": "SPEC",
+                  "label": "b2.spec",
+                  "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b2.spec"
+                }
+              ]
+            }
+          ],
+          "anchors": [
+            {
+              "kind": "SOURCE",
+              "label": "BookingService.createBooking",
+              "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+              "symbol": "createBooking"
+            },
+            {
+              "kind": "SPEC",
+              "label": "b2.spec",
+              "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b2.spec"
+            }
+          ]
+        }
+      ],
+      "governed": {
+        "kind": "BEHAVIOR",
+        "data": {
+          "elseEffects": [],
+          "guard": {
+            "by": [
+              "id"
+            ],
+            "collection": "requested",
+            "comparison": "IS_NOT",
+            "kind": "DISTINCT_BY",
+            "property": "seats"
+          },
+          "kind": "BEHAVIOR",
+          "thenEffects": [
+            {
+              "canonicalTypeId": null,
+              "kind": "FAILURE",
+              "type": "com.example.cinema.BookingRejectedException"
+            }
+          ]
+        },
+        "provenance": "SPECIFIED",
+        "completeness": "EXACT"
+      },
+      "recovered": {
+        "kind": "BEHAVIOR",
+        "data": {
+          "elseEffects": [],
+          "guard": {
+            "kind": "AND",
+            "terms": [
+              {
+                "kind": "UNKNOWN"
+              },
+              {
+                "by": [
+                  "id"
+                ],
+                "collection": "requestedSeats",
+                "kind": "EXISTS_DUPLICATE_BY",
+                "property": null
+              }
+            ]
+          },
+          "kind": "BEHAVIOR",
+          "thenEffects": [
+            {
+              "canonicalTypeId": "com.example.cinema.BookingRejectedException",
+              "kind": "FAILURE",
+              "type": "BookingRejectedException"
+            }
+          ],
+          "witnesses": [
+            {
+              "binders": [
+                {
+                  "binder": {
+                    "display_name": "i",
+                    "operation": "BookingService.createBooking",
+                    "ordinal": 0,
+                    "scope": [
+                      1
+                    ]
+                  },
+                  "domain": {
+                    "end_exclusive": {
+                      "collection": {
+                        "id": 1,
+                        "kind": "parameter",
+                        "name": "requestedSeats"
+                      },
+                      "kind": "cardinality"
+                    },
+                    "kind": "range",
+                    "start": {
+                      "kind": "literal",
+                      "value": "0"
+                    },
+                    "step": {
+                      "kind": "literal",
+                      "value": "1"
+                    }
+                  }
+                },
+                {
+                  "binder": {
+                    "display_name": "j",
+                    "operation": "BookingService.createBooking",
+                    "ordinal": 1,
+                    "scope": [
+                      1
+                    ]
+                  },
+                  "domain": {
+                    "end_exclusive": {
+                      "collection": {
+                        "id": 1,
+                        "kind": "parameter",
+                        "name": "requestedSeats"
+                      },
+                      "kind": "cardinality"
+                    },
+                    "kind": "range",
+                    "start": {
+                      "kind": "add",
+                      "left": {
+                        "binder": {
+                          "display_name": "i",
+                          "operation": "BookingService.createBooking",
+                          "ordinal": 0,
+                          "scope": [
+                            1
+                          ]
+                        },
+                        "kind": "ref"
+                      },
+                      "right": {
+                        "kind": "literal",
+                        "value": "1"
+                      }
+                    },
+                    "step": {
+                      "kind": "literal",
+                      "value": "1"
+                    }
+                  }
+                }
+              ],
+              "completeness": "EXACT",
+              "evidence": {
+                "exit": {
+                  "kind": "return",
+                  "value": {
+                    "kind": "literal",
+                    "value": "true"
+                  }
+                }
+              },
+              "predicate": {
+                "kind": "equal",
+                "left": {
+                  "kind": "property",
+                  "property": "id",
+                  "receiver": {
+                    "collection": {
+                      "id": 1,
+                      "kind": "parameter",
+                      "name": "requestedSeats"
+                    },
+                    "index": {
+                      "binder": {
+                        "display_name": "i",
+                        "operation": "BookingService.createBooking",
+                        "ordinal": 0,
+                        "scope": [
+                          1
+                        ]
+                      },
+                      "kind": "ref"
+                    },
+                    "kind": "indexedaccess"
+                  }
+                },
+                "right": {
+                  "kind": "property",
+                  "property": "id",
+                  "receiver": {
+                    "collection": {
+                      "id": 1,
+                      "kind": "parameter",
+                      "name": "requestedSeats"
+                    },
+                    "index": {
+                      "binder": {
+                        "display_name": "j",
+                        "operation": "BookingService.createBooking",
+                        "ordinal": 1,
+                        "scope": [
+                          1
+                        ]
+                      },
+                      "kind": "ref"
+                    },
+                    "kind": "indexedaccess"
+                  }
+                }
+              },
+              "provenance": "DERIVED"
+            }
+          ]
+        },
+        "provenance": "DERIVED",
+        "completeness": "EXACT"
+      },
+      "reasons": [],
+      "evidence": [
+        {
+          "kind": "comparison",
+          "data": {
+            "items": [],
+            "semanticComparison": "UNCHANGED"
+          },
+          "anchors": [
+            {
+              "kind": "SOURCE",
+              "label": "BookingService.createBooking",
+              "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+              "symbol": "createBooking"
+            },
+            {
+              "kind": "SPEC",
+              "label": "b2.spec",
+              "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b2.spec"
+            }
+          ]
+        }
+      ],
+      "anchors": [
+        {
+          "kind": "SOURCE",
+          "label": "BookingService.createBooking",
+          "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+          "symbol": "createBooking"
+        },
+        {
+          "kind": "SPEC",
+          "label": "b2.spec",
+          "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b2.spec"
+        }
+      ]
+    },
+    {
+      "id": "B3",
+      "title": "Requested seats cardinality",
+      "aggregateDisposition": "SYNCED",
+      "obligations": [
+        {
+          "id": "B3:guard",
+          "kind": "guard",
+          "disposition": "SYNCED",
+          "governed": {
+            "kind": "COLLECTION_EMPTINESS",
+            "data": {
+              "collection": "requested",
+              "comparison": "IS",
+              "kind": "COLLECTION_EMPTINESS",
+              "property": "seats"
+            },
+            "provenance": "SPECIFIED",
+            "completeness": "EXACT"
+          },
+          "recovered": {
+            "kind": "OR",
+            "data": {
+              "kind": "OR",
+              "terms": [
+                {
+                  "kind": "UNKNOWN"
+                },
+                {
+                  "collection": "requestedSeats",
+                  "comparison": "IS",
+                  "kind": "COLLECTION_EMPTINESS",
+                  "property": null
+                }
+              ]
+            },
+            "provenance": "DERIVED",
+            "completeness": "EXACT"
+          },
+          "reasons": [],
+          "evidence": [
+            {
+              "kind": "comparison",
+              "data": {
+                "items": [],
+                "semanticComparison": "UNCHANGED"
+              },
+              "anchors": [
+                {
+                  "kind": "SOURCE",
+                  "label": "BookingService.createBooking",
+                  "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+                  "symbol": "createBooking"
+                },
+                {
+                  "kind": "SPEC",
+                  "label": "b3.spec",
+                  "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b3.spec"
+                }
+              ]
+            }
+          ],
+          "anchors": [
+            {
+              "kind": "SOURCE",
+              "label": "BookingService.createBooking",
+              "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+              "symbol": "createBooking"
+            },
+            {
+              "kind": "SPEC",
+              "label": "b3.spec",
+              "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b3.spec"
+            }
+          ]
+        },
+        {
+          "id": "B3:effects",
+          "kind": "effects",
+          "disposition": "SYNCED",
+          "governed": {
+            "kind": "FAILURE",
+            "data": {
+              "canonicalTypeId": null,
+              "kind": "FAILURE",
+              "type": "com.example.cinema.BookingRejectedException"
+            },
+            "provenance": "SPECIFIED",
+            "completeness": "EXACT"
+          },
+          "recovered": {
+            "kind": "FAILURE",
+            "data": {
+              "canonicalTypeId": "com.example.cinema.BookingRejectedException",
+              "kind": "FAILURE",
+              "type": "BookingRejectedException"
+            },
+            "provenance": "DERIVED",
+            "completeness": "EXACT"
+          },
+          "reasons": [],
+          "evidence": [
+            {
+              "kind": "comparison",
+              "data": {
+                "items": [],
+                "semanticComparison": "UNCHANGED"
+              },
+              "anchors": [
+                {
+                  "kind": "SOURCE",
+                  "label": "BookingService.createBooking",
+                  "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+                  "symbol": "createBooking"
+                },
+                {
+                  "kind": "SPEC",
+                  "label": "b3.spec",
+                  "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b3.spec"
+                }
+              ]
+            }
+          ],
+          "anchors": [
+            {
+              "kind": "SOURCE",
+              "label": "BookingService.createBooking",
+              "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+              "symbol": "createBooking"
+            },
+            {
+              "kind": "SPEC",
+              "label": "b3.spec",
+              "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b3.spec"
+            }
+          ]
+        }
+      ],
+      "governed": {
+        "kind": "BEHAVIOR",
+        "data": {
+          "elseEffects": [],
+          "guard": {
+            "collection": "requested",
+            "comparison": "IS",
+            "kind": "COLLECTION_EMPTINESS",
+            "property": "seats"
+          },
+          "kind": "BEHAVIOR",
+          "thenEffects": [
+            {
+              "canonicalTypeId": null,
+              "kind": "FAILURE",
+              "type": "com.example.cinema.BookingRejectedException"
+            }
+          ]
+        },
+        "provenance": "SPECIFIED",
+        "completeness": "EXACT"
+      },
+      "recovered": {
+        "kind": "BEHAVIOR",
+        "data": {
+          "elseEffects": [],
+          "guard": {
+            "kind": "OR",
+            "terms": [
+              {
+                "kind": "UNKNOWN"
+              },
+              {
+                "collection": "requestedSeats",
+                "comparison": "IS",
+                "kind": "COLLECTION_EMPTINESS",
+                "property": null
+              }
+            ]
+          },
+          "kind": "BEHAVIOR",
+          "thenEffects": [
+            {
+              "canonicalTypeId": "com.example.cinema.BookingRejectedException",
+              "kind": "FAILURE",
+              "type": "BookingRejectedException"
+            }
+          ],
+          "witnesses": []
+        },
+        "provenance": "DERIVED",
+        "completeness": "EXACT"
+      },
+      "reasons": [],
+      "evidence": [
+        {
+          "kind": "comparison",
+          "data": {
+            "items": [],
+            "semanticComparison": "UNCHANGED"
+          },
+          "anchors": [
+            {
+              "kind": "SOURCE",
+              "label": "BookingService.createBooking",
+              "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+              "symbol": "createBooking"
+            },
+            {
+              "kind": "SPEC",
+              "label": "b3.spec",
+              "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b3.spec"
+            }
+          ]
+        }
+      ],
+      "anchors": [
+        {
+          "kind": "SOURCE",
+          "label": "BookingService.createBooking",
+          "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+          "symbol": "createBooking"
+        },
+        {
+          "kind": "SPEC",
+          "label": "b3.spec",
+          "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b3.spec"
+        }
+      ]
+    },
+    {
+      "id": "B8",
+      "title": "Hall match with confirmed effect",
+      "aggregateDisposition": "CONFLICTED",
+      "obligations": [
+        {
+          "id": "B8:guard",
+          "kind": "guard",
+          "disposition": "NOT_OBSERVED",
+          "governed": {
+            "kind": "ATOM",
+            "data": {
+              "comparison": "IS_NOT",
+              "kind": "ATOM",
+              "property": "hall name",
+              "receiver": "seat",
+              "value": {
+                "reference": {
+                  "property": "hall name",
+                  "receiver": "showtime"
+                }
+              }
+            },
+            "provenance": "SPECIFIED",
+            "completeness": "EXACT"
+          },
+          "reasons": [
+            {
+              "code": "WRONG_OPERATION_SCOPE"
+            }
+          ],
+          "evidence": [
+            {
+              "kind": "comparison",
+              "data": {
+                "items": [
+                  {
+                    "certainty": "CONFIRMED",
+                    "expectedEvidence": [],
+                    "kind": "SHAPE_MISMATCH",
+                    "observed": {
+                      "behaviorCount": 0
+                    },
+                    "observedEvidence": [],
+                    "path": "/behaviors"
+                  }
+                ],
+                "semanticComparison": "INDETERMINATE"
+              },
+              "anchors": [
+                {
+                  "kind": "SOURCE",
+                  "label": "BookingService.createBooking",
+                  "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+                  "symbol": "createBooking"
+                },
+                {
+                  "kind": "SPEC",
+                  "label": "b8.spec",
+                  "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b8.spec"
+                }
+              ]
+            }
+          ],
+          "anchors": [
+            {
+              "kind": "SOURCE",
+              "label": "BookingService.createBooking",
+              "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+              "symbol": "createBooking"
+            },
+            {
+              "kind": "SPEC",
+              "label": "b8.spec",
+              "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b8.spec"
+            }
+          ]
+        },
+        {
+          "id": "B8:effects",
+          "kind": "effects",
+          "disposition": "NOT_OBSERVED",
+          "governed": {
+            "kind": "FAILURE",
+            "data": {
+              "canonicalTypeId": null,
+              "kind": "FAILURE",
+              "type": "com.example.cinema.BookingRejectedException"
+            },
+            "provenance": "SPECIFIED",
+            "completeness": "EXACT"
+          },
+          "recovered": {
+            "kind": "EFFECTS",
+            "data": [],
+            "provenance": "DERIVED",
+            "completeness": "EXACT"
+          },
+          "reasons": [],
+          "evidence": [
+            {
+              "kind": "comparison",
+              "data": {
+                "items": [
+                  {
+                    "certainty": "CONFIRMED",
+                    "expectedEvidence": [],
+                    "kind": "SHAPE_MISMATCH",
+                    "observed": {
+                      "behaviorCount": 0
+                    },
+                    "observedEvidence": [],
+                    "path": "/behaviors"
+                  }
+                ],
+                "semanticComparison": "INDETERMINATE"
+              },
+              "anchors": [
+                {
+                  "kind": "SOURCE",
+                  "label": "BookingService.createBooking",
+                  "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+                  "symbol": "createBooking"
+                },
+                {
+                  "kind": "SPEC",
+                  "label": "b8.spec",
+                  "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b8.spec"
+                }
+              ]
+            }
+          ],
+          "anchors": [
+            {
+              "kind": "SOURCE",
+              "label": "BookingService.createBooking",
+              "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+              "symbol": "createBooking"
+            },
+            {
+              "kind": "SPEC",
+              "label": "b8.spec",
+              "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b8.spec"
+            }
+          ]
+        }
+      ],
+      "governed": {
+        "kind": "EFFECTS",
+        "data": {
+          "effects": [
+            {
+              "canonicalTypeId": null,
+              "kind": "FAILURE",
+              "type": "com.example.cinema.BookingRejectedException"
+            }
+          ],
+          "kind": "EFFECTS"
+        },
+        "provenance": "SPECIFIED",
+        "completeness": "EXACT"
+      },
+      "recovered": {
+        "kind": "EFFECTS",
+        "data": {
+          "effects": [],
+          "kind": "EFFECTS"
+        },
+        "provenance": "DERIVED",
+        "completeness": "EXACT"
+      },
+      "reasons": [],
+      "evidence": [
+        {
+          "kind": "comparison",
+          "data": {
+            "items": [
+              {
+                "certainty": "CONFIRMED",
+                "expectedEvidence": [],
+                "kind": "SHAPE_MISMATCH",
+                "observed": {
+                  "behaviorCount": 0
+                },
+                "observedEvidence": [],
+                "path": "/behaviors"
+              }
+            ],
+            "semanticComparison": "INDETERMINATE"
+          },
+          "anchors": [
+            {
+              "kind": "SOURCE",
+              "label": "BookingService.createBooking",
+              "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+              "symbol": "createBooking"
+            },
+            {
+              "kind": "SPEC",
+              "label": "b8.spec",
+              "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b8.spec"
+            }
+          ]
+        }
+      ],
+      "anchors": [
+        {
+          "kind": "SOURCE",
+          "label": "BookingService.createBooking",
+          "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+          "symbol": "createBooking"
+        },
+        {
+          "kind": "SPEC",
+          "label": "b8.spec",
+          "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b8.spec"
+        }
+      ]
+    },
+    {
+      "id": "STATE_EFFECT",
+      "title": "Booking becomes CONFIRMED",
+      "aggregateDisposition": "SYNCED",
+      "obligations": [
+        {
+          "id": "STATE_EFFECT:guard",
+          "kind": "guard",
+          "disposition": "NOT_OBSERVED",
+          "reasons": [],
+          "evidence": [
+            {
+              "kind": "comparison",
+              "data": {
+                "items": [],
+                "semanticComparison": "UNCHANGED"
+              },
+              "anchors": [
+                {
+                  "kind": "SOURCE",
+                  "label": "BookingService.createBooking",
+                  "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+                  "symbol": "createBooking"
+                },
+                {
+                  "kind": "SPEC",
+                  "label": "effect.spec",
+                  "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/effect.spec"
+                }
+              ]
+            }
+          ],
+          "anchors": [
+            {
+              "kind": "SOURCE",
+              "label": "BookingService.createBooking",
+              "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+              "symbol": "createBooking"
+            },
+            {
+              "kind": "SPEC",
+              "label": "effect.spec",
+              "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/effect.spec"
+            }
+          ]
+        },
+        {
+          "id": "STATE_EFFECT:effects",
+          "kind": "effects",
+          "disposition": "SYNCED",
+          "governed": {
+            "kind": "STATE_MUTATION",
+            "data": {
+              "kind": "STATE_MUTATION",
+              "property": "status",
+              "receiver": "booking",
+              "value": {
+                "enum_type": "BookingStatus",
+                "kind": "ENUM_LITERAL",
+                "member": "CONFIRMED"
+              }
+            },
+            "provenance": "SPECIFIED",
+            "completeness": "EXACT"
+          },
+          "recovered": {
+            "kind": "STATE_MUTATION",
+            "data": {
+              "kind": "STATE_MUTATION",
+              "property": "status",
+              "receiver": "booking",
+              "value": {
+                "kind": "PROPERTY",
+                "property": "CONFIRMED",
+                "receiver": "BookingStatus"
+              }
+            },
+            "provenance": "DERIVED",
+            "completeness": "EXACT"
+          },
+          "reasons": [],
+          "evidence": [
+            {
+              "kind": "comparison",
+              "data": {
+                "items": [],
+                "semanticComparison": "UNCHANGED"
+              },
+              "anchors": [
+                {
+                  "kind": "SOURCE",
+                  "label": "BookingService.createBooking",
+                  "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+                  "symbol": "createBooking"
+                },
+                {
+                  "kind": "SPEC",
+                  "label": "effect.spec",
+                  "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/effect.spec"
+                }
+              ]
+            }
+          ],
+          "anchors": [
+            {
+              "kind": "SOURCE",
+              "label": "BookingService.createBooking",
+              "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+              "symbol": "createBooking"
+            },
+            {
+              "kind": "SPEC",
+              "label": "effect.spec",
+              "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/effect.spec"
+            }
+          ]
+        }
+      ],
+      "governed": {
+        "kind": "EFFECTS",
+        "data": {
+          "effects": [
+            {
+              "kind": "STATE_MUTATION",
+              "property": "status",
+              "receiver": "booking",
+              "value": {
+                "enum_type": "BookingStatus",
+                "kind": "ENUM_LITERAL",
+                "member": "CONFIRMED"
+              }
+            }
+          ],
+          "kind": "EFFECTS"
+        },
+        "provenance": "SPECIFIED",
+        "completeness": "EXACT"
+      },
+      "recovered": {
+        "kind": "EFFECTS",
+        "data": {
+          "effects": [
+            {
+              "kind": "STATE_MUTATION",
+              "property": "status",
+              "receiver": "booking",
+              "value": {
+                "kind": "PROPERTY",
+                "property": "CONFIRMED",
+                "receiver": "BookingStatus"
+              }
+            }
+          ],
+          "kind": "EFFECTS"
+        },
+        "provenance": "DERIVED",
+        "completeness": "EXACT"
+      },
+      "reasons": [],
+      "evidence": [
+        {
+          "kind": "comparison",
+          "data": {
+            "items": [],
+            "semanticComparison": "UNCHANGED"
+          },
+          "anchors": [
+            {
+              "kind": "SOURCE",
+              "label": "BookingService.createBooking",
+              "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+              "symbol": "createBooking"
+            },
+            {
+              "kind": "SPEC",
+              "label": "effect.spec",
+              "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/effect.spec"
+            }
+          ]
+        }
+      ],
+      "anchors": [
+        {
+          "kind": "SOURCE",
+          "label": "BookingService.createBooking",
+          "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+          "symbol": "createBooking"
+        },
+        {
+          "kind": "SPEC",
+          "label": "effect.spec",
+          "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/effect.spec"
+        }
+      ]
+    }
+  ]
+}

@@ -11,6 +11,7 @@ import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { IViewDescriptorService } from '../../../common/views.js';
 import { ViewPane, IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
+import { VerificationTransportError } from '../common/sysVerificationWire.js';
 import { ISysVerificationDataProvider } from './sysVerificationProviderService.js';
 import {
 	ALL_DISPOSITIONS,
@@ -32,6 +33,7 @@ type SemanticViewTab = 'GOVERNED' | 'RECOVERED' | 'VERIFICATION';
 export class SysVerificationWorkbenchView extends ViewPane {
 	private project: VerificationProject | undefined;
 	private loadState: 'IDLE' | 'LOADING' | 'READY' | 'ERROR' = 'IDLE';
+	private loadError: string | undefined;
 	private loadPromise: Promise<void> | undefined;
 	private bodyContainer: HTMLElement | undefined;
 
@@ -83,10 +85,16 @@ export class SysVerificationWorkbenchView extends ViewPane {
 			try {
 				const project = await this.dataProvider.getProject();
 				this.selectedRuleId = pickStableSelection(project.rules, this.selectedRuleId);
+				const ids = new Set(project.rules.flatMap(r => r.obligations.map(o => o.id)));
+				this.expandedObligationIds = new Set([...this.expandedObligationIds].filter(id => ids.has(id)));
 				this.project = project;
 				this.loadState = 'READY';
+				this.loadError = undefined;
 			} catch (error) {
 				this.loadState = 'ERROR';
+				this.project = undefined;
+				this.selectedRuleId = undefined;
+				this.loadError = error instanceof VerificationTransportError ? `${error.code}: ${error.message}` : String(error);
 				console.error('[SysVerificationWorkbenchView] load failed', error instanceof Error ? error.message : error);
 			} finally {
 				this.loadPromise = undefined;
@@ -106,7 +114,8 @@ export class SysVerificationWorkbenchView extends ViewPane {
 			return;
 		}
 		if (this.loadState === 'ERROR') {
-			DOM.append(parent, $('p.sys-verification-unavailable')).textContent = 'Unable to load verification data.';
+			DOM.append(parent, $('p.sys-verification-unavailable')).textContent = `Unable to load verification data — ${this.loadError ?? 'unknown error'}. This is an infrastructure error, not a verification result.`;
+			this._refreshButton(parent);
 			return;
 		}
 		const project = this.project;
@@ -118,6 +127,8 @@ export class SysVerificationWorkbenchView extends ViewPane {
 		DOM.append(header, $('div.sys-eyebrow')).textContent = 'SEMANTIC VERIFICATION';
 		DOM.append(header, $('h1.sys-title')).textContent = project.projectId;
 		DOM.append(header, $('p.sys-subtitle')).textContent = 'Governed intent vs. recovered meaning, with evidence';
+		DOM.append(header, $('p.sys-subtitle')).textContent = `Data source: ${project.dataSource ?? 'UNKNOWN'}`;
+		this._refreshButton(header);
 
 		if (project.contractStatus === 'PLATFORM_CONTRACT_GAP') {
 			const gap = DOM.append(parent, $('section.sys-section'));
@@ -147,6 +158,12 @@ export class SysVerificationWorkbenchView extends ViewPane {
 		for (const rule of visibleRules) {
 			this._renderRuleRow(list, rule);
 		}
+	}
+
+	private _refreshButton(parent: HTMLElement): void {
+		const btn = DOM.append(parent, $('button.sys-verification-filter-btn'));
+		btn.textContent = 'Refresh';
+		btn.addEventListener('click', () => void this.load());
 	}
 
 	private _filterButton(parent: HTMLElement, filter: DispositionFilter, label: string): void {
@@ -191,6 +208,9 @@ export class SysVerificationWorkbenchView extends ViewPane {
 				`Aggregate is ${dispositionLabel(rule.aggregateDisposition)}. Each obligation below keeps its own disposition; a synced obligation never implies the aggregate is synced.`;
 		}
 
+		if (rule.evidence?.length) {
+			DOM.append(detail, $('div.sys-semantic-view-evidence')).textContent = `Rule evidence\n${rule.evidence.join('\n')}`;
+		}
 		for (const obligation of rule.obligations) {
 			this._renderObligation(detail, obligation);
 		}
@@ -268,13 +288,19 @@ export class SysVerificationWorkbenchView extends ViewPane {
 		if (view.evidence?.length) {
 			DOM.append(block, $('div.sys-semantic-view-evidence')).textContent = view.evidence.join('\n');
 		}
+		if (view.completeness) {
+			DOM.append(block, $('div.sys-detail-value')).textContent = `Completeness: ${view.completeness}`;
+		}
 	}
 
 	private _renderVerification(parent: HTMLElement, obligation: VerificationObligation): void {
 		const block = DOM.append(parent, $('div.sys-semantic-view-block'));
+		if (obligation.proof?.length) {
+			DOM.append(block, $('div.sys-semantic-view-evidence')).textContent = obligation.proof.join('\n');
+		}
 		if (obligation.why) {
 			DOM.append(block, $('div.sys-semantic-view-summary')).textContent = `Why ${dispositionLabel(obligation.disposition)}: ${obligation.why}`;
-		} else {
+		} else if (!obligation.proof?.length) {
 			DOM.append(block, $('p.sys-verification-unavailable')).textContent = 'No proof obligation available for this disposition.';
 		}
 		if (obligation.reasons.length) {
@@ -282,12 +308,18 @@ export class SysVerificationWorkbenchView extends ViewPane {
 		}
 		const completenessRow = DOM.append(block, $('div.sys-detail'));
 		DOM.append(completenessRow, $('span.sys-detail-label')).textContent = 'Completeness:';
-		DOM.append(completenessRow, $('span.sys-detail-value')).textContent = obligation.completeness ?? 'UNKNOWN';
+		DOM.append(completenessRow, $('span.sys-detail-value')).textContent = obligation.completeness
+			?? (obligation.governed?.completeness || obligation.recovered?.completeness
+				? `governed=${obligation.governed?.completeness ?? 'MISSING'}, recovered=${obligation.recovered?.completeness ?? 'MISSING'}`
+				: 'UNKNOWN');
 	}
 
 	private _renderEvidenceAndNavigation(parent: HTMLElement, obligation: VerificationObligation): void {
 		const section = DOM.append(parent, $('div.sys-list-section'));
 		DOM.append(section, $('h3.sys-subsection-title')).textContent = 'Evidence / Navigation';
+		if (obligation.evidence !== undefined) {
+			DOM.append(section, $('div.sys-semantic-view-evidence')).textContent = obligation.evidence.length ? obligation.evidence.join('\n') : 'Evidence: none provided by platform.';
+		}
 		if (!obligation.anchors.length) {
 			DOM.append(section, $('p.sys-list-empty')).textContent = 'No source or spec anchors available.';
 			return;
@@ -305,9 +337,16 @@ export class SysVerificationWorkbenchView extends ViewPane {
 			btn.title = 'No navigable location for this anchor.';
 			return;
 		}
+		if (anchor.range) {
+			btn.title = `range: ${anchor.range}`;
+		}
 		btn.addEventListener('click', (e) => {
 			e.stopPropagation();
-			void this.openerService.open(URI.file(anchor.file!));
+			const target = anchor.file!.includes('://') ? URI.parse(anchor.file!) : URI.file(anchor.file!);
+			this.openerService.open(target).catch(err => {
+				btn.title = `Unable to open ${anchor.file}: ${err instanceof Error ? err.message : err}`;
+				btn.textContent = `[${anchor.kind}] ${anchor.label} — cannot open`;
+			});
 		});
 	}
 

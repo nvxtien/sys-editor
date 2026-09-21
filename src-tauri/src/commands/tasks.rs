@@ -17,6 +17,47 @@ fn shell_escape(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\"'\"'"))
 }
 
+/// Stateful UTF-8 decoding for chunked pipe reads: a code point split across two reads is held in
+/// `pending` until its remaining bytes arrive, instead of each chunk being lossily decoded alone.
+fn decode_utf8_chunk(pending: &mut Vec<u8>, chunk: &[u8]) -> String {
+    pending.extend_from_slice(chunk);
+    let mut out = String::new();
+    loop {
+        match std::str::from_utf8(pending) {
+            Ok(valid) => {
+                out.push_str(valid);
+                pending.clear();
+                return out;
+            }
+            Err(e) => {
+                let valid_up_to = e.valid_up_to();
+                out.push_str(std::str::from_utf8(&pending[..valid_up_to]).unwrap_or_default());
+                match e.error_len() {
+                    // truncated sequence at the end: keep it for the next read
+                    None => {
+                        pending.drain(..valid_up_to);
+                        return out;
+                    }
+                    Some(bad) => {
+                        out.push('\u{FFFD}');
+                        pending.drain(..valid_up_to + bad);
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// End of stream: whatever is still pending is genuinely truncated.
+fn flush_utf8(pending: &mut Vec<u8>) -> Option<String> {
+    if pending.is_empty() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(pending).to_string();
+    pending.clear();
+    Some(text)
+}
+
 struct TaskProcessHandle {
     child: Child,
 }
@@ -167,10 +208,14 @@ pub fn task_spawn(
         std::thread::spawn(move || {
             let mut reader = std::io::BufReader::new(stdout);
             let mut buf = [0u8; 8192];
+            let mut pending: Vec<u8> = Vec::new();
             loop {
                 match reader.read(&mut buf) {
                     Ok(n) if n > 0 => {
-                        let text = String::from_utf8_lossy(&buf[..n]).to_string();
+                        let text = decode_utf8_chunk(&mut pending, &buf[..n]);
+                        if text.is_empty() {
+                            continue;
+                        }
                         let _ = app_out.emit(
                             "task-output",
                             TaskOutputEvent {
@@ -182,6 +227,16 @@ pub fn task_spawn(
                     }
                     Ok(_) | Err(_) => break,
                 }
+            }
+            if let Some(text) = flush_utf8(&mut pending) {
+                let _ = app_out.emit(
+                    "task-output",
+                    TaskOutputEvent {
+                        task_id,
+                        data: text,
+                        stream: "stdout".to_string(),
+                    },
+                );
             }
 
             // Remove the handle from the map FIRST, then wait() WITHOUT the
@@ -219,10 +274,14 @@ pub fn task_spawn(
         std::thread::spawn(move || {
             let mut reader = std::io::BufReader::new(stderr);
             let mut buf = [0u8; 4096];
+            let mut pending: Vec<u8> = Vec::new();
             loop {
                 match reader.read(&mut buf) {
                     Ok(n) if n > 0 => {
-                        let text = String::from_utf8_lossy(&buf[..n]).to_string();
+                        let text = decode_utf8_chunk(&mut pending, &buf[..n]);
+                        if text.is_empty() {
+                            continue;
+                        }
                         let _ = app_err.emit(
                             "task-output",
                             TaskOutputEvent {
@@ -234,6 +293,16 @@ pub fn task_spawn(
                     }
                     Ok(_) | Err(_) => break,
                 }
+            }
+            if let Some(text) = flush_utf8(&mut pending) {
+                let _ = app_err.emit(
+                    "task-output",
+                    TaskOutputEvent {
+                        task_id,
+                        data: text,
+                        stream: "stderr".to_string(),
+                    },
+                );
             }
         });
     }
@@ -348,4 +417,38 @@ pub fn tasks_parse_config(workspace: String) -> Result<Vec<TaskDefinition>, Stri
     }
     let tasks = sidex_tasks::parse_tasks_json(&tasks_path).map_err(|e| e.to_string())?;
     Ok(tasks.iter().map(TaskDefinition::from_crate_task).collect())
+}
+
+#[cfg(test)]
+mod utf8_tests {
+    use super::*;
+
+    #[test]
+    fn multibyte_split_across_chunks_round_trips() {
+        let original = "i ∈ [0, |requestedSeats|) → 日本語 🎬";
+        let bytes = original.as_bytes();
+        for split in 1..bytes.len() {
+            let mut pending = Vec::new();
+            let mut out = decode_utf8_chunk(&mut pending, &bytes[..split]);
+            out.push_str(&decode_utf8_chunk(&mut pending, &bytes[split..]));
+            assert!(flush_utf8(&mut pending).is_none(), "split {split}");
+            assert_eq!(out, original, "split {split}");
+        }
+    }
+
+    #[test]
+    fn ascii_chunks_pass_through_unchanged() {
+        let mut pending = Vec::new();
+        assert_eq!(decode_utf8_chunk(&mut pending, b"abc"), "abc");
+        assert_eq!(decode_utf8_chunk(&mut pending, b"def"), "def");
+        assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn truncated_tail_flushes_lossily_and_invalid_bytes_are_replaced() {
+        let mut pending = Vec::new();
+        assert_eq!(decode_utf8_chunk(&mut pending, &[b'a', 0xE2, 0x88]), "a");
+        assert_eq!(flush_utf8(&mut pending).as_deref(), Some("\u{FFFD}"));
+        assert_eq!(decode_utf8_chunk(&mut pending, &[b'a', 0xFF, b'b']), "a\u{FFFD}b");
+    }
 }

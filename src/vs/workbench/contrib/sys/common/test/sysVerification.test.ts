@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { dispositionLabel, filterRulesByDisposition, pickStableSelection } from '../sysVerification.js';
-import { CINEMA_BOOKING_VERIFICATION_PROJECT, LIVE_PLATFORM_CONTRACT_GAP_PROJECT } from '../sysVerificationFixture.js';
+import { CINEMA_BOOKING_VERIFICATION_PROJECT } from '../sysVerificationFixture.js';
 
 const rules = CINEMA_BOOKING_VERIFICATION_PROJECT.rules;
 const find = (id: string) => rules.find(r => r.id === id)!;
@@ -65,10 +65,4 @@ test('selection survives a data refresh only if the id still exists', () => {
 	assert.equal(pickStableSelection(rules, 'B2-distinctness'), 'B2-distinctness');
 	assert.equal(pickStableSelection(rules, 'does-not-exist'), undefined);
 	assert.equal(pickStableSelection(rules, undefined), undefined);
-});
-
-test('live platform contract gap never substitutes fixture rules', () => {
-	assert.equal(LIVE_PLATFORM_CONTRACT_GAP_PROJECT.contractStatus, 'PLATFORM_CONTRACT_GAP');
-	assert.deepEqual(LIVE_PLATFORM_CONTRACT_GAP_PROJECT.rules, []);
-	assert.ok(LIVE_PLATFORM_CONTRACT_GAP_PROJECT.missingPlatformFields!.includes('governedRuleId'));
 });

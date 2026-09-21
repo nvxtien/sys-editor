@@ -15,7 +15,7 @@ export type VerificationDisposition =
 	| 'UNSUPPORTED'
 	| 'WRONG_OPERATION_SCOPE';
 
-export type VerificationProvenance = 'SPECIFIED' | 'DERIVED';
+export type VerificationProvenance = 'SPECIFIED' | 'OBSERVED' | 'DERIVED' | 'INFERRED';
 
 export type VerificationContractStatus = 'READY' | 'PLATFORM_CONTRACT_GAP';
 
@@ -32,6 +32,10 @@ export interface VerificationSemanticView {
 	readonly expression?: string;
 	readonly evidence?: readonly string[];
 	readonly provenance: VerificationProvenance;
+	/** Live contract only: structured object as sent by the platform, plus its completeness. */
+	readonly kind?: string;
+	readonly data?: unknown;
+	readonly completeness?: string;
 }
 
 export interface VerificationObligation {
@@ -43,6 +47,10 @@ export interface VerificationObligation {
 	readonly why?: string;
 	readonly reasons: readonly string[];
 	readonly completeness?: 'COMPLETE' | 'BOUNDED' | 'UNKNOWN';
+	/** Live contract only: structured platform evidence, one bounded line per entry. */
+	readonly evidence?: readonly string[];
+	/** Live contract only: structured proof rendered line by line. */
+	readonly proof?: readonly string[];
 	readonly anchors: readonly VerificationAnchor[];
 }
 
@@ -50,12 +58,15 @@ export interface VerificationRule {
 	readonly id: string;
 	readonly title: string;
 	readonly aggregateDisposition: VerificationDisposition;
+	/** Live contract only: rule-level structured evidence (e.g. exists-witnesses). */
+	readonly evidence?: readonly string[];
 	readonly obligations: readonly VerificationObligation[];
 }
 
 export interface VerificationProject {
 	readonly projectId: string;
 	readonly contractStatus: VerificationContractStatus;
+	readonly dataSource?: 'LIVE' | 'FIXTURE';
 	readonly rules: readonly VerificationRule[];
 	readonly missingPlatformFields?: readonly string[];
 }

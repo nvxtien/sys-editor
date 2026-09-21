@@ -1,0 +1,94 @@
+{
+  "project_id": "cinema-booking",
+  "project_root": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture",
+  "target_operation": "BookingService.createBooking",
+  "rules": [
+    {
+      "id": "B1",
+      "title": "Requested seats non-empty",
+      "spec_file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b1.spec",
+      "source_anchor": {
+        "kind": "SOURCE",
+        "label": "BookingService.createBooking",
+        "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+        "symbol": "createBooking"
+      },
+      "spec_anchor": {
+        "kind": "SPEC",
+        "label": "b1.spec",
+        "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b1.spec"
+      }
+    },
+    {
+      "id": "B2",
+      "title": "Requested seats distinct by Seat.id",
+      "spec_file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b2.spec",
+      "source_anchor": {
+        "kind": "SOURCE",
+        "label": "BookingService.createBooking",
+        "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+        "symbol": "createBooking"
+      },
+      "spec_anchor": {
+        "kind": "SPEC",
+        "label": "b2.spec",
+        "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b2.spec"
+      }
+    },
+    {
+      "id": "B3",
+      "title": "Requested seats cardinality",
+      "spec_file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b3.spec",
+      "source_anchor": {
+        "kind": "SOURCE",
+        "label": "BookingService.createBooking",
+        "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+        "symbol": "createBooking"
+      },
+      "spec_anchor": {
+        "kind": "SPEC",
+        "label": "b3.spec",
+        "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b3.spec"
+      }
+    },
+    {
+      "id": "STATE_EFFECT",
+      "title": "Booking becomes CONFIRMED",
+      "spec_file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/effect.spec",
+      "source_anchor": {
+        "kind": "SOURCE",
+        "label": "BookingService.createBooking",
+        "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+        "symbol": "createBooking"
+      },
+      "spec_anchor": {
+        "kind": "SPEC",
+        "label": "effect.spec",
+        "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/effect.spec"
+      }
+    },
+    {
+      "id": "B8",
+      "title": "Hall match with confirmed effect",
+      "spec_file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b8.spec",
+      "obligation_reasons": {
+        "guard": [
+          {
+            "code": "WRONG_OPERATION_SCOPE"
+          }
+        ]
+      },
+      "source_anchor": {
+        "kind": "SOURCE",
+        "label": "BookingService.createBooking",
+        "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
+        "symbol": "createBooking"
+      },
+      "spec_anchor": {
+        "kind": "SPEC",
+        "label": "b8.spec",
+        "file": "/Volumes/Work/dev/sys-editor/examples/cinema-booking-verification/b8.spec"
+      }
+    }
+  ]
+}

@@ -5,6 +5,7 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { ViewPaneContainer } from '../../../browser/parts/views/viewPaneContainer.js';
 import { Extensions as ViewExtensions, IViewContainersRegistry, IViewsRegistry, ViewContainerLocation } from '../../../common/views.js';
+import { Extensions as ConfigurationExtensions, IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { SysSemanticWorkbenchView } from './sysSemanticWorkbenchView.js';
 import { SysVerificationWorkbenchView } from './sysVerificationWorkbenchView.js';
 import './sysSemanticSnapshotService.js';
@@ -50,3 +51,32 @@ Registry.as<IViewsRegistry>(ViewExtensions.ViewsRegistry).registerViews([
 		hideByDefault: false,
 	},
 ], viewContainer);
+
+Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
+	id: 'sys.verification',
+	title: nls.localize('sysVerificationConfig', 'Sys Verification'),
+	type: 'object',
+	properties: {
+		'sys.verification.dataSource': {
+			type: 'string',
+			enum: ['live', 'fixture'],
+			default: 'live',
+			description: nls.localize('sysVerificationDataSource', 'Where the Verification view gets data. A failing live run shows an error; it never falls back to the fixture.')
+		},
+		'sys.verification.platformBinary': {
+			type: 'string',
+			default: '',
+			description: nls.localize('sysVerificationBinary', 'Absolute path to the sys-platform spec-code-sync executable.')
+		},
+		'sys.verification.manifestPath': {
+			type: 'string',
+			default: '',
+			description: nls.localize('sysVerificationManifest', 'Absolute path to the verification manifest JSON passed to `spec-code-sync verification-v0.1`.')
+		},
+		'sys.verification.timeoutMs': {
+			type: 'number',
+			default: 60000,
+			description: nls.localize('sysVerificationTimeout', 'Timeout for a live verification run, in milliseconds.')
+		}
+	}
+});

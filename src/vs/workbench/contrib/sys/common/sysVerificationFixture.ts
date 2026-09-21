@@ -172,14 +172,3 @@ export const CINEMA_BOOKING_VERIFICATION_PROJECT: VerificationProject = {
 		}
 	]
 };
-
-export const LIVE_PLATFORM_CONTRACT_GAP_PROJECT: VerificationProject = {
-	projectId: 'live-workspace',
-	contractStatus: 'PLATFORM_CONTRACT_GAP',
-	rules: [],
-	missingPlatformFields: [
-		'governedRuleId', 'ruleDisposition', 'obligationDisposition', 'governedSemanticObject',
-		'recoveredSemanticObject', 'proofReasonCodes', 'provenance', 'completeness', 'evidence',
-		'sourceAnchors', 'specAnchors'
-	]
-};
