@@ -9,6 +9,12 @@ import { IKeybindingService } from '../../../../platform/keybinding/common/keybi
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
+import { CancellationToken } from '../../../../base/common/cancellation.js';
+import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
+import { DocumentSymbol } from '../../../../editor/common/languages.js';
+import { getCodeEditor } from '../../../../editor/browser/editorBrowser.js';
+import { ScrollType } from '../../../../editor/common/editorCommon.js';
+import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IViewDescriptorService } from '../../../common/views.js';
 import { ViewPane, IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { VerificationTransportError } from '../common/sysVerificationWire.js';
@@ -37,6 +43,8 @@ export class SysVerificationWorkbenchView extends ViewPane {
 	private loadPromise: Promise<void> | undefined;
 	private bodyContainer: HTMLElement | undefined;
 
+	private lastLoad: { at: Date; runs: number } | undefined;
+	private loadRuns = 0;
 	private filter: DispositionFilter = 'ALL';
 	private selectedRuleId: string | undefined;
 	private expandedObligationIds = new Set<string>();
@@ -53,6 +61,8 @@ export class SysVerificationWorkbenchView extends ViewPane {
 		@IOpenerService openerService: IOpenerService,
 		@IThemeService themeService: IThemeService,
 		@IHoverService hoverService: IHoverService,
+		@IEditorService private readonly editorService: IEditorService,
+		@ILanguageFeaturesService private readonly languageFeatures: ILanguageFeaturesService,
 		@ISysVerificationDataProvider private readonly dataProvider: ISysVerificationDataProvider
 	) {
 		super(
@@ -89,6 +99,7 @@ export class SysVerificationWorkbenchView extends ViewPane {
 				this.expandedObligationIds = new Set([...this.expandedObligationIds].filter(id => ids.has(id)));
 				this.project = project;
 				this.loadState = 'READY';
+				this.lastLoad = { at: new Date(), runs: ++this.loadRuns };
 				this.loadError = undefined;
 			} catch (error) {
 				this.loadState = 'ERROR';
@@ -128,6 +139,9 @@ export class SysVerificationWorkbenchView extends ViewPane {
 		DOM.append(header, $('h1.sys-title')).textContent = project.projectId;
 		DOM.append(header, $('p.sys-subtitle')).textContent = 'Governed intent vs. recovered meaning, with evidence';
 		DOM.append(header, $('p.sys-subtitle')).textContent = `Data source: ${project.dataSource ?? 'UNKNOWN'}`;
+		if (this.lastLoad) {
+			DOM.append(header, $('p.sys-subtitle')).textContent = `Last refreshed ${this.lastLoad.at.toLocaleTimeString()} (run #${this.lastLoad.runs})`;
+		}
 		this._refreshButton(header);
 
 		if (project.contractStatus === 'PLATFORM_CONTRACT_GAP') {
@@ -161,9 +175,13 @@ export class SysVerificationWorkbenchView extends ViewPane {
 	}
 
 	private _refreshButton(parent: HTMLElement): void {
-		const btn = DOM.append(parent, $('button.sys-verification-filter-btn'));
+		const btn = DOM.append(parent, $('button.sys-verification-filter-btn')) as HTMLButtonElement;
 		btn.textContent = 'Refresh';
-		btn.addEventListener('click', () => void this.load());
+		btn.addEventListener('click', () => {
+			btn.textContent = 'Refreshing…';
+			btn.disabled = true;
+			void this.load(); // re-renders on completion, restoring the button
+		});
 	}
 
 	private _filterButton(parent: HTMLElement, filter: DispositionFilter, label: string): void {
@@ -343,11 +361,44 @@ export class SysVerificationWorkbenchView extends ViewPane {
 		btn.addEventListener('click', (e) => {
 			e.stopPropagation();
 			const target = anchor.file!.includes('://') ? URI.parse(anchor.file!) : URI.file(anchor.file!);
-			this.openerService.open(target).catch(err => {
+			this._openAnchor(target, anchor.symbol).catch(err => {
 				btn.title = `Unable to open ${anchor.file}: ${err instanceof Error ? err.message : err}`;
 				btn.textContent = `[${anchor.kind}] ${anchor.label} — cannot open`;
 			});
 		});
+	}
+
+	/**
+	 * Opens the file; if the anchor names a symbol, reveals it only when a document symbol provider
+	 * returns exactly one matching symbol. No provider or no unique match => file-only (never guessed from text).
+	 */
+	private async _openAnchor(target: URI, symbol: string | undefined): Promise<void> {
+		const pane = await this.editorService.openEditor({ resource: target });
+		const editor = getCodeEditor(pane?.getControl());
+		const model = editor?.getModel();
+		if (!symbol || !editor || !model) {
+			return;
+		}
+		const found: DocumentSymbol[] = [];
+		const walk = (list: DocumentSymbol[]) => list.forEach(s => {
+			// exact name, or a method-style name "name(params)"
+			if (s.name === symbol || s.name.startsWith(`${symbol}(`)) {
+				found.push(s);
+			}
+			walk(s.children ?? []);
+		});
+		for (const provider of this.languageFeatures.documentSymbolProvider.ordered(model)) {
+			const symbols = await provider.provideDocumentSymbols(model, CancellationToken.None);
+			if (symbols) {
+				walk(symbols);
+				break;
+			}
+		}
+		if (found.length === 1) {
+			const range = found[0].selectionRange;
+			editor.setSelection(range);
+			editor.revealRangeInCenter(range, ScrollType.Smooth);
+		}
 	}
 
 	private _dispositionBadge(parent: HTMLElement, disposition: VerificationObligation['disposition']): void {

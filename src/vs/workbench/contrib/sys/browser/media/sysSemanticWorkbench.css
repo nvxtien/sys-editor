@@ -1,4 +1,5 @@
-.sys-semantic-workbench {
+.sys-semantic-workbench,
+.monaco-pane-view .pane > .pane-body.sys-semantic-workbench {
 	height: 100%;
 	overflow: auto;
 	padding: 0 12px 24px;
