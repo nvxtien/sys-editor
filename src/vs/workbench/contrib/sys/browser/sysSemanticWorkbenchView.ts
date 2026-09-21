@@ -10,6 +10,8 @@ import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { IViewDescriptorService } from '../../../common/views.js';
 import { ViewPane, IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
+import { ISysProjectService } from './sysProjectService.js';
+import { SysProjectState } from '../common/sysProject.js';
 import { ISysSemanticSnapshotService, SysProjectSnapshot } from '../common/sysSemanticSnapshot.js';
 import {
 	ISysIntentActionService,
@@ -39,7 +41,8 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		@IThemeService themeService: IThemeService,
 		@IHoverService hoverService: IHoverService,
 		@ISysSemanticSnapshotService private readonly snapshotService: ISysSemanticSnapshotService,
-		@ISysIntentActionService private readonly intentActionService: ISysIntentActionService
+		@ISysIntentActionService private readonly intentActionService: ISysIntentActionService,
+		@ISysProjectService private readonly projectService: ISysProjectService
 	) {
 		super(
 			options,
@@ -53,6 +56,14 @@ export class SysSemanticWorkbenchView extends ViewPane {
 			themeService,
 			hoverService
 		);
+
+		this._register(this.projectService.onDidChange(() => void this._renderProject()));
+		this._register(this.configurationService.onDidChangeConfiguration(e => {
+			if (e.affectsConfiguration('sys.demoMode') && this.bodyContainer) {
+				this.loadState = 'IDLE';
+				this.renderBody(this.bodyContainer);
+			}
+		}));
 
 		// Subscribe to intent item changes
 		this._register(
@@ -77,6 +88,12 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		super.renderBody(parent);
 		parent.classList.add('sys-semantic-workbench');
 
+		// The Cinema fixture is demo data: opt-in only, never the fallback for a workspace without Sys state.
+		if (!this._demoMode()) {
+			void this._renderProject();
+			return;
+		}
+
 		// If showing detail, render detail; otherwise render list or error
 		if (this.currentDetailId && this.currentDetails) {
 			this._renderDetail(parent, this.currentDetails);
@@ -90,6 +107,73 @@ export class SysSemanticWorkbenchView extends ViewPane {
 			this._renderLoading(parent);
 			void this.load();
 		}
+	}
+
+	private _demoMode(): boolean {
+		return this.configurationService.getValue<boolean>('sys.demoMode') === true;
+	}
+
+	private async _renderProject(): Promise<void> {
+		if (this._demoMode() || !this.bodyContainer) {
+			return;
+		}
+		const parent = this.bodyContainer;
+		const state = await this.projectService.getState();
+		if (this._demoMode()) {
+			return;
+		}
+		parent.textContent = '';
+		parent.classList.remove('sys-loading');
+		const header = DOM.append(parent, $('div.sys-header'));
+		DOM.append(header, $('div.sys-eyebrow')).textContent = 'SYS';
+		const note = (text: string) => { DOM.append(parent, $('p')).textContent = text; };
+		const button = (host: HTMLElement, label: string, run: () => Promise<void>) => {
+			const b = DOM.append(host, $('button.sys-error-retry-btn'));
+			b.textContent = label;
+			b.addEventListener('click', () => { void run().catch(e => this._renderProjectError(parent, e)); });
+			return b;
+		};
+		switch (state.kind) {
+			case 'NO_WORKSPACE': note('Open a folder to start a Sys project.'); return;
+			case 'UNSUPPORTED_MULTI_ROOT_WORKSPACE': note('Sys projects are not supported in multi-root workspaces yet.'); return;
+			case 'MALFORMED_SYS_PROJECT': note(`.sys/project.json is malformed: ${state.reason}`); return;
+			case 'IO_ERROR': note(`Cannot read Sys project state: ${state.reason}`); return;
+			case 'NO_SYS_PROJECT_YET':
+				this._renderCreateForm(parent, state, 'No governed requirements yet. Create the first requirement for this workspace.', button);
+				return;
+			case 'READY':
+				this._renderRequirements(parent, state, button);
+				this._renderCreateForm(parent, state, undefined, button);
+				return;
+		}
+	}
+
+	private _renderProjectError(parent: HTMLElement, e: unknown): void {
+		DOM.append(parent, $('p.sys-error-message')).textContent = `Save failed: ${e instanceof Error ? e.message : String(e)}`;
+	}
+
+	private _renderRequirements(parent: HTMLElement, state: Extract<SysProjectState, { kind: 'READY' }>, button: (host: HTMLElement, label: string, run: () => Promise<void>) => HTMLElement): void {
+		const section = DOM.append(parent, this._section('Requirements'));
+		for (const r of state.project.requirements) {
+			const item = DOM.append(section, $('div.sys-list-item'));
+			DOM.append(item, $('strong')).textContent = `${r.id} `;
+			DOM.append(item, $('span')).textContent = r.text;
+			DOM.append(item, $('div.sys-subtitle')).textContent = r.status === 'DRAFT_UNFORMALIZED' ? 'DRAFT · unformalized · needs review' : 'Intent approved by human · unformalized · not verified';
+			if (r.status === 'DRAFT_UNFORMALIZED') {
+				button(item, 'Approve governed intent', () => this.projectService.approveRequirement(r.id));
+			}
+		}
+	}
+
+	private _renderCreateForm(parent: HTMLElement, _state: SysProjectState, intro: string | undefined, button: (host: HTMLElement, label: string, run: () => Promise<void>) => HTMLElement): void {
+		const form = DOM.append(parent, this._section(intro ? 'Get started' : 'New requirement'));
+		if (intro) {
+			DOM.append(form, $('p')).textContent = intro;
+		}
+		const input = DOM.append(form, $('textarea')) as HTMLTextAreaElement;
+		input.rows = 3;
+		input.placeholder = 'What should this software do?';
+		button(form, intro ? 'Create first requirement' : 'Add requirement', () => this.projectService.createRequirement(input.value));
 	}
 
 	private async load(): Promise<void> {
