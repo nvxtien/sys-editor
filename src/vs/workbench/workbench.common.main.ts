@@ -216,6 +216,7 @@ import './contrib/sidexChat/browser/sidexChat.contribution.js';
 
 // Sys Semantic Workbench
 import './contrib/sys/browser/sys.contribution.js';
+import './contrib/welcome/browser/welcome.contribution.js';
 
 // Sidex Complete
 import './contrib/sidexComplete/browser/sidexComplete.contribution.js';
