@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { EMPTY_PROJECT, addRequirement, approveRequirement, loadProjectState, parseProject, removeRequirement, serializeProject, statusOf, titleOf } from '../sysProject.js';
+import { EMPTY_PROJECT, addRequirement, approveRequirement, loadProjectState, parseOperation, parseProject, removeRequirement, serializeProject, setOperation, statusOf, titleOf } from '../sysProject.js';
 
 const files = (m: Record<string, string>) => async (p: string) => m[p];
 const A = '/a/.sys/project.json';
@@ -64,4 +64,38 @@ test('malformed state is MALFORMED_SYS_PROJECT, not empty, fixture or verified',
 
 test('I/O failure is IO_ERROR', async () => {
 	assert.equal((await loadProjectState(['/a'], async () => { throw new Error('EACCES'); })).kind, 'IO_ERROR');
+});
+
+test('parseOperation accepts Class.method, trims, and treats empty as unbind', () => {
+	assert.deepEqual(parseOperation('  BookingService.createBooking '), { operation: 'BookingService.createBooking' });
+	assert.deepEqual(parseOperation('com.example.Svc.run$1'), { operation: 'com.example.Svc.run$1' });
+	assert.deepEqual(parseOperation('   '), { operation: undefined });
+});
+
+test('parseOperation rejects anything that is not a qualified name', () => {
+	for (const bad of ['createBooking', 'A.', '.b', 'A..b', 'A.b()', '1A.b', 'A b.c']) {
+		assert.ok('error' in parseOperation(bad), bad);
+	}
+});
+
+test('setOperation sets, changes and clears the binding and keeps other fields', () => {
+	const approved = approveRequirement(addRequirement(EMPTY_PROJECT).project, 'REQ-001', 'seat required');
+	const bound = setOperation(approved, 'REQ-001', 'A.b');
+	assert.deepEqual(bound.requirements[0], { id: 'REQ-001', approvedText: 'seat required', operation: 'A.b' });
+	assert.equal(setOperation(bound, 'REQ-001', 'C.d').requirements[0].operation, 'C.d');
+	const cleared = setOperation(bound, 'REQ-001', undefined).requirements[0];
+	assert.ok(!('operation' in cleared) && cleared.approvedText === 'seat required');
+	assert.throws(() => setOperation(bound, 'REQ-999', 'A.b'));
+});
+
+test('binding survives reload, is shown on the row, and never changes the status', async () => {
+	const bound = setOperation(addRequirement(EMPTY_PROJECT).project, 'REQ-001', 'A.b');
+	const state = await loadProjectState(['/a'], files({ [A]: serializeProject(bound), '/a/.sys/requirements/REQ-001.md': 'x' }));
+	assert.deepEqual((state as { rows: unknown }).rows, [{ id: 'REQ-001', title: 'x', status: 'DRAFT_UNFORMALIZED', missing: false, operation: 'A.b' }]);
+});
+
+test('an invalid operation in a hand-edited file is MALFORMED_SYS_PROJECT', async () => {
+	for (const op of ['"bad"', '7']) {
+		assert.equal((await loadProjectState(['/a'], files({ [A]: `{"version":1,"requirements":[{"id":"REQ-001","operation":${op}}]}` }))).kind, 'MALFORMED_SYS_PROJECT', op);
+	}
 });

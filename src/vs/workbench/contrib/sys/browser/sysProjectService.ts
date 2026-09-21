@@ -6,7 +6,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { VSBuffer } from '../../../../base/common/buffer.js';
 import { URI } from '../../../../base/common/uri.js';
-import { EMPTY_PROJECT, SYS_PROJECT_FILE, SysProject, SysProjectState, addRequirement, approveRequirement, loadProjectState, removeRequirement, requirementFile, serializeProject } from '../common/sysProject.js';
+import { EMPTY_PROJECT, SYS_PROJECT_FILE, SysProject, SysProjectState, addRequirement, approveRequirement, loadProjectState, removeRequirement, requirementFile, serializeProject, setOperation } from '../common/sysProject.js';
 
 export const ISysProjectService = createDecorator<ISysProjectService>('sysProjectService');
 
@@ -20,6 +20,8 @@ export interface ISysProjectService {
 	resourceOf(id: string): URI;
 	approveRequirement(id: string): Promise<void>;
 	deleteRequirement(id: string): Promise<void>;
+	/** `operation` is already validated by parseOperation; undefined unbinds. */
+	setOperation(id: string, operation: string | undefined): Promise<void>;
 }
 
 class SysProjectService extends Disposable implements ISysProjectService {
@@ -89,6 +91,10 @@ class SysProjectService extends Disposable implements ISysProjectService {
 		const project = await this.writable();
 		const text = await this.read(this.resourceOf(id).toString());
 		await this.save(approveRequirement(project, id, text ?? ''));
+	}
+
+	async setOperation(id: string, operation: string | undefined): Promise<void> {
+		await this.save(setOperation(await this.writable(), id, operation));
 	}
 
 	async deleteRequirement(id: string): Promise<void> {

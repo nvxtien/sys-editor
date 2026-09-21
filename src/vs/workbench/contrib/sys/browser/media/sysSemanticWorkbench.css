@@ -845,9 +845,15 @@
 	opacity: 0.75;
 }
 
+.sys-semantic-workbench .sys-req-binding {
+	grid-column: 1;
+	font-size: 11px;
+	opacity: 0.75;
+}
+
 .sys-semantic-workbench .sys-req-actions {
 	grid-column: 2;
-	grid-row: 1 / span 2;
+	grid-row: 1 / span 3;
 	display: flex;
 	gap: 4px;
 	align-items: center;

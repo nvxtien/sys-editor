@@ -11,7 +11,8 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import { IViewDescriptorService } from '../../../common/views.js';
 import { ViewPane, IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { ISysProjectService } from './sysProjectService.js';
-import { SysRequirementRow } from '../common/sysProject.js';
+import { SysRequirementRow, parseOperation } from '../common/sysProject.js';
+import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { ISysSemanticSnapshotService, SysProjectSnapshot } from '../common/sysSemanticSnapshot.js';
@@ -46,7 +47,8 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		@ISysIntentActionService private readonly intentActionService: ISysIntentActionService,
 		@ISysProjectService private readonly projectService: ISysProjectService,
 		@IEditorService private readonly editorService: IEditorService,
-		@IDialogService private readonly dialogService: IDialogService
+		@IDialogService private readonly dialogService: IDialogService,
+		@IQuickInputService private readonly quickInputService: IQuickInputService
 	) {
 		super(
 			options,
@@ -180,7 +182,21 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		DOM.append(el, $('div.sys-req-status')).textContent = row.status === 'APPROVED_UNFORMALIZED'
 			? 'Intent approved · unformalized · not verified'
 			: 'Draft · unformalized · needs review';
+		DOM.append(el, $('div.sys-req-binding')).textContent = row.operation ? `\u2192 ${row.operation} \u00b7 not checked` : 'Not bound to a source operation';
 		const actions = DOM.append(el, $('div.sys-req-actions'));
+		this._action(actions, row.operation ? 'Edit binding' : 'Bind', 'sys-req-action', async () => {
+			const value = await this.quickInputService.input({
+				title: `Source operation for ${row.id}`,
+				prompt: 'Class.method that implements this requirement (leave empty to unbind). Not checked against the code.',
+				value: row.operation ?? '',
+				placeHolder: 'BookingService.createBooking',
+				validateInput: async text => { const p = parseOperation(text); return 'error' in p ? p.error : undefined; }
+			});
+			if (value === undefined) { return; }
+			const parsed = parseOperation(value);
+			if ('error' in parsed) { throw new Error(parsed.error); }
+			await this.projectService.setOperation(row.id, parsed.operation);
+		});
 		if (row.status === 'DRAFT_UNFORMALIZED' && !row.missing) {
 			this._action(actions, 'Approve', 'sys-req-action', () => this.projectService.approveRequirement(row.id));
 		}
