@@ -54,7 +54,16 @@
                   "kind": "SOURCE",
                   "label": "BookingService.createBooking",
                   "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-                  "symbol": "createBooking"
+                  "symbol": "createBooking",
+                  "span": {
+                    "startOffset": 863,
+                    "endOffset": 2045,
+                    "startLine": 29,
+                    "startColumn": 5,
+                    "endLine": 55,
+                    "endColumn": 6,
+                    "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+                  }
                 },
                 {
                   "kind": "SPEC",
@@ -69,7 +78,16 @@
               "kind": "SOURCE",
               "label": "BookingService.createBooking",
               "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-              "symbol": "createBooking"
+              "symbol": "createBooking",
+              "span": {
+                "startOffset": 863,
+                "endOffset": 2045,
+                "startLine": 29,
+                "startColumn": 5,
+                "endLine": 55,
+                "endColumn": 6,
+                "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+              }
             },
             {
               "kind": "SPEC",
@@ -115,7 +133,16 @@
                   "kind": "SOURCE",
                   "label": "BookingService.createBooking",
                   "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-                  "symbol": "createBooking"
+                  "symbol": "createBooking",
+                  "span": {
+                    "startOffset": 863,
+                    "endOffset": 2045,
+                    "startLine": 29,
+                    "startColumn": 5,
+                    "endLine": 55,
+                    "endColumn": 6,
+                    "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+                  }
                 },
                 {
                   "kind": "SPEC",
@@ -130,7 +157,16 @@
               "kind": "SOURCE",
               "label": "BookingService.createBooking",
               "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-              "symbol": "createBooking"
+              "symbol": "createBooking",
+              "span": {
+                "startOffset": 863,
+                "endOffset": 2045,
+                "startLine": 29,
+                "startColumn": 5,
+                "endLine": 55,
+                "endColumn": 6,
+                "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+              }
             },
             {
               "kind": "SPEC",
@@ -206,7 +242,16 @@
               "kind": "SOURCE",
               "label": "BookingService.createBooking",
               "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-              "symbol": "createBooking"
+              "symbol": "createBooking",
+              "span": {
+                "startOffset": 863,
+                "endOffset": 2045,
+                "startLine": 29,
+                "startColumn": 5,
+                "endLine": 55,
+                "endColumn": 6,
+                "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+              }
             },
             {
               "kind": "SPEC",
@@ -221,7 +266,16 @@
           "kind": "SOURCE",
           "label": "BookingService.createBooking",
           "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-          "symbol": "createBooking"
+          "symbol": "createBooking",
+          "span": {
+            "startOffset": 863,
+            "endOffset": 2045,
+            "startLine": 29,
+            "startColumn": 5,
+            "endLine": 55,
+            "endColumn": 6,
+            "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+          }
         },
         {
           "kind": "SPEC",
@@ -279,7 +333,16 @@
                   "kind": "SOURCE",
                   "label": "BookingService.createBooking",
                   "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-                  "symbol": "createBooking"
+                  "symbol": "createBooking",
+                  "span": {
+                    "startOffset": 863,
+                    "endOffset": 2045,
+                    "startLine": 29,
+                    "startColumn": 5,
+                    "endLine": 55,
+                    "endColumn": 6,
+                    "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+                  }
                 },
                 {
                   "kind": "SPEC",
@@ -436,7 +499,16 @@
                   "kind": "SOURCE",
                   "label": "BookingService.createBooking",
                   "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-                  "symbol": "createBooking"
+                  "symbol": "createBooking",
+                  "span": {
+                    "startOffset": 863,
+                    "endOffset": 2045,
+                    "startLine": 29,
+                    "startColumn": 5,
+                    "endLine": 55,
+                    "endColumn": 6,
+                    "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+                  }
                 },
                 {
                   "kind": "SPEC",
@@ -491,7 +563,16 @@
               "kind": "SOURCE",
               "label": "BookingService.createBooking",
               "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-              "symbol": "createBooking"
+              "symbol": "createBooking",
+              "span": {
+                "startOffset": 863,
+                "endOffset": 2045,
+                "startLine": 29,
+                "startColumn": 5,
+                "endLine": 55,
+                "endColumn": 6,
+                "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+              }
             },
             {
               "kind": "SPEC",
@@ -537,7 +618,16 @@
                   "kind": "SOURCE",
                   "label": "BookingService.createBooking",
                   "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-                  "symbol": "createBooking"
+                  "symbol": "createBooking",
+                  "span": {
+                    "startOffset": 863,
+                    "endOffset": 2045,
+                    "startLine": 29,
+                    "startColumn": 5,
+                    "endLine": 55,
+                    "endColumn": 6,
+                    "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+                  }
                 },
                 {
                   "kind": "SPEC",
@@ -552,7 +642,16 @@
               "kind": "SOURCE",
               "label": "BookingService.createBooking",
               "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-              "symbol": "createBooking"
+              "symbol": "createBooking",
+              "span": {
+                "startOffset": 863,
+                "endOffset": 2045,
+                "startLine": 29,
+                "startColumn": 5,
+                "endLine": 55,
+                "endColumn": 6,
+                "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+              }
             },
             {
               "kind": "SPEC",
@@ -770,7 +869,16 @@
               "kind": "SOURCE",
               "label": "BookingService.createBooking",
               "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-              "symbol": "createBooking"
+              "symbol": "createBooking",
+              "span": {
+                "startOffset": 863,
+                "endOffset": 2045,
+                "startLine": 29,
+                "startColumn": 5,
+                "endLine": 55,
+                "endColumn": 6,
+                "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+              }
             },
             {
               "kind": "SPEC",
@@ -785,7 +893,16 @@
           "kind": "SOURCE",
           "label": "BookingService.createBooking",
           "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-          "symbol": "createBooking"
+          "symbol": "createBooking",
+          "span": {
+            "startOffset": 863,
+            "endOffset": 2045,
+            "startLine": 29,
+            "startColumn": 5,
+            "endLine": 55,
+            "endColumn": 6,
+            "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+          }
         },
         {
           "kind": "SPEC",
@@ -846,7 +963,16 @@
                   "kind": "SOURCE",
                   "label": "BookingService.createBooking",
                   "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-                  "symbol": "createBooking"
+                  "symbol": "createBooking",
+                  "span": {
+                    "startOffset": 863,
+                    "endOffset": 2045,
+                    "startLine": 29,
+                    "startColumn": 5,
+                    "endLine": 55,
+                    "endColumn": 6,
+                    "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+                  }
                 },
                 {
                   "kind": "SPEC",
@@ -861,7 +987,16 @@
               "kind": "SOURCE",
               "label": "BookingService.createBooking",
               "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-              "symbol": "createBooking"
+              "symbol": "createBooking",
+              "span": {
+                "startOffset": 863,
+                "endOffset": 2045,
+                "startLine": 29,
+                "startColumn": 5,
+                "endLine": 55,
+                "endColumn": 6,
+                "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+              }
             },
             {
               "kind": "SPEC",
@@ -907,7 +1042,16 @@
                   "kind": "SOURCE",
                   "label": "BookingService.createBooking",
                   "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-                  "symbol": "createBooking"
+                  "symbol": "createBooking",
+                  "span": {
+                    "startOffset": 863,
+                    "endOffset": 2045,
+                    "startLine": 29,
+                    "startColumn": 5,
+                    "endLine": 55,
+                    "endColumn": 6,
+                    "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+                  }
                 },
                 {
                   "kind": "SPEC",
@@ -922,7 +1066,16 @@
               "kind": "SOURCE",
               "label": "BookingService.createBooking",
               "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-              "symbol": "createBooking"
+              "symbol": "createBooking",
+              "span": {
+                "startOffset": 863,
+                "endOffset": 2045,
+                "startLine": 29,
+                "startColumn": 5,
+                "endLine": 55,
+                "endColumn": 6,
+                "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+              }
             },
             {
               "kind": "SPEC",
@@ -998,7 +1151,16 @@
               "kind": "SOURCE",
               "label": "BookingService.createBooking",
               "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-              "symbol": "createBooking"
+              "symbol": "createBooking",
+              "span": {
+                "startOffset": 863,
+                "endOffset": 2045,
+                "startLine": 29,
+                "startColumn": 5,
+                "endLine": 55,
+                "endColumn": 6,
+                "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+              }
             },
             {
               "kind": "SPEC",
@@ -1013,7 +1175,16 @@
           "kind": "SOURCE",
           "label": "BookingService.createBooking",
           "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-          "symbol": "createBooking"
+          "symbol": "createBooking",
+          "span": {
+            "startOffset": 863,
+            "endOffset": 2045,
+            "startLine": 29,
+            "startColumn": 5,
+            "endLine": 55,
+            "endColumn": 6,
+            "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+          }
         },
         {
           "kind": "SPEC",
@@ -1076,7 +1247,16 @@
                   "kind": "SOURCE",
                   "label": "BookingService.createBooking",
                   "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-                  "symbol": "createBooking"
+                  "symbol": "createBooking",
+                  "span": {
+                    "startOffset": 863,
+                    "endOffset": 2045,
+                    "startLine": 29,
+                    "startColumn": 5,
+                    "endLine": 55,
+                    "endColumn": 6,
+                    "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+                  }
                 },
                 {
                   "kind": "SPEC",
@@ -1091,7 +1271,16 @@
               "kind": "SOURCE",
               "label": "BookingService.createBooking",
               "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-              "symbol": "createBooking"
+              "symbol": "createBooking",
+              "span": {
+                "startOffset": 863,
+                "endOffset": 2045,
+                "startLine": 29,
+                "startColumn": 5,
+                "endLine": 55,
+                "endColumn": 6,
+                "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+              }
             },
             {
               "kind": "SPEC",
@@ -1144,7 +1333,16 @@
                   "kind": "SOURCE",
                   "label": "BookingService.createBooking",
                   "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-                  "symbol": "createBooking"
+                  "symbol": "createBooking",
+                  "span": {
+                    "startOffset": 863,
+                    "endOffset": 2045,
+                    "startLine": 29,
+                    "startColumn": 5,
+                    "endLine": 55,
+                    "endColumn": 6,
+                    "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+                  }
                 },
                 {
                   "kind": "SPEC",
@@ -1159,7 +1357,16 @@
               "kind": "SOURCE",
               "label": "BookingService.createBooking",
               "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-              "symbol": "createBooking"
+              "symbol": "createBooking",
+              "span": {
+                "startOffset": 863,
+                "endOffset": 2045,
+                "startLine": 29,
+                "startColumn": 5,
+                "endLine": 55,
+                "endColumn": 6,
+                "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+              }
             },
             {
               "kind": "SPEC",
@@ -1217,7 +1424,16 @@
               "kind": "SOURCE",
               "label": "BookingService.createBooking",
               "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-              "symbol": "createBooking"
+              "symbol": "createBooking",
+              "span": {
+                "startOffset": 863,
+                "endOffset": 2045,
+                "startLine": 29,
+                "startColumn": 5,
+                "endLine": 55,
+                "endColumn": 6,
+                "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+              }
             },
             {
               "kind": "SPEC",
@@ -1232,7 +1448,16 @@
           "kind": "SOURCE",
           "label": "BookingService.createBooking",
           "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-          "symbol": "createBooking"
+          "symbol": "createBooking",
+          "span": {
+            "startOffset": 863,
+            "endOffset": 2045,
+            "startLine": 29,
+            "startColumn": 5,
+            "endLine": 55,
+            "endColumn": 6,
+            "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+          }
         },
         {
           "kind": "SPEC",
@@ -1263,7 +1488,16 @@
                   "kind": "SOURCE",
                   "label": "BookingService.createBooking",
                   "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-                  "symbol": "createBooking"
+                  "symbol": "createBooking",
+                  "span": {
+                    "startOffset": 863,
+                    "endOffset": 2045,
+                    "startLine": 29,
+                    "startColumn": 5,
+                    "endLine": 55,
+                    "endColumn": 6,
+                    "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+                  }
                 },
                 {
                   "kind": "SPEC",
@@ -1278,7 +1512,16 @@
               "kind": "SOURCE",
               "label": "BookingService.createBooking",
               "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-              "symbol": "createBooking"
+              "symbol": "createBooking",
+              "span": {
+                "startOffset": 863,
+                "endOffset": 2045,
+                "startLine": 29,
+                "startColumn": 5,
+                "endLine": 55,
+                "endColumn": 6,
+                "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+              }
             },
             {
               "kind": "SPEC",
@@ -1334,7 +1577,16 @@
                   "kind": "SOURCE",
                   "label": "BookingService.createBooking",
                   "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-                  "symbol": "createBooking"
+                  "symbol": "createBooking",
+                  "span": {
+                    "startOffset": 863,
+                    "endOffset": 2045,
+                    "startLine": 29,
+                    "startColumn": 5,
+                    "endLine": 55,
+                    "endColumn": 6,
+                    "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+                  }
                 },
                 {
                   "kind": "SPEC",
@@ -1349,7 +1601,16 @@
               "kind": "SOURCE",
               "label": "BookingService.createBooking",
               "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-              "symbol": "createBooking"
+              "symbol": "createBooking",
+              "span": {
+                "startOffset": 863,
+                "endOffset": 2045,
+                "startLine": 29,
+                "startColumn": 5,
+                "endLine": 55,
+                "endColumn": 6,
+                "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+              }
             },
             {
               "kind": "SPEC",
@@ -1412,7 +1673,16 @@
               "kind": "SOURCE",
               "label": "BookingService.createBooking",
               "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-              "symbol": "createBooking"
+              "symbol": "createBooking",
+              "span": {
+                "startOffset": 863,
+                "endOffset": 2045,
+                "startLine": 29,
+                "startColumn": 5,
+                "endLine": 55,
+                "endColumn": 6,
+                "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+              }
             },
             {
               "kind": "SPEC",
@@ -1427,7 +1697,16 @@
           "kind": "SOURCE",
           "label": "BookingService.createBooking",
           "file": "/Volumes/Work/dev/sys-platform/harness/cinema-booking-pilot/fixture/src/main/java/com/example/cinema/BookingService.java",
-          "symbol": "createBooking"
+          "symbol": "createBooking",
+          "span": {
+            "startOffset": 863,
+            "endOffset": 2045,
+            "startLine": 29,
+            "startColumn": 5,
+            "endLine": 55,
+            "endColumn": 6,
+            "sourceDigest": "sha256:a8ef9bbfd50f162da0fa2c337ce54dd20842c6a39b485eafb07298db313e564c"
+          }
         },
         {
           "kind": "SPEC",

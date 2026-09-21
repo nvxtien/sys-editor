@@ -200,3 +200,24 @@ test('real Cinema Booking probe: platform stdout decodes to the UI contract', { 
 	assert.equal(b8.obligations.find(o => o.kind === 'guard')!.disposition, 'NOT_OBSERVED');
 	assert.deepEqual(b8.obligations.find(o => o.kind === 'guard')!.reasons, ['WRONG_OPERATION_SCOPE']);
 });
+
+test('decoder accepts anchors that carry an observed span and ignores it', () => {
+	const doc = JSON.parse(golden);
+	const anchors: Array<Record<string, unknown>> = [];
+	const walk = (x: unknown): void => {
+		if (Array.isArray(x)) { x.forEach(walk); return; }
+		if (x && typeof x === 'object') {
+			const o = x as Record<string, unknown>;
+			if ((o.kind === 'SOURCE' || o.kind === 'SPEC') && 'label' in o) { anchors.push(o); }
+			Object.values(o).forEach(walk);
+		}
+	};
+	walk(doc);
+	const spanned = anchors.filter(a => 'span' in a);
+	assert.ok(spanned.length > 0, 'golden should come from a platform that emits spans');
+	assert.ok(spanned.every(a => a.kind === 'SOURCE'), 'only SOURCE anchors carry a span');
+	const decoded = decodeVerificationV01(golden);
+	const decodedAnchors = decoded.rules.flatMap(r => r.obligations.flatMap(o => o.anchors ?? []));
+	assert.ok(decodedAnchors.length > 0);
+	assert.ok(decodedAnchors.every(a => !('span' in a)), 'span is not part of the editor anchor model yet');
+});
