@@ -392,7 +392,7 @@ export class SysVerificationWorkbenchView extends ViewPane {
 		});
 		if (decision.action === 'REVEAL_SPAN' && editor) {
 			const { range } = decision;
-			editor.setPosition(range.getStartPosition());
+			editor.setPosition({ lineNumber: range.startLineNumber, column: range.startColumn });
 			editor.revealRangeInCenter(range, ScrollType.Smooth);
 			return decision.message;
 		}
