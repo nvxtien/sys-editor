@@ -17,8 +17,15 @@
 Scaling findings that shape this design:
 
 - `contract::build` calls `recover_observed_project` once per rule, so N rules mean N full javac + `semantic-core` +
-  `ontology-core` runs for the same `target_operation`. This cost already exists; the span work must not thread its
-  data through that loop in a way that entrenches it;
+  `ontology-core` runs. `target_operation` is a **manifest-level** field, so every rule in a manifest shares the same
+  recovery; the loop repeats identical work. Measured on the cinema manifest (5 rules, 9 Java files): one
+  `verification-v0.1` call takes about 1.8 s (1.90 / 1.81 / 1.74), and one `reverse.ProjectMain` (javac) run takes about
+  0.36 s, so javac repetition (5 x 0.36 s) accounts for almost all of it. The time of the other stages was not measured
+  separately;
+- the JSON repeats anchors: 62 anchor objects but only 6 distinct in a 46,663-byte output (about 10x duplication).
+  Adding `span` and a digest to every copy multiplies that. Fixing it needs a reference table, which changes the
+  contract shape; that is out of scope here (see Follow-up);
+- every Refresh re-analyzes the whole project with no cache; cost grows with rules x project size, extrapolated only;
 - `SourceFile` keeps only the file name, so matching by function name alone breaks for overloads, nested classes with
   the same name, and same-named classes in different packages;
 - a span on `ProgramIr.Function` supports method-level anchors only. Statement-level anchors would need spans on every
@@ -57,9 +64,13 @@ through them unless that turns out to be false; if it is false, record why.
 
 Scale requirements:
 
-- **Recover once per operation.** Change the pipeline so the recovered result and the observed span come from one
-  run per `target_operation` and are reused for every rule that targets it. Do not add a second javac run just to
-  fetch the span. Report the number of subprocess runs per `verification-v0.1` call before and after.
+- **Recover once per manifest.** `target_operation` is manifest-level, so run the recovery (javac -> `semantic-core`
+  -> `ontology-core`) once in `contract::build`, before the rule loop, and reuse the result and the observed span for
+  every rule. Per-rule work that genuinely differs (spec compile and comparison) stays per rule. Do not add a second
+  javac run to fetch the span.
+  Measurable target: javac runs per `verification-v0.1` call = 1 (was 1 per rule). Report wall time before and after
+  against the 1.8 s baseline above, the same manifest, three runs each. The recovered result and every verdict must be
+  byte-identical to before, apart from the new `span` field.
 - **Identity is more than the name.** The IR function must carry enough to identify it: the source file (full path
   relative to the project, not only the file name) and a signature (parameter types). Match an anchor by
   file + qualified name (+ signature when the manifest supplies it). Ambiguity means no range.
@@ -105,14 +116,14 @@ Rules:
    `JsonRenderer`; populate them in `JavaFrontend.lowerFunction`. The frontend currently loses the full path
    (`SourceFile` keeps the name only); fix that for this data without changing recovered semantics.
 2. In `pipeline.rs`, return the recovered result and the target function span from one run; reuse them across rules
-   in `contract::build` (recover once per operation).
+   in `contract::build` (recover once per manifest).
 3. In `contract.rs`, set the SOURCE anchor `span` from the observed data. Ignore any manifest-authored range or span.
 4. Tests:
    - frontend: a fixture with a known method declaration yields the expected offsets, line and columns;
    - tab-indented method and a non-ASCII character before the declaration: columns match UTF-16 counting;
    - overloads and same-named classes in two packages: no span;
    - source digest changes when the file changes;
-   - subprocess runs per `verification-v0.1` call: once per operation, not once per rule;
+   - javac runs per `verification-v0.1` call: exactly 1 regardless of rule count;
    - contract: anchor with observed span, anchor without, manifest-authored range ignored, serialization unchanged
      when absent;
    - existing suites still pass, including the golden verification output where it applies.
@@ -132,7 +143,9 @@ Automated (exact commands and counts):
 - sys-editor: all verification node tests, Rust UTF-8 tests, targeted `tsc` and eslint for changed files;
 - real-binary probe: `spec-code-sync verification-v0.1 <manifest>` exits 0, and the B2 SOURCE anchor now carries a
   `span` that points at `createBooking` in `BookingService.java`;
-- wall time and subprocess count for the manifest (5 rules) before and after the recover-once change.
+- wall time and javac run count for the manifest (5 rules) before and after the recover-once change, against the
+  1.8 s baseline;
+- the output with `span` removed is byte-identical to the pre-change output.
 
 Independent check of the observed span: read the actual line/column and the character offsets from the file and
 confirm the emitted span covers `createBooking`. Report the file line and the emitted span side by side. Do not rely on
@@ -140,7 +153,15 @@ the emitted value alone.
 
 Regression: verdicts for B1, B2, B3, B8 and STATE_EFFECT are identical before and after, including B8 CONFLICTED.
 
-## Follow-up (separate mission)
+## Follow-up (separate missions)
+
+Known scale limits left open on purpose; record them under `NEXT_PRODUCT_GAP`, do not solve them here:
+
+- anchor duplication in the JSON: a shared anchor table referenced by id is a `verification.v0.1` shape change and
+  needs a contract version decision;
+- no cache: whole-project re-analysis on every Refresh; a cache keyed by source digests is the natural next step and
+  the `sourceDigest` emitted here is its input;
+- the editor rebuilds the whole rule list DOM on each selection or filter change; only matters for very large rule sets.
 
 Editor consumption in `_openAnchor`: select and reveal the range with no language server, with the acceptance
 scenario from `PLATFORM_ANCHOR_RANGE_V0_1` (Java extension absent, language mode `Plain Text`). Not part of this mission.
@@ -158,6 +179,7 @@ scenario from `PLATFORM_ANCHOR_RANGE_V0_1` (Java extension absent, language mode
     RANGE_FROM_MANIFEST = 0
     SPAN_ON_STATEMENTS = 0
     EXTRA_JAVAC_RUNS_FOR_SPAN = 0
+    JAVAC_RUNS_PER_CALL = 1
     RANGE_FROM_TEXT_SEARCH = 0
     RANGE_FROM_SYMBOL_NAME_GUESS = 0
     VERDICT_CHANGES = 0
@@ -166,7 +188,7 @@ scenario from `PLATFORM_ANCHOR_RANGE_V0_1` (Java extension absent, language mode
 ## Stop conditions
 
 - `IR_SPAN_UNAVAILABLE`: javac cannot give a position for the target declaration. Report what it returns.
-- `RECOVER_ONCE_BLOCKED`: recovering once per operation cannot be done without changing recovered semantics. Report why;
+- `RECOVER_ONCE_BLOCKED`: recovering once per manifest cannot be done without changing recovered semantics. Report why;
   do not fall back to a second javac run for the span.
 - `IDENTITY_MISMATCH`: the function in the IR cannot be tied to the manifest target operation without guessing.
 - `CONTRACT_BREAK`: the change alters existing `verification.v0.1` fields or their meaning, or breaks the editor decoder.
@@ -191,7 +213,7 @@ STAGES_CHANGED: which of frontend / IR / semantic-core / ontology-core / spec-co
 OVERLOAD_BEHAVIOR / SAME_NAME_BEHAVIOR:
 ...
 
-SUBPROCESS_RUNS_PER_CALL: before -> after (5 rules)
+JAVAC_RUNS_PER_CALL: before -> after (5 rules); WALL_TIME: before -> after (3 runs each, baseline 1.8 s)
 
 COLUMN_UNITS_TEST: tab and non-ASCII result
 
