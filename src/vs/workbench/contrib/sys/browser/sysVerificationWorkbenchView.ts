@@ -391,8 +391,9 @@ export class SysVerificationWorkbenchView extends ViewPane {
 			model: model ? { lineCount: model.getLineCount(), lineMaxColumn: line => model.getLineMaxColumn(line) } : undefined
 		});
 		if (decision.action === 'REVEAL_SPAN' && editor) {
-			editor.setSelection(decision.range);
-			editor.revealRangeInCenter(decision.range, ScrollType.Smooth);
+			const { range } = decision;
+			editor.setPosition(range.getStartPosition());
+			editor.revealRangeInCenter(range, ScrollType.Smooth);
 			return decision.message;
 		}
 		if (decision.action === 'SYMBOL_FALLBACK' && editor && model && anchor.symbol) {
