@@ -201,23 +201,47 @@ test('real Cinema Booking probe: platform stdout decodes to the UI contract', { 
 	assert.deepEqual(b8.obligations.find(o => o.kind === 'guard')!.reasons, ['WRONG_OPERATION_SCOPE']);
 });
 
-test('decoder accepts anchors that carry an observed span and ignores it', () => {
+const decodedAnchors = () => project.rules.flatMap(r => r.obligations.flatMap(o => o.anchors ?? []));
+
+test('decoder keeps the observed span on SOURCE anchors only', () => {
+	const anchors = decodedAnchors();
+	assert.ok(anchors.length > 0);
+	const source = anchors.filter(a => a.kind === 'SOURCE');
+	const spec = anchors.filter(a => a.kind === 'SPEC');
+	assert.ok(source.length > 0 && source.every(a => a.span !== undefined), 'every SOURCE anchor of the golden has a span');
+	assert.ok(spec.every(a => a.span === undefined), 'SPEC anchors have no span');
+	const span = source[0].span!;
+	assert.deepEqual([span.startLine, span.startColumn, span.endLine, span.endColumn], [29, 5, 55, 6]);
+	assert.match(span.sourceDigest, /^sha256:[0-9a-f]{64}$/);
+});
+
+const withSpan = (mutate: (span: Record<string, unknown>) => void) => {
 	const doc = JSON.parse(golden);
-	const anchors: Array<Record<string, unknown>> = [];
-	const walk = (x: unknown): void => {
-		if (Array.isArray(x)) { x.forEach(walk); return; }
-		if (x && typeof x === 'object') {
-			const o = x as Record<string, unknown>;
-			if ((o.kind === 'SOURCE' || o.kind === 'SPEC') && 'label' in o) { anchors.push(o); }
-			Object.values(o).forEach(walk);
-		}
-	};
-	walk(doc);
-	const spanned = anchors.filter(a => 'span' in a);
-	assert.ok(spanned.length > 0, 'golden should come from a platform that emits spans');
-	assert.ok(spanned.every(a => a.kind === 'SOURCE'), 'only SOURCE anchors carry a span');
-	const decoded = decodeVerificationV01(golden);
-	const decodedAnchors = decoded.rules.flatMap(r => r.obligations.flatMap(o => o.anchors ?? []));
-	assert.ok(decodedAnchors.length > 0);
-	assert.ok(decodedAnchors.every(a => !('span' in a)), 'span is not part of the editor anchor model yet');
+	const anchor = doc.rules[1].obligations[0].anchors.find((a: { kind: string }) => a.kind === 'SOURCE');
+	mutate(anchor.span);
+	return decodeVerificationV01(JSON.stringify(doc)).rules[1].obligations[0].anchors!.find(a => a.kind === 'SOURCE')!;
+};
+
+test('a malformed span is dropped, the anchor and the rest of the contract survive', () => {
+	const bad: Array<[string, (s: Record<string, unknown>) => void]> = [
+		['string offset', s => { s.startOffset = '863'; }],
+		['fractional line', s => { s.startLine = 29.5; }],
+		['zero line', s => { s.startLine = 0; }],
+		['zero column', s => { s.startColumn = 0; }],
+		['negative offset', s => { s.startOffset = -1; }],
+		['inverted offsets', s => { s.endOffset = 1; }],
+		['end line before start', s => { s.endLine = 3; }],
+		['end column before start on one line', s => { s.endLine = 29; s.endColumn = 1; }],
+		['missing digest', s => { delete s.sourceDigest; }],
+		['bad digest', s => { s.sourceDigest = 'forged'; }],
+		['missing field', s => { delete s.endColumn; }]
+	];
+	for (const [name, mutate] of bad) {
+		const anchor = withSpan(mutate);
+		assert.equal(anchor.span, undefined, name);
+		assert.ok(anchor.file && anchor.symbol === 'createBooking', `${name}: anchor is still usable`);
+	}
+	const doc = JSON.parse(golden);
+	doc.rules[1].obligations[0].anchors[0].span = 'not an object';
+	assert.equal(decodeVerificationV01(JSON.stringify(doc)).rules.length, 5, 'contract survives a non-object span');
 });

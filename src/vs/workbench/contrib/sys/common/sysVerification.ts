@@ -19,12 +19,29 @@ export type VerificationProvenance = 'SPECIFIED' | 'OBSERVED' | 'DERIVED' | 'INF
 
 export type VerificationContractStatus = 'READY' | 'PLATFORM_CONTRACT_GAP';
 
+/**
+ * Source location the platform observed for the whole declaration. Offsets are UTF-16 code units and the range is
+ * half-open [startOffset, endOffset); lines and columns are 1-based and the end is exclusive, matching the editor's
+ * range semantics. `sourceDigest` is the SHA-256 of the exact bytes of the file the platform read.
+ */
+export interface VerificationSourceSpan {
+	readonly startOffset: number;
+	readonly endOffset: number;
+	readonly startLine: number;
+	readonly startColumn: number;
+	readonly endLine: number;
+	readonly endColumn: number;
+	readonly sourceDigest: string;
+}
+
 export interface VerificationAnchor {
 	readonly kind: 'SOURCE' | 'SPEC';
 	readonly label: string;
 	readonly file?: string;
 	readonly symbol?: string;
 	readonly range?: string;
+	/** Platform-observed location; absent when the platform could not prove one. Never derived in the editor. */
+	readonly span?: VerificationSourceSpan;
 }
 
 export interface VerificationSemanticView {

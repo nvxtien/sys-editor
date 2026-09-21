@@ -12,12 +12,15 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import { DocumentSymbol } from '../../../../editor/common/languages.js';
-import { getCodeEditor } from '../../../../editor/browser/editorBrowser.js';
+import { getCodeEditor, ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
+import { ITextModel } from '../../../../editor/common/model.js';
 import { ScrollType } from '../../../../editor/common/editorCommon.js';
+import { IFileService } from '../../../../platform/files/common/files.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IViewDescriptorService } from '../../../common/views.js';
 import { ViewPane, IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { VerificationTransportError } from '../common/sysVerificationWire.js';
+import { decideNavigation } from '../common/sysVerificationNavigation.js';
 import { ISysVerificationDataProvider } from './sysVerificationProviderService.js';
 import {
 	ALL_DISPOSITIONS,
@@ -62,6 +65,7 @@ export class SysVerificationWorkbenchView extends ViewPane {
 		@IThemeService themeService: IThemeService,
 		@IHoverService hoverService: IHoverService,
 		@IEditorService private readonly editorService: IEditorService,
+		@IFileService private readonly fileService: IFileService,
 		@ILanguageFeaturesService private readonly languageFeatures: ILanguageFeaturesService,
 		@ISysVerificationDataProvider private readonly dataProvider: ISysVerificationDataProvider
 	) {
@@ -358,10 +362,13 @@ export class SysVerificationWorkbenchView extends ViewPane {
 		if (anchor.range) {
 			btn.title = `range: ${anchor.range}`;
 		}
+		const note = DOM.append(parent, $('span.sys-verification-anchor-note'));
 		btn.addEventListener('click', (e) => {
 			e.stopPropagation();
 			const target = anchor.file!.includes('://') ? URI.parse(anchor.file!) : URI.file(anchor.file!);
-			this._openAnchor(target, anchor.symbol).catch(err => {
+			this._openAnchor(target, anchor).then(message => {
+				note.textContent = message;
+			}, err => {
 				btn.title = `Unable to open ${anchor.file}: ${err instanceof Error ? err.message : err}`;
 				btn.textContent = `[${anchor.kind}] ${anchor.label} — cannot open`;
 			});
@@ -369,16 +376,45 @@ export class SysVerificationWorkbenchView extends ViewPane {
 	}
 
 	/**
-	 * Opens the file; if the anchor names a symbol, reveals it only when a document symbol provider
-	 * returns exactly one matching symbol. No provider or no unique match => file-only (never guessed from text).
+	 * Opens the file, then follows `decideNavigation`: reveal the platform-observed span if it is fresh and fits the file,
+	 * else (no span only) try the symbol provider, else leave the file open. Returns what happened, for display.
 	 */
-	private async _openAnchor(target: URI, symbol: string | undefined): Promise<void> {
+	private async _openAnchor(target: URI, anchor: VerificationAnchor): Promise<string> {
 		const pane = await this.editorService.openEditor({ resource: target });
 		const editor = getCodeEditor(pane?.getControl());
 		const model = editor?.getModel();
-		if (!symbol || !editor || !model) {
-			return;
+		const decision = decideNavigation({
+			span: anchor.span,
+			hasSymbol: !!anchor.symbol,
+			currentDigest: anchor.span ? await this._digestOnDisk(target) : undefined,
+			dirty: !!pane?.input?.isDirty(),
+			model: model ? { lineCount: model.getLineCount(), lineMaxColumn: line => model.getLineMaxColumn(line) } : undefined
+		});
+		if (decision.action === 'REVEAL_SPAN' && editor) {
+			editor.setSelection(decision.range);
+			editor.revealRangeInCenter(decision.range, ScrollType.Smooth);
+			return decision.message;
 		}
+		if (decision.action === 'SYMBOL_FALLBACK' && editor && model && anchor.symbol) {
+			return (await this._revealSymbol(editor, model, anchor.symbol)) ? 'opened at symbol' : 'opened file only: no observed location';
+		}
+		return decision.action === 'FILE_ONLY' ? decision.message : 'opened file only';
+	}
+
+	/** SHA-256 of the bytes on disk (not the editor model), in the platform's `sha256:<hex>` form. */
+	private async _digestOnDisk(target: URI): Promise<string | undefined> {
+		try {
+			const content = await this.fileService.readFile(target);
+			const bytes = content.value.buffer;
+			const hash = await crypto.subtle.digest('SHA-256', bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
+			return 'sha256:' + Array.from(new Uint8Array(hash), b => b.toString(16).padStart(2, '0')).join('');
+		} catch {
+			return undefined;
+		}
+	}
+
+	/** Reveals the symbol only when a document symbol provider returns exactly one match; never searches text. */
+	private async _revealSymbol(editor: ICodeEditor, model: ITextModel, symbol: string): Promise<boolean> {
 		const found: DocumentSymbol[] = [];
 		const walk = (list: DocumentSymbol[]) => list.forEach(s => {
 			// exact name, or a method-style name "name(params)"
@@ -394,11 +430,12 @@ export class SysVerificationWorkbenchView extends ViewPane {
 				break;
 			}
 		}
-		if (found.length === 1) {
-			const range = found[0].selectionRange;
-			editor.setSelection(range);
-			editor.revealRangeInCenter(range, ScrollType.Smooth);
+		if (found.length !== 1) {
+			return false;
 		}
+		editor.setSelection(found[0].selectionRange);
+		editor.revealRangeInCenter(found[0].selectionRange, ScrollType.Smooth);
+		return true;
 	}
 
 	private _dispositionBadge(parent: HTMLElement, disposition: VerificationObligation['disposition']): void {

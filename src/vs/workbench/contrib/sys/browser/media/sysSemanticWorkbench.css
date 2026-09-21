@@ -806,3 +806,9 @@
 	background: var(--vscode-input-background);
 	color: var(--vscode-input-foreground);
 }
+
+.sys-verification-anchor-note {
+	margin-left: 6px;
+	font-size: 10px;
+	color: var(--vscode-descriptionForeground);
+}

@@ -14,7 +14,8 @@ import {
 	VerificationProject,
 	VerificationProvenance,
 	VerificationRule,
-	VerificationSemanticView
+	VerificationSemanticView,
+	VerificationSourceSpan
 } from './sysVerification.js';
 
 export const SUPPORTED_VERIFICATION_SCHEMA = 'verification.v0.1';
@@ -106,6 +107,38 @@ function semanticView(value: unknown, path: string): VerificationSemanticView | 
 	};
 }
 
+const SPAN_INTEGERS = ['startOffset', 'endOffset', 'startLine', 'startColumn', 'endLine', 'endColumn'] as const;
+
+/**
+ * A malformed span is dropped, not fatal: the anchor stays usable at file level and the rest of the contract is intact.
+ */
+function decodeSpan(value: unknown): VerificationSourceSpan | undefined {
+	if (!value || typeof value !== 'object') {
+		return undefined;
+	}
+	const o = value as Record<string, unknown>;
+	const n: Record<string, number> = {};
+	for (const key of SPAN_INTEGERS) {
+		const v = o[key];
+		if (typeof v !== 'number' || !Number.isInteger(v)) {
+			return undefined;
+		}
+		n[key] = v;
+	}
+	if (typeof o.sourceDigest !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(o.sourceDigest)) {
+		return undefined;
+	}
+	const ordered = n.endLine > n.startLine || (n.endLine === n.startLine && n.endColumn >= n.startColumn);
+	if (n.startLine < 1 || n.startColumn < 1 || n.endLine < 1 || n.endColumn < 1 || n.startOffset < 0 || n.endOffset < n.startOffset || !ordered) {
+		return undefined;
+	}
+	return {
+		startOffset: n.startOffset, endOffset: n.endOffset,
+		startLine: n.startLine, startColumn: n.startColumn, endLine: n.endLine, endColumn: n.endColumn,
+		sourceDigest: o.sourceDigest
+	};
+}
+
 function anchor(value: unknown, path: string): VerificationAnchor {
 	const o = obj(value, path);
 	const kind = str(o.kind, `${path}.kind`);
@@ -117,7 +150,8 @@ function anchor(value: unknown, path: string): VerificationAnchor {
 		label: str(o.label, `${path}.label`),
 		file: optStr(o.file ?? o.uri, `${path}.file`),
 		symbol: optStr(o.symbol, `${path}.symbol`),
-		range: optStr(o.range, `${path}.range`)
+		range: optStr(o.range, `${path}.range`),
+		span: decodeSpan(o.span)
 	};
 }
 
