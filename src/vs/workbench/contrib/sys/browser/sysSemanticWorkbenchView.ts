@@ -9,13 +9,11 @@ import { IHoverService } from '../../../../platform/hover/browser/hover.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { URI } from '../../../../base/common/uri.js';
-import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { IViewDescriptorService } from '../../../common/views.js';
 import { ViewPane, IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { ISysProjectService } from './sysProjectService.js';
 import { SysRequirementRow, parseOperation } from '../common/sysProject.js';
-import { BindingCheckResult, runBindingCheck } from '../common/sysBindingCheck.js';
 import { SpecCheckResult, runSpecCheck } from '../common/sysSpecCheck.js';
 import { TaskProcessTransport } from './sysVerificationProviderService.js';
 import { ISideXTaskService } from '../../../../platform/sidex/common/sidexTaskService.js';
@@ -33,7 +31,6 @@ import {
 const $ = DOM.$;
 
 export class SysSemanticWorkbenchView extends ViewPane {
-	private readonly bindingChecks = new Map<string, BindingCheckResult>();
 	private readonly specChecks = new Map<string, SpecCheckResult>();
 	private intentItems: readonly SysIntentItem[] = [];
 	private snapshot: SysProjectSnapshot | undefined;
@@ -60,7 +57,6 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		@IQuickInputService private readonly quickInputService: IQuickInputService,
 		@IFileService private readonly fileService: IFileService,
 		@ISideXTaskService private readonly taskService: ISideXTaskService,
-		@IWorkspaceContextService private readonly workspaceContextService: IWorkspaceContextService
 	) {
 		super(
 			options,
@@ -211,15 +207,6 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		await this.editorService.openEditor({ resource: await this.projectService.createRequirement() });
 	}
 
-	private _checkLabel(check: BindingCheckResult | undefined): string {
-		if (!check) { return 'not checked'; }
-		switch (check.kind) {
-			case 'FOUND': return 'found in code (name only, not verified)';
-			case 'NOT_FOUND': return 'not found in code';
-			case 'CHECK_ERROR': return `check failed: ${check.reason}`;
-		}
-	}
-
 	private _specLabel(check: SpecCheckResult | undefined): string {
 		if (!check) { return 'syntax not checked'; }
 		switch (check.kind) {
@@ -243,23 +230,6 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		void this._renderProject();
 	}
 
-	/** Name lookup only, via the same mechanism sys-platform's own recovery uses (java reverse.ProjectMain). Never a semantic verdict. */
-	private async _checkBinding(id: string, operation: string): Promise<void> {
-		let platformRoot = await this.projectService.getPlatformRoot();
-		if (!platformRoot) {
-			const input = await this._promptPlatformRoot(undefined);
-			if (input === undefined) { return; }
-			await this.projectService.setPlatformRoot(input);
-			platformRoot = input;
-		}
-		const projectRoot = this.workspaceContextService.getWorkspace().folders[0]?.uri.fsPath;
-		if (!projectRoot) { throw new Error('no workspace folder open'); }
-		const transport = new TaskProcessTransport(this.taskService, this.fileService);
-		const result = await runBindingCheck(transport, { platformRoot, projectRoot }, operation);
-		this.bindingChecks.set(id, result);
-		void this._renderProject();
-	}
-
 	private _renderRequirementRow(host: HTMLElement, row: SysRequirementRow): void {
 		const el = DOM.append(host, $('div.sys-req-row'));
 		const main = DOM.append(el, $('div.sys-req-main'));
@@ -273,14 +243,10 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		DOM.append(el, $('div.sys-req-status')).textContent = row.status === 'APPROVED_UNFORMALIZED'
 			? 'Intent approved · unformalized · not verified'
 			: 'Draft · unformalized · needs review';
-		const check = row.operation ? this.bindingChecks.get(row.id) : undefined;
 		DOM.append(el, $('div.sys-req-binding')).textContent = row.operation
-			? `\u2192 ${row.operation} \u00b7 ${this._checkLabel(check)}`
+			? `\u2192 ${row.operation} \u00b7 declared by human, not checked against code`
 			: 'Not bound to a source operation';
 		const actions = DOM.append(el, $('div.sys-req-actions'));
-		if (row.operation) {
-			this._action(actions, 'Check', 'sys-req-action', () => this._checkBinding(row.id, row.operation!));
-		}
 		this._action(actions, row.operation ? 'Edit binding' : 'Bind', 'sys-req-action', async () => {
 			const value = await this.quickInputService.input({
 				title: `Source operation for ${row.id}`,

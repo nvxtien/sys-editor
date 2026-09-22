@@ -30,3 +30,19 @@ Valid/invalid operation text; set, change and clear keep other fields; binding s
 2. Service method.
 3. Row UI and quick input.
 4. `tsc`, `eslint`, all Sys tests; commit.
+
+## Revision: no code-correspondence reasoning in sys-editor
+Sprint 1 originally shipped a client-side "Check" that ran `reverse.ProjectMain` and looked up the bound name
+in `functions[].name` to answer FOUND/NOT_FOUND. This was removed:
+
+- sys-platform's real identity match (`contract.rs::with_observed_span`) requires BOTH the qualified name AND
+  the anchor's file, and treats >1 candidates as AMBIGUOUS, never resolving to a pick. sys-editor's binding has
+  no file at all, so it cannot reproduce this rule, and a bare name lookup can report FOUND for a name that is
+  actually ambiguous project-wide.
+- More fundamentally: whether a requirement corresponds to code is sys-platform's reasoning to do, inside its
+  real pipeline (manifest → recovery → matching → comparison). sys-editor re-implementing any part of that
+  matching, however partial, is a second reverse path — exactly what sys-platform's own docs forbid.
+
+`operation` stays as pure human-declared intent (mirrors the manifest's own `target_operation`/`source_anchor`,
+which are authored, not reasoned) and is always labeled "declared by human, not checked against code". Any real
+correspondence check is deferred to Verify (sprint 3+4), which runs the actual sys-platform pipeline.
