@@ -1,5 +1,7 @@
 import { createDecorator } from '../../../../platform/instantiation/common/instantiation.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Emitter, Event } from '../../../../base/common/event.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -12,10 +14,15 @@ import { VerificationTransportError } from '../common/sysVerificationWire.js';
 
 export const ISysVerificationDataProvider = createDecorator<ISysVerificationDataProvider>('sysVerificationDataProvider');
 
+export interface WorkspaceVerificationRun { readonly platformBinary: string; readonly manifestPath: string }
+
 export interface ISysVerificationDataProvider {
 	readonly _serviceBrand: undefined;
+	readonly onDidChangeWorkspaceRun: Event<void>;
 	/** Rejects with VerificationTransportError on any live failure; never substitutes fixture data. */
 	getProject(): Promise<VerificationProject>;
+	/** The manifest+binary of the current workspace's last "Verify" run (set from Semantic Workbench). */
+	setWorkspaceRun(run: WorkspaceVerificationRun): void;
 }
 
 /** Tauri emits snake_case payloads; the shared task-service typings say camelCase. Accept both. */
@@ -79,27 +86,44 @@ export class TaskProcessTransport implements VerificationTransport {
  * The single registered provider. `sys.verification.dataSource` picks Live (default) or Fixture explicitly;
  * a failing live run is an error, not a reason to show fixture data.
  */
-class SysVerificationDataProvider implements ISysVerificationDataProvider {
+class SysVerificationDataProvider extends Disposable implements ISysVerificationDataProvider {
 	readonly _serviceBrand: undefined;
 	private readonly transport: VerificationTransport;
+	private workspaceRun: WorkspaceVerificationRun | undefined;
+	private readonly _onDidChangeWorkspaceRun = this._register(new Emitter<void>());
+	readonly onDidChangeWorkspaceRun = this._onDidChangeWorkspaceRun.event;
 
 	constructor(
 		@IConfigurationService private readonly config: IConfigurationService,
 		@IFileService files: IFileService,
 		@ISideXTaskService tasks: ISideXTaskService
 	) {
+		super();
 		this.transport = new TaskProcessTransport(tasks, files);
 	}
 
+	setWorkspaceRun(run: WorkspaceVerificationRun): void {
+		this.workspaceRun = run;
+		this._onDidChangeWorkspaceRun.fire();
+	}
+
 	getProject(): Promise<VerificationProject> {
-		if (this.config.getValue<string>('sys.verification.dataSource') === 'fixture') {
-			return Promise.resolve({ ...CINEMA_BOOKING_VERIFICATION_PROJECT, dataSource: 'FIXTURE' });
+		// sys.demoMode keeps the old, workspace-independent path (fixture or a globally configured manifest);
+		// the default path shows the current workspace's own last "Verify" run, or a clear not-configured error.
+		if (this.config.getValue<boolean>('sys.demoMode') === true) {
+			if (this.config.getValue<string>('sys.verification.dataSource') === 'fixture') {
+				return Promise.resolve({ ...CINEMA_BOOKING_VERIFICATION_PROJECT, dataSource: 'FIXTURE' });
+			}
+			return loadLiveVerification(this.transport, {
+				platformBinary: this.config.getValue<string>('sys.verification.platformBinary') ?? '',
+				manifestPath: this.config.getValue<string>('sys.verification.manifestPath') ?? '',
+				timeoutMs: this.config.getValue<number>('sys.verification.timeoutMs') ?? 60000
+			});
 		}
-		return loadLiveVerification(this.transport, {
-			platformBinary: this.config.getValue<string>('sys.verification.platformBinary') ?? '',
-			manifestPath: this.config.getValue<string>('sys.verification.manifestPath') ?? '',
-			timeoutMs: this.config.getValue<number>('sys.verification.timeoutMs') ?? 60000
-		});
+		if (!this.workspaceRun) {
+			return Promise.reject(new VerificationTransportError('CONFIG_MISSING', 'Run Verify on a requirement in Semantic Workbench to see a result here.'));
+		}
+		return loadLiveVerification(this.transport, { ...this.workspaceRun, timeoutMs: this.config.getValue<number>('sys.verification.timeoutMs') ?? 60000 });
 	}
 }
 

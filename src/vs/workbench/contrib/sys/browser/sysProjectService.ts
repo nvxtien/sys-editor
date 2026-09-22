@@ -7,6 +7,7 @@ import { Emitter, Event } from '../../../../base/common/event.js';
 import { VSBuffer } from '../../../../base/common/buffer.js';
 import { URI } from '../../../../base/common/uri.js';
 import { EMPTY_PROJECT, SYS_PROJECT_FILE, SysProject, SysProjectState, addRequirement, approveRequirement, loadProjectState, removeRequirement, requirementFile, serializeProject, setPlatformRoot, specFile } from '../common/sysProject.js';
+import { Verification01Manifest } from '../common/sysManifest.js';
 
 export const ISysProjectService = createDecorator<ISysProjectService>('sysProjectService');
 
@@ -26,6 +27,8 @@ export interface ISysProjectService {
 	setPlatformRoot(path: string | undefined): Promise<void>;
 	/** '' from getState() when not configured; the READY/NO_SYS_PROJECT_YET project's platformRoot. */
 	getPlatformRoot(): Promise<string | undefined>;
+	/** Writes a one-rule manifest for a single requirement's Verify run to .sys/verification/<id>.manifest.json. */
+	writeManifest(id: string, manifest: Verification01Manifest): Promise<URI>;
 }
 
 class SysProjectService extends Disposable implements ISysProjectService {
@@ -42,7 +45,7 @@ class SysProjectService extends Disposable implements ISysProjectService {
 		// Editing a requirement in the editor changes its derived status, so watch .sys/ too.
 		// The OS watcher may not report saves made from this window, so also listen to the operations it runs itself.
 		this._register(files.onDidFilesChange(e => {
-			if (e.changes.some(c => c.resource.path.includes('/.sys/'))) { this._onDidChange.fire(); }
+			if (this.folders().some(f => e.affects(URI.joinPath(f, '.sys')))) { this._onDidChange.fire(); }
 		}));
 		this._register(files.onDidRunOperation(e => {
 			if ((e.isOperation(FileOperation.WRITE) || e.isOperation(FileOperation.CREATE) || e.isOperation(FileOperation.DELETE)) && e.resource.path.includes('/.sys/')) { this._onDidChange.fire(); }
@@ -112,6 +115,12 @@ class SysProjectService extends Disposable implements ISysProjectService {
 
 	async setPlatformRoot(path: string | undefined): Promise<void> {
 		await this.save(setPlatformRoot(await this.writable(), path));
+	}
+
+	async writeManifest(id: string, manifest: Verification01Manifest): Promise<URI> {
+		const resource = URI.joinPath(this.folders()[0], '.sys', 'verification', `${id}.manifest.json`);
+		await this.files.writeFile(resource, VSBuffer.fromString(JSON.stringify(manifest, null, 2) + '\n'));
+		return resource;
 	}
 
 	async getPlatformRoot(): Promise<string | undefined> {

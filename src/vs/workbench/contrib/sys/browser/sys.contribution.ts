@@ -13,9 +13,8 @@ import './sysIntentActionService.js';
 import './sysVerificationProviderService.js';
 import './sysProjectService.js';
 
-export const SYS_VIEW_CONTAINER_ID = 'workbench.view.sys';
-export const SYS_VIEW_ID = 'workbench.view.sys.semanticWorkbench';
-export const SYS_VERIFICATION_VIEW_ID = 'workbench.view.sys.verificationWorkbench';
+import { SYS_VIEW_CONTAINER_ID, SYS_VIEW_ID, SYS_VERIFICATION_VIEW_ID } from '../common/sysViewIds.js';
+export { SYS_VIEW_CONTAINER_ID, SYS_VIEW_ID, SYS_VERIFICATION_VIEW_ID };
 
 const sysIcon = registerIcon('sys-icon', Codicon.symbolStructure, nls.localize('sysIcon', 'Sys semantic workbench icon'));
 

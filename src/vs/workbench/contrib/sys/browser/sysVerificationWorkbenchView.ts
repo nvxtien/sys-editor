@@ -83,20 +83,17 @@ export class SysVerificationWorkbenchView extends ViewPane {
 		);
 		this._register(this.configurationService.onDidChangeConfiguration(e => {
 			if (e.affectsConfiguration('sys.demoMode') && this.bodyContainer) {
+				this.loadState = 'IDLE';
 				this.renderBody(this.bodyContainer);
 			}
 		}));
+		this._register(this.dataProvider.onDidChangeWorkspaceRun(() => void this.load()));
 	}
 
 	protected override renderBody(parent: HTMLElement): void {
 		this.bodyContainer = parent;
 		super.renderBody(parent);
 		parent.classList.add('sys-semantic-workbench');
-		// The verification manifest is global config, not workspace state: without demo mode it must not be shown as this workspace's.
-		if (this.configurationService.getValue<boolean>('sys.demoMode') !== true) {
-			parent.textContent = 'Verification is not configured for this workspace.';
-			return;
-		}
 		void this.load();
 	}
 

@@ -15,6 +15,11 @@ import { ViewPane, IViewPaneOptions } from '../../../browser/parts/views/viewPan
 import { ISysProjectService } from './sysProjectService.js';
 import { SysRequirementRow } from '../common/sysProject.js';
 import { SpecCheckResult, runSpecCheck } from '../common/sysSpecCheck.js';
+import { buildManifest, validateTargetOperation } from '../common/sysManifest.js';
+import { ISysVerificationDataProvider } from './sysVerificationProviderService.js';
+import { SYS_VERIFICATION_VIEW_ID } from '../common/sysViewIds.js';
+import { IViewsService } from '../../../services/views/common/viewsService.js';
+import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { TaskProcessTransport } from './sysVerificationProviderService.js';
 import { ISideXTaskService } from '../../../../platform/sidex/common/sidexTaskService.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
@@ -57,6 +62,9 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		@IQuickInputService private readonly quickInputService: IQuickInputService,
 		@IFileService private readonly fileService: IFileService,
 		@ISideXTaskService private readonly taskService: ISideXTaskService,
+		@ISysVerificationDataProvider private readonly verificationDataProvider: ISysVerificationDataProvider,
+		@IViewsService private readonly viewsService: IViewsService,
+		@IFileDialogService private readonly fileDialogService: IFileDialogService
 	) {
 		super(
 			options,
@@ -230,6 +238,44 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		void this._renderProject();
 	}
 
+	/**
+	 * Builds a one-rule manifest for this requirement (human-declared operation + file, asked here, never
+	 * persisted) and runs it via spec-code-sync — the exact live-verification mechanism already used to
+	 * decode a real result. The result is shown in the Verification view, not reasoned about here.
+	 */
+	private async _verify(id: string, title: string): Promise<void> {
+		const operation = await this.quickInputService.input({
+			title: `Target operation for ${id}`,
+			prompt: 'The Class.method this requirement\'s spec governs. Asked fresh each time; not saved.',
+			placeHolder: 'ClassName.methodName',
+			validateInput: async text => validateTargetOperation(text)
+		});
+		if (!operation) { return; }
+		const picked = await this.fileDialogService.showOpenDialog({ title: 'Source file containing the operation', canSelectFiles: true, canSelectFolders: false, canSelectMany: false });
+		if (!picked?.[0]) { return; }
+		let platformRoot = await this.projectService.getPlatformRoot();
+		if (!platformRoot) {
+			const input = await this._promptPlatformRoot(undefined);
+			if (input === undefined) { return; }
+			await this.projectService.setPlatformRoot(input);
+			platformRoot = input;
+		}
+		const folder = this.projectService.resourceOf(id).path.split('/.sys/')[0];
+		const projectId = folder.slice(folder.lastIndexOf('/') + 1);
+		const manifest = buildManifest({
+			projectId,
+			projectRoot: folder,
+			targetOperation: operation,
+			sourceFile: picked[0].fsPath,
+			ruleId: id,
+			title,
+			specFile: this.projectService.resourceOfSpec(id).fsPath
+		});
+		const manifestUri = await this.projectService.writeManifest(id, manifest);
+		this.verificationDataProvider.setWorkspaceRun({ platformBinary: `${platformRoot}/spec-code-sync/target/debug/spec-code-sync`, manifestPath: manifestUri.fsPath });
+		await this.viewsService.openView(SYS_VERIFICATION_VIEW_ID, true);
+	}
+
 	private _renderRequirementRow(host: HTMLElement, row: SysRequirementRow): void {
 		const el = DOM.append(host, $('div.sys-req-row'));
 		const main = DOM.append(el, $('div.sys-req-main'));
@@ -254,6 +300,7 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		});
 		if (row.hasSpec) {
 			this._action(actions, 'Check syntax', 'sys-req-action', () => this._checkSpec(row.id));
+			this._action(actions, 'Verify', 'sys-req-action', () => this._verify(row.id, row.title));
 		}
 		this._action(actions, 'Delete', 'sys-req-action', async () => {
 			const { confirmed } = await this.dialogService.confirm({ message: `Delete ${row.id}?`, detail: 'The requirement file is removed from .sys/requirements/.', primaryButton: 'Delete' });
