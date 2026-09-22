@@ -28,6 +28,8 @@ export interface ISysProjectService {
 	createSpec(id: string): Promise<URI>;
 	approveRequirement(id: string): Promise<void>;
 	readStructuredIntent(id: string): Promise<SysStructuredIntentRecord | undefined>;
+	prepareStructuredIntentContext(id: string): Promise<string>;
+	prepareFormalSpecContext(id: string): Promise<string>;
 	writeStructuredIntent(id: string, sourceRequirement: string, draft: SysStructuredIntent): Promise<void>;
 	approveStructuredIntent(id: string): Promise<void>;
 	approveSpec(id: string): Promise<void>;
@@ -112,7 +114,7 @@ class SysProjectService extends Disposable implements ISysProjectService {
 		this._onDidChange.fire();
 	}
 
-	private async core(args: readonly string[], input?: string): Promise<void> {
+	private async coreResponse(args: readonly string[], input?: string): Promise<string> {
 		const configured = this.configuration.getValue<string>('sidex.chat.serverUrl');
 		const endpoint = configured?.trim() ? await resolveServerEndpoint() : await waitForServerEndpoint();
 		const response = await fetch(`${serverHttpUrl(configured)}/v1/sys/core`, {
@@ -122,6 +124,11 @@ class SysProjectService extends Disposable implements ISysProjectService {
 		});
 		if (!response.ok) { throw new Error(`sys-core failed (${response.status}): ${await response.text()}`); }
 		void endpoint;
+		return response.text();
+	}
+
+	private async core(args: readonly string[], input?: string): Promise<void> {
+		await this.coreResponse(args, input);
 	}
 
 	async createRequirement(): Promise<URI> {
@@ -151,11 +158,19 @@ class SysProjectService extends Disposable implements ISysProjectService {
 
 	async writeStructuredIntent(id: string, sourceRequirement: string, draft: SysStructuredIntent): Promise<void> {
 		await this.core(['requirement', 'save', id], sourceRequirement);
-		await this.core(['intent', 'save', id], serializeStructuredIntent(draft));
+		await this.core(['intent', 'accept', id], serializeStructuredIntent(draft));
 		const resource = this.resourceOfStructuredIntent(id);
 		await this.files.createFolder(URI.joinPath(this.folders()[0], '.sys', 'intents'));
 		await this.files.writeFile(resource, VSBuffer.fromString(JSON.stringify({ sourceRequirement, draft: JSON.parse(serializeStructuredIntent(draft)) }, null, 2) + '\n'));
 		this._onDidChange.fire();
+	}
+
+	async prepareStructuredIntentContext(id: string): Promise<string> {
+		return this.coreResponse(['intent', 'prepare', id]);
+	}
+
+	async prepareFormalSpecContext(id: string): Promise<string> {
+		return this.coreResponse(['spec', 'prepare', id]);
 	}
 
 	async approveStructuredIntent(id: string): Promise<void> {
@@ -175,7 +190,7 @@ class SysProjectService extends Disposable implements ISysProjectService {
 		const intent = await this.readStructuredIntent(id);
 		const requirement = await this.read(this.resourceOf(id).toString()) ?? '';
 		if (!intent || !canGenerateFormalSpec(intent, requirement)) { throw new Error('Approve the Structured Intent and bind its operation before approving the Formal Spec.'); }
-		await this.core(['spec', 'save', id], spec);
+		await this.core(['spec', 'accept', id], spec);
 		await this.core(['spec', 'approve-current', id]);
 		await this.save({ ...project, requirements: project.requirements.map(ref => ref.id === id ? { ...ref, approvedSpecText: spec, approvedSpecIntent: serializeStructuredIntent(intent.draft) } : ref) });
 	}

@@ -304,7 +304,8 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		const endpoint = configuredServerUrl?.trim() ? await resolveServerEndpoint() : await waitForServerEndpoint();
 		assertSysDraftServerAvailable(endpoint.running, configuredServerUrl, endpoint.error);
 		const httpUrl = serverHttpUrl(configuredServerUrl);
-		const draft = await requestSysFormalSpecDraft(httpUrl, model, JSON.stringify(structuredIntent.draft));
+		const proposalContext = await this.projectService.prepareFormalSpecContext(id);
+		const draft = await requestSysFormalSpecDraft(httpUrl, model, proposalContext);
 		const proposals = URI.joinPath(URI.file(projectRoot), '.sys', 'proposals');
 		await this.fileService.createFolder(proposals);
 		const candidatePath = URI.joinPath(proposals, `draft-${generateUuid()}.spec`).fsPath;
@@ -332,7 +333,8 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		const configuredServerUrl = this.configurationService.getValue<string>('sidex.chat.serverUrl');
 		const endpoint = configuredServerUrl?.trim() ? await resolveServerEndpoint() : await waitForServerEndpoint();
 		assertSysDraftServerAvailable(endpoint.running, configuredServerUrl, endpoint.error);
-		const structuredIntent = await requestStructuredIntent(serverHttpUrl(configuredServerUrl), model, id, intent);
+		const proposalContext = await this.projectService.prepareStructuredIntentContext(id);
+		const structuredIntent = await requestStructuredIntent(serverHttpUrl(configuredServerUrl), model, id, proposalContext);
 		await this.projectService.writeStructuredIntent(id, intent, structuredIntent);
 		await this.editorService.openEditor({ resource: this.projectService.resourceOfStructuredIntent(id) });
 	}
