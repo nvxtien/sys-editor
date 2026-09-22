@@ -30,8 +30,8 @@ import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { decodePendingProposal, canApplySysProposal, isSysWorkspaceMissing, validateDraftCandidate } from '../common/sysPlatformFlow.js';
 import { ISidexChatService } from '../../sidexChat/browser/sidexChatService.js';
-import { resolveServerEndpoint, serverHttpUrl } from '../../sidexChat/browser/localServer.js';
-import { assertSysDraftServerAvailable, requestSysFormalSpecDraft } from '../common/sysFormalSpecDraft.js';
+import { resolveServerEndpoint, serverHttpUrl, waitForServerEndpoint } from '../../sidexChat/browser/localServer.js';
+import { assertSysDraftOperationBinding, assertSysDraftServerAvailable, requestSysFormalSpecDraft } from '../common/sysFormalSpecDraft.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { ISysSemanticSnapshotService, SysProjectSnapshot } from '../common/sysSemanticSnapshot.js';
 import {
@@ -291,10 +291,11 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		if (!platformRoot) { return; }
 		const projectRoot = this._projectRoot();
 		if (!await this._ensurePlatformWorkspace(platformRoot, projectRoot)) { return; }
+		assertSysDraftOperationBinding(undefined);
 		const model = this.sidexChatService.serverModel;
 		if (!model) { throw new Error('Select a model in SideX Settings → Models before drafting a Formal Spec.'); }
 		const configuredServerUrl = this.configurationService.getValue<string>('sidex.chat.serverUrl');
-		const endpoint = await resolveServerEndpoint();
+		const endpoint = configuredServerUrl?.trim() ? await resolveServerEndpoint() : await waitForServerEndpoint();
 		assertSysDraftServerAvailable(endpoint.running, configuredServerUrl, endpoint.error);
 		const httpUrl = serverHttpUrl(configuredServerUrl);
 		const draft = await requestSysFormalSpecDraft(httpUrl, model, intent);

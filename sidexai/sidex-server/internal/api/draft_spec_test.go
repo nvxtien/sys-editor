@@ -72,8 +72,36 @@ func TestDraftSpecUsesSelectedModelAndOnlyIntent(t *testing.T) {
 	if !strings.Contains(system, "Formal Spec") || !strings.Contains(strings.ToLower(system), "only") {
 		t.Fatalf("system prompt must request only Formal Spec output: %q", system)
 	}
+	for _, declaration := range []string{"Requirement:", "Operation:", "Markdown fences"} {
+		if !strings.Contains(system, declaration) {
+			t.Fatalf("system prompt missing %q contract: %q", declaration, system)
+		}
+	}
 	if user != intent {
 		t.Fatalf("provider user content = %q, want only intent %q", user, intent)
+	}
+}
+
+func TestDraftSpecPreservesAllProviderTextChunks(t *testing.T) {
+	draft := "Requirement: Booking\n\nOperation: create booking\n\nWhen the operation succeeds,\nstatus becomes CONFIRMED.\n\n日本語"
+	h, server := draftHandler(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"Requirement: Booking\\n\\nOperation: create booking\\n\\nWhen the operation succeeds,\\n\"}}]}\n\n")
+		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"status becomes CONFIRMED.\\n\\n日本語\"}}]}\n\ndata: [DONE]\n\n")
+	})
+	defer server.Close()
+
+	rr := httptest.NewRecorder()
+	h.DraftSpec(rr, draftRequest(`{"model":"openrouter/test-model","intent":"A booking must have a seat."}`))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	var result draftSpecResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if result.DraftSpec != draft {
+		t.Fatalf("draftSpec = %q, want %q", result.DraftSpec, draft)
 	}
 }
 

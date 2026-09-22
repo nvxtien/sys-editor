@@ -7,6 +7,12 @@ export function assertSysDraftServerAvailable(running: boolean, configuredUrl: s
 	}
 }
 
+export function assertSysDraftOperationBinding(operation: string | undefined): void {
+	if (!operation?.trim()) {
+		throw new Error('Bind this requirement to a source operation before drafting a Formal Spec.');
+	}
+}
+
 export async function requestSysFormalSpecDraft(httpUrl: string, model: string, intent: string): Promise<string> {
 	let response: Response;
 	try {

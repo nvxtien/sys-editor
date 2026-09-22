@@ -141,6 +141,24 @@ export function resolveServerEndpoint(): Promise<IServerEndpoint> {
 	return inFlight;
 }
 
+/** Wait for the app-started server to finish its asynchronous health check. */
+export async function waitForServerEndpoint(timeoutMs = 65_000): Promise<IServerEndpoint> {
+	if (!getTauriInvoke()) {
+		return cached;
+	}
+	const deadline = Date.now() + timeoutMs;
+	while (true) {
+		const endpoint = await resolveServerEndpoint();
+		if (endpoint.running || endpoint.error) {
+			return endpoint;
+		}
+		if (Date.now() >= deadline) {
+			throw new Error(`SideX server did not become ready within ${Math.ceil(timeoutMs / 1000)} seconds. Check SideX Settings → Models.`);
+		}
+		await new Promise(resolve => setTimeout(resolve, 250));
+	}
+}
+
 /**
  * Restart the server so newly-saved provider credentials are picked up, then
  * refresh the cached endpoint (the port changes across restarts).
