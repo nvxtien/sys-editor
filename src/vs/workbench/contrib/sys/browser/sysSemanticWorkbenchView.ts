@@ -158,8 +158,38 @@ export class SysSemanticWorkbenchView extends ViewPane {
 					this._renderRequirementRow(section, row);
 				}
 				this._action(section, 'New requirement', 'sys-error-retry-btn', () => this._createRequirement());
+				this._renderPlatformRow(parent, state.project.platformRoot);
 			}
 		}
+	}
+
+	private _renderPlatformRow(parent: HTMLElement, platformRoot: string | undefined): void {
+		const section = DOM.append(parent, this._section('Code check'));
+		DOM.append(section, $('p.sys-error-message')).textContent = platformRoot
+			? `sys-platform checkout: ${platformRoot}`
+			: 'No sys-platform checkout configured yet. Set it here, or the first "Check" will ask for it.';
+		this._action(section, platformRoot ? 'Change' : 'Set sys-platform path', 'sys-req-action', async () => {
+			const next = await this._promptPlatformRoot(platformRoot);
+			if (next !== undefined) { await this.projectService.setPlatformRoot(next); }
+		});
+	}
+
+	/**
+	 * Asks for the checkout of the sys-platform TOOL that runs the code check — a separate repo on disk,
+	 * never this workspace (the project being checked is taken from the open folder automatically).
+	 */
+	private async _promptPlatformRoot(current: string | undefined): Promise<string | undefined> {
+		const input = await this.quickInputService.input({
+			title: 'sys-platform checkout (developer tool, not this project)',
+			prompt: 'Absolute path to your sys-platform repo checkout — the tool that reads your code, built with ./scripts/build.sh. Not the folder you have open here.',
+			value: current ?? '',
+			placeHolder: '/path/to/sys-platform'
+		});
+		if (!input) { return undefined; }
+		if (!await this.fileService.exists(URI.file(`${input}/build/classes`))) {
+			throw new Error(`${input}/build/classes not found; run sys-platform's ./scripts/build.sh first`);
+		}
+		return input;
 	}
 
 	private _action(host: HTMLElement, label: string, cls: string, run: () => Promise<void>): HTMLButtonElement {
@@ -189,18 +219,11 @@ export class SysSemanticWorkbenchView extends ViewPane {
 	}
 
 	/** Name lookup only, via the same mechanism sys-platform's own recovery uses (java reverse.ProjectMain). Never a semantic verdict. */
-	private async _checkBinding(id: string, operation: string, host: HTMLElement): Promise<void> {
+	private async _checkBinding(id: string, operation: string): Promise<void> {
 		let platformRoot = await this.projectService.getPlatformRoot();
 		if (!platformRoot) {
-			const input = await this.quickInputService.input({
-				title: 'sys-platform checkout',
-				prompt: 'Path to the sys-platform repo (must contain build/classes from ./scripts/build.sh)',
-				placeHolder: '/path/to/sys-platform'
-			});
-			if (!input) { return; }
-			if (!await this.fileService.exists(URI.file(`${input}/build/classes`))) {
-				throw new Error(`${input}/build/classes not found; run sys-platform's ./scripts/build.sh first`);
-			}
+			const input = await this._promptPlatformRoot(undefined);
+			if (input === undefined) { return; }
 			await this.projectService.setPlatformRoot(input);
 			platformRoot = input;
 		}
@@ -231,7 +254,7 @@ export class SysSemanticWorkbenchView extends ViewPane {
 			: 'Not bound to a source operation';
 		const actions = DOM.append(el, $('div.sys-req-actions'));
 		if (row.operation) {
-			this._action(actions, 'Check', 'sys-req-action', () => this._checkBinding(row.id, row.operation!, el));
+			this._action(actions, 'Check', 'sys-req-action', () => this._checkBinding(row.id, row.operation!));
 		}
 		this._action(actions, row.operation ? 'Edit binding' : 'Bind', 'sys-req-action', async () => {
 			const value = await this.quickInputService.input({
