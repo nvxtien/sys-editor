@@ -44,100 +44,384 @@ Do not fabricate desktop evidence.
 
 # Repository ownership and implementation boundary
 
-This mission is **primarily a sys-editor mission**.
+This mission is now a **shared core architecture mission**, not an editor-owned workflow.
 
-Use this ownership model:
+Create a dedicated reusable module:
+
+    sys-core
+
+Do NOT place lifecycle/domain logic inside `product-cli`.
+Do NOT make `sys-editor` the owner of Structured Intent lifecycle state.
+
+The intended architecture is:
 
     sys-editor
-    = product workflow
-    = GUI
-    = human review / confirmation
-    = Structured Intent draft + approval lifecycle
-    = workspace-local persistence / orchestration
-    = provider invocation / proposal handling
-    = staleness presentation and user actions
+        = GUI client / presentation adapter
+
+    product-cli
+        = CLI client / presentation adapter
+
+    sys-core
+        = product lifecycle / application core
+        = workspace-owned project state
+        = requirement lifecycle
+        = Structured Intent model
+        = Structured Intent normalization orchestration
+        = human confirmation transitions
+        = exact-content approvals
+        = staleness propagation
+        = persistence under .sys/
+        = Formal Spec generation orchestration
+        = provider-agnostic proposal workflow
+        = invocation/orchestration of sys-platform capabilities
 
     sys-platform
-    = Formal Spec grammar
-    = Formal Spec parser / validator
-    = semantic authority
-    = governed Formal Spec validation
-    = source/code semantic recovery
-    = verification semantics and verdicts
+        = Formal Spec grammar
+        = Formal Spec parser / validator
+        = semantic authority
+        = source/code semantic recovery
+        = verification semantics
+        = proof / evidence / verdict generation
 
-Important default:
+The key rule is:
 
-    Structured Intent is a sys-editor/product artifact.
+    sys-core orchestrates
+    sys-platform certifies
 
-Do NOT move Structured Intent into sys-platform merely because this mission introduces it.
+Neither sys-editor nor product-cli may own lifecycle semantics.
 
-Only change sys-platform if the existing platform contract cannot support one of these required operations soundly:
+Both must call the same reusable sys-core APIs so GUI and CLI cannot drift into separate implementations.
 
-- validate a Formal Spec candidate produced from approved Structured Intent;
-- expose or consume the canonical Formal Spec grammar/template contract;
-- accept the authoritative operation identity needed by the Formal Spec;
-- produce verification evidence/verdicts required by the GUI lifecycle.
+Required dependency direction:
 
-If sys-platform already supports those capabilities, leave it unchanged.
+    sys-editor ─┐
+                ├──> sys-core ───> sys-platform
+    product-cli ┘
 
-Do NOT add provider/LLM logic to sys-platform.
+Do NOT create:
 
-Do NOT add GUI/workflow state to sys-platform.
+    sys-editor -> product-cli
 
-Do NOT make sys-editor responsible for semantic truth that belongs to sys-platform.
+as the architectural path.
 
-The intended boundary is:
+Do NOT make product-cli a library used by sys-editor.
 
-    Raw Requirement
-      -> sys-editor
+The CLI is a client of sys-core, not the owner of sys-core.
 
-    LLM proposes Structured Intent
-      -> sys-editor
+---
 
-    Human confirms Structured Intent
-      -> sys-editor
+## Required sys-core module
 
-    Approved Structured Intent
-      -> sys-editor-owned governed product state
+Create a dedicated `sys-core` module/package/crate/library in the appropriate repository structure after inspecting the current build system.
 
-    Formal Spec candidate generation/orchestration
-      -> sys-editor
+Do not assume its language or packaging blindly; choose the implementation form that integrates cleanly with the current sys-platform/product build.
 
-    Formal Spec grammar validation
-      -> sys-platform
+The module must be independently reusable by:
 
-    Human approves validated Formal Spec
-      -> sys-editor records approval of exact content
+- Sys Editor integration;
+- product CLI;
+- future non-GUI clients.
 
-    Source recovery / semantic comparison / proof
-      -> sys-platform
+At minimum, sys-core should own APIs conceptually equivalent to:
 
-    Rendering verdict/evidence/navigation
-      -> sys-editor
+    loadProject(workspace)
+    createRequirement(...)
+    normalizeRequirement(reqId, ...)
+    approveStructuredIntent(reqId, exactContentIdentity)
+    generateFormalSpec(reqId, ...)
+    approveFormalSpec(reqId, exactContentIdentity)
+    mark/recomputeStaleness(...)
+    verifyRequirement(reqId, ...)
 
-If implementation requires touching both repositories, report each change separately and explain why the boundary required it.
+Exact API names may differ.
 
-Before editing sys-platform, first prove that a platform change is necessary.
+The important requirement is that lifecycle state transitions live in sys-core exactly once.
 
-Required final ownership report:
+---
 
-    PRIMARY_IMPLEMENTATION_REPO:
-    sys-editor
+## Structured Intent ownership
 
-    SYS_PLATFORM_CHANGE_REQUIRED:
-    YES | NO
+Structured Intent is a first-class product lifecycle artifact owned by sys-core.
 
-    SYS_PLATFORM_CHANGE_REASON:
+It is NOT:
+
+- a sys-editor-only UI model;
+- a product-cli-only command model;
+- a sys-platform semantic verdict.
+
+sys-core owns:
+
+    Structured Intent Draft
+    Structured Intent Approved
+    exact-content identity
+    provenance metadata
+    UNKNOWN / INFERRED preservation
+    downstream staleness rules
+
+sys-editor renders and lets the user act on this state.
+
+product-cli prints/prompts and lets the user act on this state.
+
+Both must call sys-core.
+
+---
+
+## Human confirmation ownership
+
+Human confirmation is a lifecycle/domain transition owned by sys-core.
+
+The GUI may expose a button:
+
+    Confirm intent
+
+The CLI may expose a command:
+
+    sys intent approve REQ-001
+
+But both must execute the same sys-core transition.
+
+Likewise for Formal Spec approval.
+
+Do not duplicate approval logic in GUI and CLI.
+
+---
+
+## Persistence ownership
+
+sys-core owns the canonical persistence model under the workspace:
+
+    .sys/...
+
+sys-editor and product-cli must not independently decide file layout or mutate project lifecycle files directly, except through sys-core APIs/adapters.
+
+The exact on-disk layout may evolve, but one source of truth must exist.
+
+Potential conceptual layout:
+
+    .sys/
+      project.json
+      requirements/
+      intents/
+      specs/
+      proposals/
+
+Reuse existing compatible artifacts where possible.
+
+Do not duplicate old state if migration is sufficient.
+
+---
+
+## LLM/provider orchestration ownership
+
+The provider-specific transport may remain in the existing SideX/editor infrastructure where necessary, but the product-level orchestration contract belongs to sys-core.
+
+Meaning:
+
+    normalize this requirement
+    generate a Formal Spec from approved Structured Intent
+
+must be sys-core use cases.
+
+Provider adapters may be injected/called through a narrow interface.
+
+Do NOT hard-wire sys-core to a specific GUI transport, localhost port, SideX UI class, or model vendor.
+
+Preferred boundary:
+
+    sys-core use case
+        -> ProposalProvider interface
+        -> editor/CLI/server adapter
+        -> selected LLM
+
+This keeps sys-core provider-agnostic and allows future CLI execution.
+
+If the current architecture requires a transitional adapter, document it clearly and do not bake the editor dependency into sys-core.
+
+---
+
+## CLI parity requirement
+
+This mission must explicitly prove that the lifecycle is not GUI-only.
+
+At minimum, design and test sys-core so product-cli can expose the same lifecycle.
+
+Preferred CLI surface, if feasible in this mission:
+
+    sys requirement create ...
+    sys intent normalize REQ-001
+    sys intent show REQ-001
+    sys intent approve REQ-001
+    sys spec generate REQ-001
+    sys spec show REQ-001
+    sys spec approve REQ-001
+    sys verify REQ-001
+
+Exact command names may differ.
+
+If full CLI wiring is too broad, it is acceptable to wire a minimal representative subset, but sys-core must be independently reusable and CLI integration must be demonstrated by at least one real lifecycle operation.
+
+Do not claim architecture independence based only on interfaces with no CLI consumer.
+
+---
+
+## Editor responsibility after this change
+
+sys-editor should become a thin client for lifecycle state.
+
+It may own:
+
+- views;
+- buttons;
+- editor opening/navigation;
+- user dialogs;
+- rendering;
+- provider selection UX;
+- transport adapters.
+
+It must NOT own:
+
+- Structured Intent lifecycle rules;
+- approval truth;
+- staleness truth;
+- .sys canonical persistence semantics;
+- Formal Spec lifecycle truth.
+
+If current editor code owns these today, migrate the logic into sys-core rather than wrapping it in place.
+
+---
+
+## product-cli responsibility after this change
+
+product-cli should become a thin command adapter.
+
+It may own:
+
+- argument parsing;
+- terminal prompts;
+- stdout/stderr formatting;
+- exit codes.
+
+It must NOT own:
+
+- lifecycle rules;
+- Structured Intent schema authority;
+- approval rules;
+- staleness propagation;
+- persistence semantics.
+
+Do not put sys-core inside product-cli.
+
+---
+
+## sys-platform responsibility
+
+sys-platform remains the semantic authority.
+
+It owns:
+
+- canonical Formal Spec grammar;
+- parser;
+- validation;
+- ontology/semantic compilation;
+- source recovery;
+- semantic comparison;
+- proof/evidence;
+- verification verdict.
+
+Do NOT move these into sys-core.
+
+sys-core may call sys-platform, but must not reimplement its semantic authority.
+
+---
+
+## Required implementation decision before coding
+
+Before editing code, inspect the repositories/build structure and write down:
+
+    SYS_CORE_LOCATION:
     ...
 
+    SYS_CORE_LANGUAGE/PACKAGING:
+    ...
+
+    DEPENDENCY_DIRECTION:
+    sys-editor -> sys-core
+    product-cli -> sys-core
+    sys-core -> sys-platform
+
+    MIGRATION_TARGETS:
+    editor-owned lifecycle logic to move
+    cli-owned lifecycle logic to move
+
+Do not start by copying code into a new folder.
+
+First define the clean module boundary and migrate one source of truth.
+
+---
+
+## Required architectural tests
+
+Add tests proving:
+
+1. sys-core lifecycle can run without sys-editor;
+2. sys-core lifecycle can run without product-cli;
+3. sys-editor uses sys-core for at least one lifecycle transition;
+4. product-cli uses sys-core for at least one lifecycle transition;
+5. approval behavior is identical through GUI adapter and CLI adapter;
+6. staleness behavior is identical through GUI adapter and CLI adapter;
+7. persistence format is shared;
+8. no duplicate lifecycle implementation remains in sys-editor/product-cli;
+9. sys-core does not implement Formal Spec parser semantics already owned by sys-platform;
+10. sys-core has no dependency on a concrete GUI/provider vendor.
+
+---
+
+## Required final ownership report
+
+    PRIMARY_CORE_MODULE:
+    sys-core
+
+    SYS_CORE_CREATED:
+    YES | NO
+
+    SYS_CORE_LOCATION:
+    ...
+
+    SYS_CORE_LANGUAGE/PACKAGING:
+    ...
+
+    SYS_EDITOR_ROLE:
+    thin GUI client | explain deviations
+
+    PRODUCT_CLI_ROLE:
+    thin CLI client | explain deviations
+
     STRUCTURED_INTENT_OWNER:
-    sys-editor
+    sys-core
+
+    HUMAN_CONFIRMATION_OWNER:
+    sys-core
+
+    PERSISTENCE_OWNER:
+    sys-core
+
+    FORMAL_SPEC_GENERATION_ORCHESTRATION_OWNER:
+    sys-core
 
     FORMAL_SPEC_VALIDATION_OWNER:
     sys-platform
 
     VERIFICATION_SEMANTICS_OWNER:
     sys-platform
+
+    CLI_PARITY_DEMONSTRATED:
+    YES | NO
+
+    GUI_PARITY_DEMONSTRATED:
+    YES | NO
+
+    DUPLICATE_LIFECYCLE_LOGIC:
+    0 | explain
 
 
 # Product thesis
