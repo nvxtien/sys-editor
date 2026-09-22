@@ -153,6 +153,7 @@ func main() {
 	protected.HandleFunc("/inline-edit", handler.InlineEdit).Methods("POST", "OPTIONS")
 	protected.HandleFunc("/sys/draft-spec", handler.DraftSpec).Methods("POST", "OPTIONS")
 	protected.HandleFunc("/sys/normalize-intent", handler.NormalizeIntent).Methods("POST", "OPTIONS")
+	protected.HandleFunc("/sys/core", handler.SysCore).Methods("POST", "OPTIONS")
 	protected.HandleFunc("/usage", handler.GetUsage).Methods("GET", "OPTIONS")
 	protected.HandleFunc("/plan", handler.GetPlan).Methods("GET", "OPTIONS")
 	protected.HandleFunc("/api-keys", handler.ListAPIKeys).Methods("GET", "OPTIONS")

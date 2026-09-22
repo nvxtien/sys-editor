@@ -9,6 +9,8 @@ import { URI } from '../../../../base/common/uri.js';
 import { EMPTY_PROJECT, SYS_PROJECT_FILE, SysProject, SysProjectState, addRequirement, approveRequirement, loadProjectState, removeRequirement, requirementFile, serializeProject, setPlatformRoot, specFile, structuredIntentFile } from '../common/sysProject.js';
 import { approveStructuredIntent, canGenerateFormalSpec, parseStructuredIntent, serializeStructuredIntent, SysStructuredIntent, SysStructuredIntentRecord } from '../common/sysStructuredIntent.js';
 import { Verification01Manifest } from '../common/sysManifest.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { resolveServerEndpoint, serverHttpUrl, waitForServerEndpoint } from '../../sidexChat/browser/localServer.js';
 
 export const ISysProjectService = createDecorator<ISysProjectService>('sysProjectService');
 
@@ -44,7 +46,8 @@ class SysProjectService extends Disposable implements ISysProjectService {
 
 	constructor(
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
-		@IFileService private readonly files: IFileService
+		@IFileService private readonly files: IFileService,
+		@IConfigurationService private readonly configuration: IConfigurationService
 	) {
 		super();
 		this._register(workspace.onDidChangeWorkspaceFolders(() => this._onDidChange.fire()));
@@ -109,6 +112,18 @@ class SysProjectService extends Disposable implements ISysProjectService {
 		this._onDidChange.fire();
 	}
 
+	private async core(args: readonly string[], input?: string): Promise<void> {
+		const configured = this.configuration.getValue<string>('sidex.chat.serverUrl');
+		const endpoint = configured?.trim() ? await resolveServerEndpoint() : await waitForServerEndpoint();
+		const response = await fetch(`${serverHttpUrl(configured)}/v1/sys/core`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ workspace: this.folders()[0].fsPath, args, ...(input === undefined ? {} : { input }) })
+		});
+		if (!response.ok) { throw new Error(`sys-core failed (${response.status}): ${await response.text()}`); }
+		void endpoint;
+	}
+
 	async createRequirement(): Promise<URI> {
 		const { project, id } = addRequirement(await this.writable());
 		const resource = this.resourceOf(id);
@@ -135,6 +150,8 @@ class SysProjectService extends Disposable implements ISysProjectService {
 	}
 
 	async writeStructuredIntent(id: string, sourceRequirement: string, draft: SysStructuredIntent): Promise<void> {
+		await this.core(['requirement', 'save', id], sourceRequirement);
+		await this.core(['intent', 'save', id], serializeStructuredIntent(draft));
 		const resource = this.resourceOfStructuredIntent(id);
 		await this.files.createFolder(URI.joinPath(this.folders()[0], '.sys', 'intents'));
 		await this.files.writeFile(resource, VSBuffer.fromString(JSON.stringify({ sourceRequirement, draft: JSON.parse(serializeStructuredIntent(draft)) }, null, 2) + '\n'));
@@ -146,6 +163,7 @@ class SysProjectService extends Disposable implements ISysProjectService {
 		if (!record) { throw new Error('Structured Intent has not been normalized yet.'); }
 		const requirement = await this.read(this.resourceOf(id).toString()) ?? '';
 		const approved = approveStructuredIntent(record, requirement);
+		await this.core(['intent', 'approve-current', id]);
 		await this.files.writeFile(this.resourceOfStructuredIntent(id), VSBuffer.fromString(JSON.stringify({ sourceRequirement: approved.sourceRequirement, draft: JSON.parse(serializeStructuredIntent(approved.draft)), approvedContent: approved.approvedContent }, null, 2) + '\n'));
 		this._onDidChange.fire();
 	}
@@ -157,6 +175,8 @@ class SysProjectService extends Disposable implements ISysProjectService {
 		const intent = await this.readStructuredIntent(id);
 		const requirement = await this.read(this.resourceOf(id).toString()) ?? '';
 		if (!intent || !canGenerateFormalSpec(intent, requirement)) { throw new Error('Approve the Structured Intent and bind its operation before approving the Formal Spec.'); }
+		await this.core(['spec', 'save', id], spec);
+		await this.core(['spec', 'approve-current', id]);
 		await this.save({ ...project, requirements: project.requirements.map(ref => ref.id === id ? { ...ref, approvedSpecText: spec, approvedSpecIntent: serializeStructuredIntent(intent.draft) } : ref) });
 	}
 
