@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { EMPTY_PROJECT, addRequirement, approveRequirement, loadProjectState, parseOperation, parseProject, removeRequirement, serializeProject, setOperation, setPlatformRoot, statusOf, titleOf } from '../sysProject.js';
+import { EMPTY_PROJECT, addRequirement, approveRequirement, loadProjectState, parseOperation, parseProject, removeRequirement, serializeProject, setOperation, setPlatformRoot, specFile, statusOf, titleOf } from '../sysProject.js';
 
 const files = (m: Record<string, string>) => async (p: string) => m[p];
 const A = '/a/.sys/project.json';
@@ -24,7 +24,7 @@ test('ids are sequential, stable and independent of text; removal never renumber
 test('persist and reload: project.json + requirement file give the same id, title and honest DRAFT status', async () => {
 	const project = addRequirement(EMPTY_PROJECT).project;
 	const state = await loadProjectState(['/a'], files({ [A]: serializeProject(project), '/a/.sys/requirements/REQ-001.md': '# A booking needs a seat\nmore' }));
-	assert.deepEqual(state, { kind: 'READY', project, rows: [{ id: 'REQ-001', title: 'A booking needs a seat', status: 'DRAFT_UNFORMALIZED', missing: false }] });
+	assert.deepEqual(state, { kind: 'READY', project, rows: [{ id: 'REQ-001', title: 'A booking needs a seat', status: 'DRAFT_UNFORMALIZED', missing: false, hasSpec: false }] });
 });
 
 test('workspace A state never appears in workspace B', async () => {
@@ -46,7 +46,7 @@ test('approval is explicit, applies to the exact text, and is void once the text
 test('a requirement file deleted by hand is shown as missing, not hidden or approved', async () => {
 	const p = approveRequirement(addRequirement(EMPTY_PROJECT).project, 'REQ-001', 'x');
 	const state = await loadProjectState(['/a'], files({ [A]: serializeProject(p) }));
-	assert.deepEqual((state as { rows: unknown }).rows, [{ id: 'REQ-001', title: '(file missing)', status: 'DRAFT_UNFORMALIZED', missing: true }]);
+	assert.deepEqual((state as { rows: unknown }).rows, [{ id: 'REQ-001', title: '(file missing)', status: 'DRAFT_UNFORMALIZED', missing: true, hasSpec: false }]);
 });
 
 test('titleOf uses the first non-empty line without markdown heading marks', () => {
@@ -91,7 +91,7 @@ test('setOperation sets, changes and clears the binding and keeps other fields',
 test('binding survives reload, is shown on the row, and never changes the status', async () => {
 	const bound = setOperation(addRequirement(EMPTY_PROJECT).project, 'REQ-001', 'A.b');
 	const state = await loadProjectState(['/a'], files({ [A]: serializeProject(bound), '/a/.sys/requirements/REQ-001.md': 'x' }));
-	assert.deepEqual((state as { rows: unknown }).rows, [{ id: 'REQ-001', title: 'x', status: 'DRAFT_UNFORMALIZED', missing: false, operation: 'A.b' }]);
+	assert.deepEqual((state as { rows: unknown }).rows, [{ id: 'REQ-001', title: 'x', status: 'DRAFT_UNFORMALIZED', missing: false, hasSpec: false, operation: 'A.b' }]);
 });
 
 test('an invalid operation in a hand-edited file is MALFORMED_SYS_PROJECT', async () => {
@@ -109,4 +109,12 @@ test('platformRoot is workspace config, independent of requirements', () => {
 
 test('a non-string platformRoot in a hand-edited file is MALFORMED_SYS_PROJECT', async () => {
 	assert.equal((await loadProjectState(['/a'], files({ [A]: '{"version":1,"requirements":[],"platformRoot":7}' }))).kind, 'MALFORMED_SYS_PROJECT');
+});
+
+test('a requirement without a .spec file shows hasSpec: false; creating the file (any content) flips it true', async () => {
+	const project = addRequirement(EMPTY_PROJECT).project;
+	const noSpec = await loadProjectState(['/a'], files({ [A]: serializeProject(project), '/a/.sys/requirements/REQ-001.md': 'x' }));
+	assert.equal((noSpec as { rows: { hasSpec: boolean }[] }).rows[0].hasSpec, false);
+	const withSpec = await loadProjectState(['/a'], files({ [A]: serializeProject(project), '/a/.sys/requirements/REQ-001.md': 'x', [`/a/${specFile('REQ-001')}`]: '' }));
+	assert.equal((withSpec as { rows: { hasSpec: boolean }[] }).rows[0].hasSpec, true);
 });

@@ -7,11 +7,13 @@
 export const SYS_PROJECT_FILE = '.sys/project.json';
 export const SYS_REQUIREMENTS_DIR = '.sys/requirements';
 export const requirementFile = (id: string) => `${SYS_REQUIREMENTS_DIR}/${id}.md`;
+export const SYS_SPECS_DIR = '.sys/specs';
+export const specFile = (id: string) => `${SYS_SPECS_DIR}/${id}.spec`;
 
 export type SysRequirementStatus = 'DRAFT_UNFORMALIZED' | 'APPROVED_UNFORMALIZED';
 export interface SysRequirementRef { readonly id: string; readonly approvedText?: string; readonly operation?: string }
 export interface SysProject { readonly version: 1; readonly requirements: readonly SysRequirementRef[]; readonly platformRoot?: string }
-export interface SysRequirementRow { readonly id: string; readonly title: string; readonly status: SysRequirementStatus; readonly missing: boolean; readonly operation?: string }
+export interface SysRequirementRow { readonly id: string; readonly title: string; readonly status: SysRequirementStatus; readonly missing: boolean; readonly hasSpec: boolean; readonly operation?: string }
 
 export type SysProjectState =
 	| { readonly kind: 'NO_WORKSPACE' }
@@ -109,7 +111,8 @@ export async function loadProjectState(folders: readonly string[], read: (path: 
 		const rows: SysRequirementRow[] = [];
 		for (const ref of project.requirements) {
 			const body = await read(`${root}/${requirementFile(ref.id)}`);
-			rows.push({ id: ref.id, title: body === undefined ? '(file missing)' : titleOf(body), status: statusOf(ref, body), missing: body === undefined, ...(ref.operation ? { operation: ref.operation } : {}) });
+			const hasSpec = await read(`${root}/${specFile(ref.id)}`) !== undefined;
+			rows.push({ id: ref.id, title: body === undefined ? '(file missing)' : titleOf(body), status: statusOf(ref, body), missing: body === undefined, hasSpec, ...(ref.operation ? { operation: ref.operation } : {}) });
 		}
 		return { kind: 'READY', project, rows };
 	} catch (e) {

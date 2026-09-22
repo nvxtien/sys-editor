@@ -16,6 +16,7 @@ import { ViewPane, IViewPaneOptions } from '../../../browser/parts/views/viewPan
 import { ISysProjectService } from './sysProjectService.js';
 import { SysRequirementRow, parseOperation } from '../common/sysProject.js';
 import { BindingCheckResult, runBindingCheck } from '../common/sysBindingCheck.js';
+import { SpecCheckResult, runSpecCheck } from '../common/sysSpecCheck.js';
 import { TaskProcessTransport } from './sysVerificationProviderService.js';
 import { ISideXTaskService } from '../../../../platform/sidex/common/sidexTaskService.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
@@ -33,6 +34,7 @@ const $ = DOM.$;
 
 export class SysSemanticWorkbenchView extends ViewPane {
 	private readonly bindingChecks = new Map<string, BindingCheckResult>();
+	private readonly specChecks = new Map<string, SpecCheckResult>();
 	private intentItems: readonly SysIntentItem[] = [];
 	private snapshot: SysProjectSnapshot | undefined;
 	private bodyContainer: HTMLElement | undefined;
@@ -218,6 +220,29 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		}
 	}
 
+	private _specLabel(check: SpecCheckResult | undefined): string {
+		if (!check) { return 'syntax not checked'; }
+		switch (check.kind) {
+			case 'PARSE_OK': return 'parses';
+			case 'PARSE_ERROR': return `does not parse: ${check.reason}`;
+			case 'CHECK_ERROR': return `check failed: ${check.reason}`;
+		}
+	}
+
+	/** Syntax only, via the exact binary spec-code-sync's own pipeline uses to compile the expected side. Never a semantic verdict. */
+	private async _checkSpec(id: string): Promise<void> {
+		const platformRoot = await this.projectService.getPlatformRoot() ?? await (async () => {
+			const input = await this._promptPlatformRoot(undefined);
+			if (input !== undefined) { await this.projectService.setPlatformRoot(input); }
+			return input;
+		})();
+		if (!platformRoot) { return; }
+		const transport = new TaskProcessTransport(this.taskService, this.fileService);
+		const result = await runSpecCheck(transport, platformRoot, this.projectService.resourceOfSpec(id).fsPath);
+		this.specChecks.set(id, result);
+		void this._renderProject();
+	}
+
 	/** Name lookup only, via the same mechanism sys-platform's own recovery uses (java reverse.ProjectMain). Never a semantic verdict. */
 	private async _checkBinding(id: string, operation: string): Promise<void> {
 		let platformRoot = await this.projectService.getPlatformRoot();
@@ -271,6 +296,14 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		});
 		if (row.status === 'DRAFT_UNFORMALIZED' && !row.missing) {
 			this._action(actions, 'Approve', 'sys-req-action', () => this.projectService.approveRequirement(row.id));
+		}
+		const specCheck = row.hasSpec ? this.specChecks.get(row.id) : undefined;
+		DOM.append(el, $('div.sys-req-binding')).textContent = row.hasSpec ? `spec: ${this._specLabel(specCheck)}` : 'No .spec file yet';
+		this._action(actions, row.hasSpec ? 'Edit spec' : 'Add spec', 'sys-req-action', async () => {
+			await this.editorService.openEditor({ resource: await this.projectService.createSpec(row.id) });
+		});
+		if (row.hasSpec) {
+			this._action(actions, 'Check syntax', 'sys-req-action', () => this._checkSpec(row.id));
 		}
 		this._action(actions, 'Delete', 'sys-req-action', async () => {
 			const { confirmed } = await this.dialogService.confirm({ message: `Delete ${row.id}?`, detail: 'The requirement file is removed from .sys/requirements/.', primaryButton: 'Delete' });
