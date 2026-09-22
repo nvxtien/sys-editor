@@ -40,6 +40,106 @@ Do not fabricate desktop evidence.
 
 ---
 
+---
+
+# Repository ownership and implementation boundary
+
+This mission is **primarily a sys-editor mission**.
+
+Use this ownership model:
+
+    sys-editor
+    = product workflow
+    = GUI
+    = human review / confirmation
+    = Structured Intent draft + approval lifecycle
+    = workspace-local persistence / orchestration
+    = provider invocation / proposal handling
+    = staleness presentation and user actions
+
+    sys-platform
+    = Formal Spec grammar
+    = Formal Spec parser / validator
+    = semantic authority
+    = governed Formal Spec validation
+    = source/code semantic recovery
+    = verification semantics and verdicts
+
+Important default:
+
+    Structured Intent is a sys-editor/product artifact.
+
+Do NOT move Structured Intent into sys-platform merely because this mission introduces it.
+
+Only change sys-platform if the existing platform contract cannot support one of these required operations soundly:
+
+- validate a Formal Spec candidate produced from approved Structured Intent;
+- expose or consume the canonical Formal Spec grammar/template contract;
+- accept the authoritative operation identity needed by the Formal Spec;
+- produce verification evidence/verdicts required by the GUI lifecycle.
+
+If sys-platform already supports those capabilities, leave it unchanged.
+
+Do NOT add provider/LLM logic to sys-platform.
+
+Do NOT add GUI/workflow state to sys-platform.
+
+Do NOT make sys-editor responsible for semantic truth that belongs to sys-platform.
+
+The intended boundary is:
+
+    Raw Requirement
+      -> sys-editor
+
+    LLM proposes Structured Intent
+      -> sys-editor
+
+    Human confirms Structured Intent
+      -> sys-editor
+
+    Approved Structured Intent
+      -> sys-editor-owned governed product state
+
+    Formal Spec candidate generation/orchestration
+      -> sys-editor
+
+    Formal Spec grammar validation
+      -> sys-platform
+
+    Human approves validated Formal Spec
+      -> sys-editor records approval of exact content
+
+    Source recovery / semantic comparison / proof
+      -> sys-platform
+
+    Rendering verdict/evidence/navigation
+      -> sys-editor
+
+If implementation requires touching both repositories, report each change separately and explain why the boundary required it.
+
+Before editing sys-platform, first prove that a platform change is necessary.
+
+Required final ownership report:
+
+    PRIMARY_IMPLEMENTATION_REPO:
+    sys-editor
+
+    SYS_PLATFORM_CHANGE_REQUIRED:
+    YES | NO
+
+    SYS_PLATFORM_CHANGE_REASON:
+    ...
+
+    STRUCTURED_INTENT_OWNER:
+    sys-editor
+
+    FORMAL_SPEC_VALIDATION_OWNER:
+    sys-platform
+
+    VERIFICATION_SEMANTICS_OWNER:
+    sys-platform
+
+
 # Product thesis
 
 Sys should not jump directly from free-form natural language to Formal Spec.
