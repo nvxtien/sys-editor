@@ -6,7 +6,8 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { VSBuffer } from '../../../../base/common/buffer.js';
 import { URI } from '../../../../base/common/uri.js';
-import { EMPTY_PROJECT, SYS_PROJECT_FILE, SysProject, SysProjectState, addRequirement, approveRequirement, loadProjectState, removeRequirement, requirementFile, serializeProject, setPlatformRoot, specFile } from '../common/sysProject.js';
+import { EMPTY_PROJECT, SYS_PROJECT_FILE, SysProject, SysProjectState, addRequirement, approveRequirement, loadProjectState, removeRequirement, requirementFile, serializeProject, setPlatformRoot, specFile, structuredIntentFile } from '../common/sysProject.js';
+import { approveStructuredIntent, canGenerateFormalSpec, parseStructuredIntent, serializeStructuredIntent, SysStructuredIntent, SysStructuredIntentRecord } from '../common/sysStructuredIntent.js';
 import { Verification01Manifest } from '../common/sysManifest.js';
 
 export const ISysProjectService = createDecorator<ISysProjectService>('sysProjectService');
@@ -20,9 +21,14 @@ export interface ISysProjectService {
 	createRequirement(): Promise<URI>;
 	resourceOf(id: string): URI;
 	resourceOfSpec(id: string): URI;
+	resourceOfStructuredIntent(id: string): URI;
 	/** Creates an empty .spec file (if absent) and returns it, ready to be opened in the editor. */
 	createSpec(id: string): Promise<URI>;
 	approveRequirement(id: string): Promise<void>;
+	readStructuredIntent(id: string): Promise<SysStructuredIntentRecord | undefined>;
+	writeStructuredIntent(id: string, sourceRequirement: string, draft: SysStructuredIntent): Promise<void>;
+	approveStructuredIntent(id: string): Promise<void>;
+	approveSpec(id: string): Promise<void>;
 	deleteRequirement(id: string): Promise<void>;
 	setPlatformRoot(path: string | undefined): Promise<void>;
 	/** '' from getState() when not configured; the READY/NO_SYS_PROJECT_YET project's platformRoot. */
@@ -77,6 +83,10 @@ class SysProjectService extends Disposable implements ISysProjectService {
 		return URI.joinPath(this.folders()[0], specFile(id));
 	}
 
+	resourceOfStructuredIntent(id: string): URI {
+		return URI.joinPath(this.folders()[0], structuredIntentFile(id));
+	}
+
 	async createSpec(id: string): Promise<URI> {
 		const resource = this.resourceOfSpec(id);
 		if (!await this.files.exists(resource)) {
@@ -111,6 +121,43 @@ class SysProjectService extends Disposable implements ISysProjectService {
 		const project = await this.writable();
 		const text = await this.read(this.resourceOf(id).toString());
 		await this.save(approveRequirement(project, id, text ?? ''));
+	}
+
+	async readStructuredIntent(id: string): Promise<SysStructuredIntentRecord | undefined> {
+		const text = await this.read(this.resourceOfStructuredIntent(id).toString());
+		if (text === undefined) { return undefined; }
+		const raw = JSON.parse(text) as { sourceRequirement?: unknown; draft?: unknown; approvedContent?: unknown };
+		return {
+			sourceRequirement: typeof raw.sourceRequirement === 'string' ? raw.sourceRequirement : '',
+			draft: parseStructuredIntent(raw.draft, id),
+			approvedContent: typeof raw.approvedContent === 'string' ? raw.approvedContent : undefined,
+		};
+	}
+
+	async writeStructuredIntent(id: string, sourceRequirement: string, draft: SysStructuredIntent): Promise<void> {
+		const resource = this.resourceOfStructuredIntent(id);
+		await this.files.createFolder(URI.joinPath(this.folders()[0], '.sys', 'intents'));
+		await this.files.writeFile(resource, VSBuffer.fromString(JSON.stringify({ sourceRequirement, draft: JSON.parse(serializeStructuredIntent(draft)) }, null, 2) + '\n'));
+		this._onDidChange.fire();
+	}
+
+	async approveStructuredIntent(id: string): Promise<void> {
+		const record = await this.readStructuredIntent(id);
+		if (!record) { throw new Error('Structured Intent has not been normalized yet.'); }
+		const requirement = await this.read(this.resourceOf(id).toString()) ?? '';
+		const approved = approveStructuredIntent(record, requirement);
+		await this.files.writeFile(this.resourceOfStructuredIntent(id), VSBuffer.fromString(JSON.stringify({ sourceRequirement: approved.sourceRequirement, draft: JSON.parse(serializeStructuredIntent(approved.draft)), approvedContent: approved.approvedContent }, null, 2) + '\n'));
+		this._onDidChange.fire();
+	}
+
+	async approveSpec(id: string): Promise<void> {
+		const project = await this.writable();
+		const spec = await this.read(this.resourceOfSpec(id).toString()) ?? '';
+		if (!spec.trim()) { throw new Error('Formal Spec is empty.'); }
+		const intent = await this.readStructuredIntent(id);
+		const requirement = await this.read(this.resourceOf(id).toString()) ?? '';
+		if (!intent || !canGenerateFormalSpec(intent, requirement)) { throw new Error('Approve the Structured Intent and bind its operation before approving the Formal Spec.'); }
+		await this.save({ ...project, requirements: project.requirements.map(ref => ref.id === id ? { ...ref, approvedSpecText: spec, approvedSpecIntent: serializeStructuredIntent(intent.draft) } : ref) });
 	}
 
 	async setPlatformRoot(path: string | undefined): Promise<void> {

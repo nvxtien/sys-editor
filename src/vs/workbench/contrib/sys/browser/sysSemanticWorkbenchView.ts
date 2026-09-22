@@ -32,6 +32,8 @@ import { decodePendingProposal, canApplySysProposal, isSysWorkspaceMissing, vali
 import { ISidexChatService } from '../../sidexChat/browser/sidexChatService.js';
 import { resolveServerEndpoint, serverHttpUrl, waitForServerEndpoint } from '../../sidexChat/browser/localServer.js';
 import { assertSysDraftOperationBinding, assertSysDraftServerAvailable, requestSysFormalSpecDraft } from '../common/sysFormalSpecDraft.js';
+import { requestStructuredIntent } from '../common/sysStructuredIntentDraft.js';
+import { canGenerateFormalSpec } from '../common/sysStructuredIntent.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { ISysSemanticSnapshotService, SysProjectSnapshot } from '../common/sysSemanticSnapshot.js';
 import {
@@ -291,14 +293,18 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		if (!platformRoot) { return; }
 		const projectRoot = this._projectRoot();
 		if (!await this._ensurePlatformWorkspace(platformRoot, projectRoot)) { return; }
-		assertSysDraftOperationBinding(undefined);
+		const structuredIntent = await this.projectService.readStructuredIntent(id);
+		if (!structuredIntent || !canGenerateFormalSpec(structuredIntent, intent)) {
+			throw new Error('Confirm a Structured Intent and bind its operation before generating a Formal Spec.');
+		}
+		assertSysDraftOperationBinding(structuredIntent.draft.operation.value);
 		const model = this.sidexChatService.serverModel;
 		if (!model) { throw new Error('Select a model in SideX Settings → Models before drafting a Formal Spec.'); }
 		const configuredServerUrl = this.configurationService.getValue<string>('sidex.chat.serverUrl');
 		const endpoint = configuredServerUrl?.trim() ? await resolveServerEndpoint() : await waitForServerEndpoint();
 		assertSysDraftServerAvailable(endpoint.running, configuredServerUrl, endpoint.error);
 		const httpUrl = serverHttpUrl(configuredServerUrl);
-		const draft = await requestSysFormalSpecDraft(httpUrl, model, intent);
+		const draft = await requestSysFormalSpecDraft(httpUrl, model, JSON.stringify(structuredIntent.draft));
 		const proposals = URI.joinPath(URI.file(projectRoot), '.sys', 'proposals');
 		await this.fileService.createFolder(proposals);
 		const candidatePath = URI.joinPath(proposals, `draft-${generateUuid()}.spec`).fsPath;
@@ -317,12 +323,55 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		await this.editorService.openEditor({ resource: spec });
 	}
 
+	private async _normalizeIntent(id: string): Promise<void> {
+		const requirement = this.projectService.resourceOf(id);
+		const intent = (await this.fileService.readFile(requirement)).value.toString();
+		if (!intent.trim()) { throw new Error('Save the raw requirement before normalizing intent.'); }
+		const model = this.sidexChatService.serverModel;
+		if (!model) { throw new Error('Select a model in SideX Settings → Models before normalizing intent.'); }
+		const configuredServerUrl = this.configurationService.getValue<string>('sidex.chat.serverUrl');
+		const endpoint = configuredServerUrl?.trim() ? await resolveServerEndpoint() : await waitForServerEndpoint();
+		assertSysDraftServerAvailable(endpoint.running, configuredServerUrl, endpoint.error);
+		const structuredIntent = await requestStructuredIntent(serverHttpUrl(configuredServerUrl), model, id, intent);
+		await this.projectService.writeStructuredIntent(id, intent, structuredIntent);
+		await this.editorService.openEditor({ resource: this.projectService.resourceOfStructuredIntent(id) });
+	}
+
+	private async _confirmIntent(id: string): Promise<void> {
+		const record = await this.projectService.readStructuredIntent(id);
+		if (!record) { throw new Error('Normalize this requirement before confirming its Structured Intent.'); }
+		const { confirmed } = await this.dialogService.confirm({ message: 'Confirm this Structured Intent?', detail: 'Only the exact reviewed Structured Intent will authorize Formal Spec generation.', primaryButton: 'Confirm intent' });
+		if (confirmed) { await this.projectService.approveStructuredIntent(id); }
+	}
+
+	private async _bindOperation(id: string): Promise<void> {
+		const operation = await this.quickInputService.input({
+			title: `Bind operation for ${id}`,
+			prompt: 'Authoritative Class.method governed by this Structured Intent.',
+			placeHolder: 'BookingService.createBooking',
+			validateInput: async text => validateTargetOperation(text)
+		});
+		if (!operation) { return; }
+		const record = await this.projectService.readStructuredIntent(id);
+		if (!record) { throw new Error('Normalize and confirm the Structured Intent first.'); }
+		const requirement = (await this.fileService.readFile(this.projectService.resourceOf(id))).value.toString();
+		await this.projectService.writeStructuredIntent(id, requirement, { ...record.draft, operation: { value: operation, provenance: 'OBSERVED' } });
+	}
+
+	private async _approveFormalSpec(id: string): Promise<void> {
+		const { confirmed } = await this.dialogService.confirm({ message: 'Approve this Formal Spec?', detail: 'Only this exact reviewed Formal Spec will authorize downstream verification.', primaryButton: 'Approve Formal Spec' });
+		if (confirmed) { await this.projectService.approveSpec(id); }
+	}
+
 	private async _approveSpecAndReviewProposal(id: string, title: string): Promise<void> {
 		const requirement = this.projectService.resourceOf(id);
 		const spec = this.projectService.resourceOfSpec(id);
 		const intentText = (await this.fileService.readFile(requirement)).value.toString();
 		const specText = (await this.fileService.readFile(spec)).value.toString();
 		if (!intentText.trim() || !specText.trim()) { throw new Error('Save both the plain-language requirement and the reviewed Formal Spec before continuing.'); }
+		const state = await this.projectService.getState();
+		const row = state.kind === 'READY' ? state.rows.find(item => item.id === id) : undefined;
+		if (row?.formalSpecState !== 'APPROVED') { throw new Error('Approve the exact Formal Spec before starting verification.'); }
 		const targetOperation = await this.quickInputService.input({
 			title: `Target operation for ${id}`,
 			prompt: 'The Class.method governed by this spec. This is sent to Sys Platform for independent verification.',
@@ -444,9 +493,26 @@ export class SysSemanticWorkbenchView extends ViewPane {
 			: 'Draft · unformalized · needs review';
 		const actions = DOM.append(el, $('div.sys-req-actions'));
 		if (!row.missing) {
-			this._action(actions, 'Draft spec from request', 'sys-req-action', () => this._draftSpecFromRequirement(row.id));
+			const intentState = row.structuredIntentState ?? 'NOT_CREATED';
+			if (intentState === 'NOT_CREATED' || intentState === 'STALE') {
+				this._action(actions, 'Normalize intent', 'sys-req-action', () => this._normalizeIntent(row.id));
+			} else {
+				this._action(actions, 'Review intent', 'sys-req-action', async () => { await this.editorService.openEditor({ resource: this.projectService.resourceOfStructuredIntent(row.id) }); });
+				if (intentState === 'DRAFT') {
+					this._action(actions, 'Confirm intent', 'sys-req-action', () => this._confirmIntent(row.id));
+				}
+			}
+			if (intentState === 'APPROVED') {
+				this._action(actions, 'Bind operation', 'sys-req-action', () => this._bindOperation(row.id));
+				this._action(actions, 'Generate Formal Spec', 'sys-req-action', () => this._draftSpecFromRequirement(row.id));
+			}
 			if (row.hasSpec) {
-				this._action(actions, 'Approve spec & review code', 'sys-req-action', () => this._approveSpecAndReviewProposal(row.id, row.title));
+				if (row.formalSpecState !== 'APPROVED') {
+					this._action(actions, 'Approve Formal Spec', 'sys-req-action', () => this._approveFormalSpec(row.id));
+				}
+				if (row.formalSpecState === 'APPROVED') {
+					this._action(actions, 'Approve spec & review code', 'sys-req-action', () => this._approveSpecAndReviewProposal(row.id, row.title));
+				}
 			}
 		}
 		if (row.status === 'DRAFT_UNFORMALIZED' && !row.missing) {

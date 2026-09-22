@@ -4,16 +4,20 @@
  *   .sys/project.json          tool-owned: which requirements exist and the exact text a human approved
  * Nothing here is formalized or verified.
  */
+import { formalSpecState, parseStructuredIntent, SysFormalSpecState, SysStructuredIntentRecord, SysStructuredIntentState, structuredIntentState } from './sysStructuredIntent.js';
+
 export const SYS_PROJECT_FILE = '.sys/project.json';
 export const SYS_REQUIREMENTS_DIR = '.sys/requirements';
 export const requirementFile = (id: string) => `${SYS_REQUIREMENTS_DIR}/${id}.md`;
 export const SYS_SPECS_DIR = '.sys/specs';
 export const specFile = (id: string) => `${SYS_SPECS_DIR}/${id}.spec`;
+export const SYS_INTENTS_DIR = '.sys/intents';
+export const structuredIntentFile = (id: string) => `${SYS_INTENTS_DIR}/${id}.intent.json`;
 
 export type SysRequirementStatus = 'DRAFT_UNFORMALIZED' | 'APPROVED_UNFORMALIZED';
-export interface SysRequirementRef { readonly id: string; readonly approvedText?: string }
+export interface SysRequirementRef { readonly id: string; readonly approvedText?: string; readonly approvedSpecText?: string; readonly approvedSpecIntent?: string }
 export interface SysProject { readonly version: 1; readonly requirements: readonly SysRequirementRef[]; readonly platformRoot?: string }
-export interface SysRequirementRow { readonly id: string; readonly title: string; readonly status: SysRequirementStatus; readonly missing: boolean; readonly hasSpec: boolean }
+export interface SysRequirementRow { readonly id: string; readonly title: string; readonly status: SysRequirementStatus; readonly missing: boolean; readonly hasSpec: boolean; readonly structuredIntentState?: SysStructuredIntentState; readonly formalSpecState?: SysFormalSpecState }
 
 export type SysProjectState =
 	| { readonly kind: 'NO_WORKSPACE' }
@@ -33,7 +37,7 @@ export function parseProject(text: string): SysProject | { readonly malformed: s
 	if (!p || p.version !== 1 || !Array.isArray(p.requirements) || (p.platformRoot !== undefined && typeof p.platformRoot !== 'string')) { return bad('expected {"version":1,"requirements":[...],"platformRoot"?:string}'); }
 	const ids = new Set<string>();
 	for (const r of p.requirements as Record<string, unknown>[]) {
-		if (!r || typeof r.id !== 'string' || !/^REQ-\d+$/.test(r.id) || (r.approvedText !== undefined && typeof r.approvedText !== 'string')) { return bad('requirement needs an id like REQ-001 and an optional string approvedText'); }
+		if (!r || typeof r.id !== 'string' || !/^REQ-\d+$/.test(r.id) || (r.approvedText !== undefined && typeof r.approvedText !== 'string') || (r.approvedSpecText !== undefined && typeof r.approvedSpecText !== 'string') || (r.approvedSpecIntent !== undefined && typeof r.approvedSpecIntent !== 'string')) { return bad('requirement needs an id like REQ-001 and optional string approval fields'); }
 		if (ids.has(r.id)) { return bad(`duplicate requirement id ${r.id}`); }
 		ids.add(r.id);
 	}
@@ -93,7 +97,26 @@ export async function loadProjectState(folders: readonly string[], read: (path: 
 		for (const ref of project.requirements) {
 			const body = await read(`${root}/${requirementFile(ref.id)}`);
 			const hasSpec = await read(`${root}/${specFile(ref.id)}`) !== undefined;
-			rows.push({ id: ref.id, title: body === undefined ? '(file missing)' : titleOf(body), status: statusOf(ref, body), missing: body === undefined, hasSpec });
+			const specText = await read(`${root}/${specFile(ref.id)}`);
+			const intentText = await read(`${root}/${structuredIntentFile(ref.id)}`);
+			let intentState: SysStructuredIntentState | undefined;
+			let intentRecord: SysStructuredIntentRecord | undefined;
+			if (intentText !== undefined) {
+				try {
+					const raw = JSON.parse(intentText) as { sourceRequirement?: unknown; draft?: unknown; approvedContent?: unknown };
+					const record: SysStructuredIntentRecord = {
+						sourceRequirement: typeof raw.sourceRequirement === 'string' ? raw.sourceRequirement : '',
+						draft: parseStructuredIntent(raw.draft, ref.id),
+						approvedContent: typeof raw.approvedContent === 'string' ? raw.approvedContent : undefined,
+					};
+					intentRecord = record;
+					intentState = structuredIntentState(record, body ?? '');
+				} catch (error) {
+					return { kind: 'IO_ERROR', reason: `invalid Structured Intent for ${ref.id}: ${String(error)}` };
+				}
+			}
+			const formalState = formalSpecState(ref.approvedSpecText, ref.approvedSpecIntent, specText, intentRecord, body ?? '');
+			rows.push({ id: ref.id, title: body === undefined ? '(file missing)' : titleOf(body), status: statusOf(ref, body), missing: body === undefined, hasSpec, ...(intentState ? { structuredIntentState: intentState } : {}), ...(specText !== undefined ? { formalSpecState: formalState } : {}) });
 		}
 		return { kind: 'READY', project, rows };
 	} catch (e) {
