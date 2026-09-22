@@ -71,8 +71,9 @@ The intended architecture is:
         = exact-content approvals
         = staleness propagation
         = persistence under .sys/
-        = Formal Spec generation orchestration
-        = provider-agnostic proposal workflow
+        = proposal lifecycle / acceptance workflow
+        = deterministic preparation of proposal context
+        = deterministic acceptance / persistence of externally produced candidates
         = invocation/orchestration of sys-platform capabilities
 
     sys-platform
@@ -211,31 +212,60 @@ Do not duplicate old state if migration is sufficient.
 
 ---
 
-## LLM/provider orchestration ownership
+## LLM/provider invocation boundary
 
-The provider-specific transport may remain in the existing SideX/editor infrastructure where necessary, but the product-level orchestration contract belongs to sys-core.
+LLM invocation belongs ONLY to the interactive clients:
 
-Meaning:
+    sys-editor
+    product-cli
 
-    normalize this requirement
-    generate a Formal Spec from approved Structured Intent
+Neither sys-core nor sys-platform may call an LLM/provider.
 
-must be sys-core use cases.
+Required invariant:
 
-Provider adapters may be injected/called through a narrow interface.
+    LLM_CALLS_FROM_SYS_CORE = 0
+    LLM_CALLS_FROM_SYS_PLATFORM = 0
 
-Do NOT hard-wire sys-core to a specific GUI transport, localhost port, SideX UI class, or model vendor.
+The architecture must be:
 
-Preferred boundary:
+    sys-editor / product-cli
+        -> ask sys-core for deterministic proposal context
+        -> invoke selected LLM/provider themselves
+        -> receive raw candidate
+        -> submit candidate to sys-core
 
-    sys-core use case
-        -> ProposalProvider interface
-        -> editor/CLI/server adapter
-        -> selected LLM
+For Structured Intent:
 
-This keeps sys-core provider-agnostic and allows future CLI execution.
+    client
+      -> sys-core.prepareStructuredIntentContext(...)
+      -> client invokes LLM
+      -> sys-core.acceptStructuredIntentCandidate(...)
 
-If the current architecture requires a transitional adapter, document it clearly and do not bake the editor dependency into sys-core.
+For Formal Spec:
+
+    client
+      -> sys-core.prepareFormalSpecContext(...)
+      -> client invokes LLM
+      -> sys-core.acceptFormalSpecCandidate(...)
+      -> sys-core asks sys-platform to validate
+
+Exact API names may differ.
+
+The key rule is:
+
+    sys-core prepares context and owns lifecycle transitions.
+    client performs the LLM call.
+    sys-platform validates/certifies formal semantics.
+
+Do NOT inject a ProposalProvider into sys-core.
+Do NOT add provider SDKs, model ids, HTTP endpoints, API keys, SideX ports, or vendor-specific logic to sys-core.
+Do NOT add any LLM/provider dependency to sys-platform.
+
+The editor may use SideX/local provider transport.
+The CLI may use its own provider adapter/configuration.
+Both must submit the resulting candidate to the same sys-core lifecycle API.
+
+The raw provider candidate must remain externally produced data from sys-core's perspective.
 
 ---
 
@@ -276,6 +306,8 @@ It may own:
 - user dialogs;
 - rendering;
 - provider selection UX;
+- provider/model invocation;
+- SideX/local HTTP transport;
 - transport adapters.
 
 It must NOT own:
@@ -299,7 +331,9 @@ It may own:
 - argument parsing;
 - terminal prompts;
 - stdout/stderr formatting;
-- exit codes.
+- exit codes;
+- provider/model invocation;
+- CLI provider configuration / transport.
 
 It must NOT own:
 
@@ -405,7 +439,13 @@ Add tests proving:
     PERSISTENCE_OWNER:
     sys-core
 
-    FORMAL_SPEC_GENERATION_ORCHESTRATION_OWNER:
+    FORMAL_SPEC_PROPOSAL_CONTEXT_OWNER:
+    sys-core
+
+    LLM_INVOCATION_OWNER:
+    sys-editor / product-cli
+
+    FORMAL_SPEC_CANDIDATE_ACCEPTANCE_OWNER:
     sys-core
 
     FORMAL_SPEC_VALIDATION_OWNER:
