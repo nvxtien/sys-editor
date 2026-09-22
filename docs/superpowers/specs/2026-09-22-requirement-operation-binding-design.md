@@ -46,3 +46,12 @@ in `functions[].name` to answer FOUND/NOT_FOUND. This was removed:
 `operation` stays as pure human-declared intent (mirrors the manifest's own `target_operation`/`source_anchor`,
 which are authored, not reasoned) and is always labeled "declared by human, not checked against code". Any real
 correspondence check is deferred to Verify (sprint 3+4), which runs the actual sys-platform pipeline.
+
+## Revision 2: remove the binding feature entirely (YAGNI)
+With the check removed, `operation` was inert data: written, displayed, never read by anything. The base
+mission explicitly allows this ("Do not require source binding in the very first form unless it is naturally
+available") — nothing here made it available. Removed `operation` from the model, service and UI entirely.
+
+When the real manifest-generation sprint needs `target_operation` + a source file, it will ask for them at that
+point, as direct input to the manifest it writes — not as pre-collected, unconsumed metadata sitting between
+"declare" and "use".

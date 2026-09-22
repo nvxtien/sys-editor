@@ -11,9 +11,9 @@ export const SYS_SPECS_DIR = '.sys/specs';
 export const specFile = (id: string) => `${SYS_SPECS_DIR}/${id}.spec`;
 
 export type SysRequirementStatus = 'DRAFT_UNFORMALIZED' | 'APPROVED_UNFORMALIZED';
-export interface SysRequirementRef { readonly id: string; readonly approvedText?: string; readonly operation?: string }
+export interface SysRequirementRef { readonly id: string; readonly approvedText?: string }
 export interface SysProject { readonly version: 1; readonly requirements: readonly SysRequirementRef[]; readonly platformRoot?: string }
-export interface SysRequirementRow { readonly id: string; readonly title: string; readonly status: SysRequirementStatus; readonly missing: boolean; readonly hasSpec: boolean; readonly operation?: string }
+export interface SysRequirementRow { readonly id: string; readonly title: string; readonly status: SysRequirementStatus; readonly missing: boolean; readonly hasSpec: boolean }
 
 export type SysProjectState =
 	| { readonly kind: 'NO_WORKSPACE' }
@@ -22,15 +22,6 @@ export type SysProjectState =
 	| { readonly kind: 'READY'; readonly project: SysProject; readonly rows: readonly SysRequirementRow[] }
 	| { readonly kind: 'MALFORMED_SYS_PROJECT'; readonly reason: string }
 	| { readonly kind: 'IO_ERROR'; readonly reason: string };
-
-const OPERATION = /^[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*)+$/;
-
-/** Empty text means "unbind". The name is human intent and is never looked up in source. */
-export function parseOperation(text: string): { operation: string | undefined } | { error: string } {
-	const t = text.trim();
-	if (!t) { return { operation: undefined }; }
-	return OPERATION.test(t) ? { operation: t } : { error: 'Use a qualified name like BookingService.createBooking' };
-}
 
 export const EMPTY_PROJECT: SysProject = { version: 1, requirements: [] };
 
@@ -42,8 +33,7 @@ export function parseProject(text: string): SysProject | { readonly malformed: s
 	if (!p || p.version !== 1 || !Array.isArray(p.requirements) || (p.platformRoot !== undefined && typeof p.platformRoot !== 'string')) { return bad('expected {"version":1,"requirements":[...],"platformRoot"?:string}'); }
 	const ids = new Set<string>();
 	for (const r of p.requirements as Record<string, unknown>[]) {
-		if (!r || typeof r.id !== 'string' || !/^REQ-\d+$/.test(r.id) || (r.approvedText !== undefined && typeof r.approvedText !== 'string')
-			|| (r.operation !== undefined && (typeof r.operation !== 'string' || !OPERATION.test(r.operation)))) { return bad('requirement needs an id like REQ-001, an optional string approvedText and an optional Class.method operation'); }
+		if (!r || typeof r.id !== 'string' || !/^REQ-\d+$/.test(r.id) || (r.approvedText !== undefined && typeof r.approvedText !== 'string')) { return bad('requirement needs an id like REQ-001 and an optional string approvedText'); }
 		if (ids.has(r.id)) { return bad(`duplicate requirement id ${r.id}`); }
 		ids.add(r.id);
 	}
@@ -71,15 +61,6 @@ export function approveRequirement(project: SysProject, id: string, currentText:
 export function setPlatformRoot(project: SysProject, platformRoot: string | undefined): SysProject {
 	const { platformRoot: _old, ...rest } = project;
 	return platformRoot ? { ...rest, platformRoot } : rest;
-}
-
-export function setOperation(project: SysProject, id: string, operation: string | undefined): SysProject {
-	if (!project.requirements.some(r => r.id === id)) { throw new Error(`unknown requirement ${id}`); }
-	return { ...project, requirements: project.requirements.map(r => {
-		if (r.id !== id) { return r; }
-		const { operation: _old, ...rest } = r;
-		return operation === undefined ? rest : { ...rest, operation };
-	}) };
 }
 
 export function removeRequirement(project: SysProject, id: string): SysProject {
@@ -112,7 +93,7 @@ export async function loadProjectState(folders: readonly string[], read: (path: 
 		for (const ref of project.requirements) {
 			const body = await read(`${root}/${requirementFile(ref.id)}`);
 			const hasSpec = await read(`${root}/${specFile(ref.id)}`) !== undefined;
-			rows.push({ id: ref.id, title: body === undefined ? '(file missing)' : titleOf(body), status: statusOf(ref, body), missing: body === undefined, hasSpec, ...(ref.operation ? { operation: ref.operation } : {}) });
+			rows.push({ id: ref.id, title: body === undefined ? '(file missing)' : titleOf(body), status: statusOf(ref, body), missing: body === undefined, hasSpec });
 		}
 		return { kind: 'READY', project, rows };
 	} catch (e) {

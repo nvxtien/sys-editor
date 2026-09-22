@@ -6,7 +6,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { VSBuffer } from '../../../../base/common/buffer.js';
 import { URI } from '../../../../base/common/uri.js';
-import { EMPTY_PROJECT, SYS_PROJECT_FILE, SysProject, SysProjectState, addRequirement, approveRequirement, loadProjectState, removeRequirement, requirementFile, serializeProject, setOperation, setPlatformRoot, specFile } from '../common/sysProject.js';
+import { EMPTY_PROJECT, SYS_PROJECT_FILE, SysProject, SysProjectState, addRequirement, approveRequirement, loadProjectState, removeRequirement, requirementFile, serializeProject, setPlatformRoot, specFile } from '../common/sysProject.js';
 
 export const ISysProjectService = createDecorator<ISysProjectService>('sysProjectService');
 
@@ -23,8 +23,6 @@ export interface ISysProjectService {
 	createSpec(id: string): Promise<URI>;
 	approveRequirement(id: string): Promise<void>;
 	deleteRequirement(id: string): Promise<void>;
-	/** `operation` is already validated by parseOperation; undefined unbinds. */
-	setOperation(id: string, operation: string | undefined): Promise<void>;
 	setPlatformRoot(path: string | undefined): Promise<void>;
 	/** '' from getState() when not configured; the READY/NO_SYS_PROJECT_YET project's platformRoot. */
 	getPlatformRoot(): Promise<string | undefined>;
@@ -110,10 +108,6 @@ class SysProjectService extends Disposable implements ISysProjectService {
 		const project = await this.writable();
 		const text = await this.read(this.resourceOf(id).toString());
 		await this.save(approveRequirement(project, id, text ?? ''));
-	}
-
-	async setOperation(id: string, operation: string | undefined): Promise<void> {
-		await this.save(setOperation(await this.writable(), id, operation));
 	}
 
 	async setPlatformRoot(path: string | undefined): Promise<void> {

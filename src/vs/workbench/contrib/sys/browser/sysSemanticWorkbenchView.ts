@@ -13,7 +13,7 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import { IViewDescriptorService } from '../../../common/views.js';
 import { ViewPane, IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { ISysProjectService } from './sysProjectService.js';
-import { SysRequirementRow, parseOperation } from '../common/sysProject.js';
+import { SysRequirementRow } from '../common/sysProject.js';
 import { SpecCheckResult, runSpecCheck } from '../common/sysSpecCheck.js';
 import { TaskProcessTransport } from './sysVerificationProviderService.js';
 import { ISideXTaskService } from '../../../../platform/sidex/common/sidexTaskService.js';
@@ -243,23 +243,7 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		DOM.append(el, $('div.sys-req-status')).textContent = row.status === 'APPROVED_UNFORMALIZED'
 			? 'Intent approved · unformalized · not verified'
 			: 'Draft · unformalized · needs review';
-		DOM.append(el, $('div.sys-req-binding')).textContent = row.operation
-			? `\u2192 ${row.operation} \u00b7 declared by human, not checked against code`
-			: 'Not bound to a source operation';
 		const actions = DOM.append(el, $('div.sys-req-actions'));
-		this._action(actions, row.operation ? 'Edit binding' : 'Bind', 'sys-req-action', async () => {
-			const value = await this.quickInputService.input({
-				title: `Source operation for ${row.id}`,
-				prompt: 'Class.method that implements this requirement (leave empty to unbind). Not checked against the code.',
-				value: row.operation ?? '',
-				placeHolder: 'ClassName.methodName',
-				validateInput: async text => { const p = parseOperation(text); return 'error' in p ? p.error : undefined; }
-			});
-			if (value === undefined) { return; }
-			const parsed = parseOperation(value);
-			if ('error' in parsed) { throw new Error(parsed.error); }
-			await this.projectService.setOperation(row.id, parsed.operation);
-		});
 		if (row.status === 'DRAFT_UNFORMALIZED' && !row.missing) {
 			this._action(actions, 'Approve', 'sys-req-action', () => this.projectService.approveRequirement(row.id));
 		}
