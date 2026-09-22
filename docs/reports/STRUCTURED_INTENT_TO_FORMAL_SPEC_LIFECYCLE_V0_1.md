@@ -4,8 +4,8 @@ RESULT: NARROW_REQUIRED
 
 SYS_CORE_CREATED: YES
 SYS_CORE_LOCATION: `/Volumes/Work/dev/sys-platform/sys-core` (Rust crate and binary)
-SYS_CORE_COMMIT: `ab5afca`, `ffb1fc0`, pending prepare/accept update
-SYS_EDITOR_COMMIT: `21af8551`
+SYS_CORE_COMMIT: `ab5afca`, `ffb1fc0`, `07b4826`
+SYS_EDITOR_COMMIT: `cc149019`, `daecdc20`
 PRODUCT_CLI_COMMIT: `806737a`
 
 SYS_CORE_OWNS:
