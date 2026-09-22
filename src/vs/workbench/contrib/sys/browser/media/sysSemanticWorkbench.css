@@ -814,10 +814,10 @@
 }
 
 .sys-semantic-workbench .sys-req-row {
-	display: grid;
-	grid-template-columns: 1fr auto;
-	gap: 2px 8px;
-	padding: 6px 0;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 8px 0;
 	border-bottom: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.25));
 }
 
@@ -839,24 +839,18 @@
 	white-space: nowrap;
 }
 
-.sys-semantic-workbench .sys-req-status {
-	grid-column: 1;
-	font-size: 11px;
-	opacity: 0.75;
-}
-
+.sys-semantic-workbench .sys-req-status,
 .sys-semantic-workbench .sys-req-binding {
-	grid-column: 1;
 	font-size: 11px;
 	opacity: 0.75;
+	word-break: break-word;
 }
 
 .sys-semantic-workbench .sys-req-actions {
-	grid-column: 2;
-	grid-row: 1 / span 3;
 	display: flex;
-	gap: 4px;
-	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-top: 2px;
 }
 
 .sys-semantic-workbench .sys-req-action {
@@ -872,4 +866,10 @@
 
 .sys-semantic-workbench .sys-req-action:hover {
 	background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.sys-semantic-workbench .sys-req-actions .sys-error-message {
+	flex-basis: 100%;
+	width: 100%;
+	margin-top: 4px;
 }
