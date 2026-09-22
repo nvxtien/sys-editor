@@ -10,7 +10,7 @@ export const requirementFile = (id: string) => `${SYS_REQUIREMENTS_DIR}/${id}.md
 
 export type SysRequirementStatus = 'DRAFT_UNFORMALIZED' | 'APPROVED_UNFORMALIZED';
 export interface SysRequirementRef { readonly id: string; readonly approvedText?: string; readonly operation?: string }
-export interface SysProject { readonly version: 1; readonly requirements: readonly SysRequirementRef[] }
+export interface SysProject { readonly version: 1; readonly requirements: readonly SysRequirementRef[]; readonly platformRoot?: string }
 export interface SysRequirementRow { readonly id: string; readonly title: string; readonly status: SysRequirementStatus; readonly missing: boolean; readonly operation?: string }
 
 export type SysProjectState =
@@ -36,8 +36,8 @@ export function parseProject(text: string): SysProject | { readonly malformed: s
 	const bad = (malformed: string) => ({ malformed });
 	let raw: unknown;
 	try { raw = JSON.parse(text); } catch (e) { return bad(`not valid JSON: ${(e as Error).message}`); }
-	const p = raw as { version?: unknown; requirements?: unknown } | null;
-	if (!p || p.version !== 1 || !Array.isArray(p.requirements)) { return bad('expected {"version":1,"requirements":[...]}'); }
+	const p = raw as { version?: unknown; requirements?: unknown; platformRoot?: unknown } | null;
+	if (!p || p.version !== 1 || !Array.isArray(p.requirements) || (p.platformRoot !== undefined && typeof p.platformRoot !== 'string')) { return bad('expected {"version":1,"requirements":[...],"platformRoot"?:string}'); }
 	const ids = new Set<string>();
 	for (const r of p.requirements as Record<string, unknown>[]) {
 		if (!r || typeof r.id !== 'string' || !/^REQ-\d+$/.test(r.id) || (r.approvedText !== undefined && typeof r.approvedText !== 'string')
@@ -64,6 +64,11 @@ export function approveRequirement(project: SysProject, id: string, currentText:
 	if (!project.requirements.some(r => r.id === id)) { throw new Error(`unknown requirement ${id}`); }
 	if (!currentText.trim()) { throw new Error('cannot approve an empty requirement'); }
 	return { ...project, requirements: project.requirements.map(r => r.id === id ? { ...r, approvedText: currentText } : r) };
+}
+
+export function setPlatformRoot(project: SysProject, platformRoot: string | undefined): SysProject {
+	const { platformRoot: _old, ...rest } = project;
+	return platformRoot ? { ...rest, platformRoot } : rest;
 }
 
 export function setOperation(project: SysProject, id: string, operation: string | undefined): SysProject {

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { EMPTY_PROJECT, addRequirement, approveRequirement, loadProjectState, parseOperation, parseProject, removeRequirement, serializeProject, setOperation, statusOf, titleOf } from '../sysProject.js';
+import { EMPTY_PROJECT, addRequirement, approveRequirement, loadProjectState, parseOperation, parseProject, removeRequirement, serializeProject, setOperation, setPlatformRoot, statusOf, titleOf } from '../sysProject.js';
 
 const files = (m: Record<string, string>) => async (p: string) => m[p];
 const A = '/a/.sys/project.json';
@@ -98,4 +98,15 @@ test('an invalid operation in a hand-edited file is MALFORMED_SYS_PROJECT', asyn
 	for (const op of ['"bad"', '7']) {
 		assert.equal((await loadProjectState(['/a'], files({ [A]: `{"version":1,"requirements":[{"id":"REQ-001","operation":${op}}]}` }))).kind, 'MALFORMED_SYS_PROJECT', op);
 	}
+});
+
+test('platformRoot is workspace config, independent of requirements', () => {
+	const p = setPlatformRoot(addRequirement(EMPTY_PROJECT).project, '/opt/sys-platform');
+	assert.equal(p.platformRoot, '/opt/sys-platform');
+	assert.equal(p.requirements.length, 1);
+	assert.ok(!('platformRoot' in setPlatformRoot(p, undefined)));
+});
+
+test('a non-string platformRoot in a hand-edited file is MALFORMED_SYS_PROJECT', async () => {
+	assert.equal((await loadProjectState(['/a'], files({ [A]: '{"version":1,"requirements":[],"platformRoot":7}' }))).kind, 'MALFORMED_SYS_PROJECT');
 });

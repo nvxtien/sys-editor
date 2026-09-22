@@ -21,7 +21,7 @@ export interface ISysVerificationDataProvider {
 /** Tauri emits snake_case payloads; the shared task-service typings say camelCase. Accept both. */
 interface RawTaskEvent { task_id?: number; taskId?: number; exit_code?: number | null; exitCode?: number | null; data?: string; stream?: string }
 
-class TaskProcessTransport implements VerificationTransport {
+export class TaskProcessTransport implements VerificationTransport {
 	constructor(private readonly tasks: ISideXTaskService, private readonly files: IFileService) { }
 
 	exists(path: string): Promise<boolean> {
