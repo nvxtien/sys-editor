@@ -80,8 +80,11 @@
 **Interfaces:**
 - Consumes: `ISidexChatService.serverModel`, `resolveServerEndpoint`, `serverHttpUrl`, `requestSysFormalSpecDraft`, `TaskProcessTransport`, and `decodeDraftPreview`.
 - Produces: a Draft spec action that uses no configured Platform `draftProvider`; Platform receives `requirement --file <intent> --draft-file <candidate> --draft-only --json`.
+- Produces: `validateDraftCandidate(path, text, writeCandidate, runPreview, removeCandidate): Promise<SysDraftPreview>`, which validates the CLI response and removes its candidate file in `finally`.
 
 - [ ] Extend preview decoding tests to reject invalid JSON, missing/blank `draftSpec`, and any `validationState` other than `VALIDATED`.
+- [ ] Add tests for `validateDraftCandidate` proving it writes the provided candidate, passes the same path to Platform, returns only a validated preview, and removes the temporary file after both success and validation/provider failure; confirm the missing helper causes RED.
+- [ ] Implement `validateDraftCandidate` in `sysPlatformFlow.ts` with one `try/finally` around write, Platform preview, and decode.
 - [ ] Inject `ISidexChatService` into the view. In `_draftSpecFromRequirement`, retain the existing unsaved-intent and replacement-confirmation checks, then resolve the SideX HTTP endpoint and `serverModel`; report a Settings → Models error if the model is unavailable.
 - [ ] Request candidate text from the one-shot helper. Write it to a unique temporary `.spec` under `<project>/.sys/proposals/`; invoke Platform with `--draft-file <temporary path> --draft-only --json` and the current project root as `cwd`.
 - [ ] Put temporary-file deletion in `finally`. Decode the JSON and require `validationState === 'VALIDATED'` before calling `createSpec`, writing the final spec, or opening it. Keep the existing spec untouched on every earlier failure.
