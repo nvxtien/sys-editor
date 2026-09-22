@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pickStableSelection } from '../sysVerification.js';
-import { decodeVerificationV01, VerificationTransportError } from '../sysVerificationWire.js';
+import { decodeVerificationV01, isNoVerificationRun, VerificationTransportError } from '../sysVerificationWire.js';
 import { loadLiveVerification, VerificationTransport } from '../sysVerificationLive.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -148,6 +148,11 @@ test('non-zero exit, missing manifest and missing config are transport errors, n
 	assert.equal(await code(loadLiveVerification(transport({ stdout: 'oops' }), cfg)), 'INVALID_JSON');
 });
 
+test('an untouched workspace is empty, while actual configuration errors remain errors', () => {
+	assert.equal(isNoVerificationRun(new VerificationTransportError('NO_VERIFICATION_RUN', '')), true);
+	assert.equal(isNoVerificationRun(new VerificationTransportError('CONFIG_MISSING', '')), false);
+});
+
 test('unknown proof and evidence kinds stay bounded', () => {
 	const doc = JSON.parse(golden);
 	const b2 = doc.rules.find((r: { id: string }) => r.id === 'B2');
@@ -164,6 +169,17 @@ test('a failing live run never falls back to fixture data', async () => {
 	const result = await loadLiveVerification(failing, cfg).then(p => p, e => e);
 	assert.ok(result instanceof VerificationTransportError);
 	assert.equal((result as { rules?: unknown }).rules, undefined);
+});
+
+test('live CLI transport receives the selected project root as cwd', async () => {
+	let seenCwd: string | undefined;
+	const config = { ...cfg, cwd: '/project root' } as typeof cfg & { cwd: string };
+	const withCwd = transport({ run: async (...args: unknown[]) => {
+		seenCwd = args[3] as string | undefined;
+		return { exitCode: 0, stdout: golden, stderr: '' };
+	} });
+	await loadLiveVerification(withCwd, config);
+	assert.equal(seenCwd, '/project root');
 });
 
 test('the transport is invoked with an argument array (no shell string)', async () => {

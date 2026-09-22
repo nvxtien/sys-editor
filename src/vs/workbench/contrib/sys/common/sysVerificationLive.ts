@@ -5,6 +5,7 @@ export interface LiveVerificationConfig {
 	readonly platformBinary: string;
 	readonly manifestPath: string;
 	readonly timeoutMs: number;
+	readonly cwd?: string;
 }
 
 export interface ProcessResult {
@@ -15,7 +16,7 @@ export interface ProcessResult {
 
 /** Injected so unit tests never need the platform binary. Args are an array: no shell. */
 export interface VerificationTransport {
-	run(command: string, args: string[], timeoutMs: number): Promise<ProcessResult>;
+	run(command: string, args: string[], timeoutMs: number, cwd?: string): Promise<ProcessResult>;
 	exists(path: string): Promise<boolean>;
 }
 
@@ -30,7 +31,7 @@ export async function loadLiveVerification(transport: VerificationTransport, con
 	if (!await transport.exists(config.manifestPath)) {
 		throw new VerificationTransportError('MANIFEST_NOT_FOUND', config.manifestPath);
 	}
-	const result = await transport.run(config.platformBinary, ['verification-v0.1', config.manifestPath], config.timeoutMs);
+	const result = await transport.run(config.platformBinary, ['verification-v0.1', config.manifestPath], config.timeoutMs, config.cwd);
 	if (result.exitCode !== 0) {
 		throw new VerificationTransportError('PLATFORM_EXECUTION_ERROR', `exit ${result.exitCode}: ${result.stderr.trim().slice(0, 500)}`);
 	}

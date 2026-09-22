@@ -19,7 +19,7 @@ import { IFileService } from '../../../../platform/files/common/files.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IViewDescriptorService } from '../../../common/views.js';
 import { ViewPane, IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
-import { VerificationTransportError } from '../common/sysVerificationWire.js';
+import { isNoVerificationRun, VerificationTransportError } from '../common/sysVerificationWire.js';
 import { decideNavigation } from '../common/sysVerificationNavigation.js';
 import { ISysVerificationDataProvider } from './sysVerificationProviderService.js';
 import {
@@ -41,7 +41,7 @@ type SemanticViewTab = 'GOVERNED' | 'RECOVERED' | 'VERIFICATION';
 
 export class SysVerificationWorkbenchView extends ViewPane {
 	private project: VerificationProject | undefined;
-	private loadState: 'IDLE' | 'LOADING' | 'READY' | 'ERROR' = 'IDLE';
+	private loadState: 'IDLE' | 'LOADING' | 'READY' | 'EMPTY' | 'ERROR' = 'IDLE';
 	private loadError: string | undefined;
 	private loadPromise: Promise<void> | undefined;
 	private bodyContainer: HTMLElement | undefined;
@@ -113,11 +113,16 @@ export class SysVerificationWorkbenchView extends ViewPane {
 				this.lastLoad = { at: new Date(), runs: ++this.loadRuns };
 				this.loadError = undefined;
 			} catch (error) {
-				this.loadState = 'ERROR';
 				this.project = undefined;
 				this.selectedRuleId = undefined;
-				this.loadError = error instanceof VerificationTransportError ? `${error.code}: ${error.message}` : String(error);
-				console.error('[SysVerificationWorkbenchView] load failed', error instanceof Error ? error.message : error);
+				if (isNoVerificationRun(error)) {
+					this.loadState = 'EMPTY';
+					this.loadError = undefined;
+				} else {
+					this.loadState = 'ERROR';
+					this.loadError = error instanceof VerificationTransportError ? `${error.code}: ${error.message}` : String(error);
+					console.error('[SysVerificationWorkbenchView] load failed', error instanceof Error ? error.message : error);
+				}
 			} finally {
 				this.loadPromise = undefined;
 				if (this.bodyContainer) {
@@ -138,6 +143,10 @@ export class SysVerificationWorkbenchView extends ViewPane {
 		if (this.loadState === 'ERROR') {
 			DOM.append(parent, $('p.sys-verification-unavailable')).textContent = `Unable to load verification data — ${this.loadError ?? 'unknown error'}. This is an infrastructure error, not a verification result.`;
 			this._refreshButton(parent);
+			return;
+		}
+		if (this.loadState === 'EMPTY') {
+			DOM.append(parent, $('p')).textContent = 'No verification run yet. Run Verify on a requirement in Semantic Workbench to see results here.';
 			return;
 		}
 		const project = this.project;

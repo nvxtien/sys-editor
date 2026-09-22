@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 )
 
 // OpenRouter is one of many providers a session can pick (see
@@ -20,6 +21,24 @@ func TestNewClientWithoutOpenRouterKey(t *testing.T) {
 	}
 	if c.model == "" {
 		t.Fatalf("expected a default model even without an API key")
+	}
+}
+
+func TestWithTimeoutClonesClientWithoutChangingOriginal(t *testing.T) {
+	client := NewClient()
+	originalTimeout := client.httpClient.Timeout
+	bounded := client.WithTimeout(7 * time.Second)
+	if bounded == client || bounded.httpClient == client.httpClient {
+		t.Fatal("WithTimeout must return an independent client and http.Client")
+	}
+	if bounded.httpClient.Timeout != 7*time.Second {
+		t.Fatalf("bounded timeout = %s, want 7s", bounded.httpClient.Timeout)
+	}
+	if client.httpClient.Timeout != originalTimeout {
+		t.Fatalf("original timeout changed to %s", client.httpClient.Timeout)
+	}
+	if bounded.httpClient.Transport != client.httpClient.Transport {
+		t.Fatal("WithTimeout should preserve the configured transport")
 	}
 }
 

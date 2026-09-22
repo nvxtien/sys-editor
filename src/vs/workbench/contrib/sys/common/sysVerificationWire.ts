@@ -22,6 +22,7 @@ export const SUPPORTED_VERIFICATION_SCHEMA = 'verification.v0.1';
 
 /** Infrastructure/contract failures. Never a semantic disposition. */
 export type VerificationErrorCode =
+	| 'NO_VERIFICATION_RUN'
 	| 'CONFIG_MISSING'
 	| 'EXECUTABLE_NOT_FOUND'
 	| 'MANIFEST_NOT_FOUND'
@@ -38,6 +39,10 @@ export class VerificationTransportError extends Error {
 		super(message);
 		this.name = 'VerificationTransportError';
 	}
+}
+
+export function isNoVerificationRun(error: unknown): error is VerificationTransportError {
+	return error instanceof VerificationTransportError && error.code === 'NO_VERIFICATION_RUN';
 }
 
 const WIRE_DISPOSITIONS: ReadonlySet<string> = new Set(['SYNCED', 'DRIFTED', 'CONFLICTED', 'PARTIAL', 'NOT_OBSERVED', 'UNSUPPORTED']);

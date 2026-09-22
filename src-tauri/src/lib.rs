@@ -22,7 +22,6 @@ use commands::window::restore_and_show;
 use std::sync::Arc;
 #[cfg(target_os = "macos")]
 use tauri::menu::{Menu, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
-use tauri::Listener;
 use tauri::Manager;
 
 #[cfg(target_os = "macos")]
@@ -767,6 +766,11 @@ pub fn run() {
             commands::setup_zsh_dotdir,
             commands::search_files,
             commands::search_text,
+            commands::search_workspace,
+            commands::search_workspace_grouped,
+            commands::search_workspace_replace_preview,
+            commands::search_workspace_replace_apply,
+            commands::storage_list,
             commands::create_window,
             commands::close_window,
             commands::set_window_title,
@@ -794,6 +798,10 @@ pub fn run() {
             commands::storage_get,
             commands::storage_set,
             commands::storage_delete,
+            commands::db_state::db_get_recent_files,
+            commands::db_state::db_get_recent_workspaces,
+            commands::db_state::db_save_workspace_state,
+            commands::db_state::db_get_workspace_state,
             // Chat session persistence
             commands::session_create,
             commands::session_list,
@@ -927,6 +935,30 @@ pub fn run() {
             commands::wasm_provide_definition_all,
             commands::wasm_provide_document_symbols_all,
             commands::wasm_provide_formatting_all,
+            commands::wasm_on_document_opened,
+            commands::wasm_on_document_closed,
+            commands::wasm_on_document_saved,
+            commands::wasm_on_document_changed,
+            commands::wasm_on_configuration_changed,
+            commands::wasm_on_active_editor_changed,
+            commands::wasm_provide_type_definition_all,
+            commands::wasm_provide_implementation_all,
+            commands::wasm_provide_declaration_all,
+            commands::wasm_provide_code_actions_all,
+            commands::wasm_provide_code_lenses_all,
+            commands::wasm_provide_signature_help_all,
+            commands::wasm_provide_document_highlights_all,
+            commands::wasm_provide_rename_all,
+            commands::wasm_provide_folding_ranges_all,
+            commands::wasm_provide_inlay_hints_all,
+            commands::wasm_provide_document_links_all,
+            commands::wasm_provide_selection_ranges_all,
+            commands::wasm_provide_semantic_tokens_all,
+            commands::wasm_provide_document_colors_all,
+            commands::wasm_provide_workspace_symbols_all,
+            commands::wasm_provide_range_formatting_all,
+            commands::wasm_execute_command_all,
+            commands::wasm_get_extension_metadata,
             // Extension diagnostics
             commands::extension_report_activated,
             commands::extension_report_provider_call,

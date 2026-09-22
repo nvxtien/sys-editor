@@ -35,7 +35,7 @@ export class TaskProcessTransport implements VerificationTransport {
 		return this.files.exists(URI.file(path));
 	}
 
-	async run(command: string, args: string[], timeoutMs: number): Promise<ProcessResult> {
+	async run(command: string, args: string[], timeoutMs: number, cwd?: string): Promise<ProcessResult> {
 		if (!isTauri()) {
 			throw new VerificationTransportError('PLATFORM_EXECUTION_ERROR', 'process execution requires the desktop runtime');
 		}
@@ -56,7 +56,7 @@ export class TaskProcessTransport implements VerificationTransport {
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		try {
 			try {
-				id = await this.tasks.spawn({ command, args, shell: false });
+				id = await this.tasks.spawn({ command, args, cwd, shell: false });
 			} catch (e) {
 				throw new VerificationTransportError('EXECUTABLE_NOT_FOUND', String(e));
 			}
@@ -121,7 +121,7 @@ class SysVerificationDataProvider extends Disposable implements ISysVerification
 			});
 		}
 		if (!this.workspaceRun) {
-			return Promise.reject(new VerificationTransportError('CONFIG_MISSING', 'Run Verify on a requirement in Semantic Workbench to see a result here.'));
+			return Promise.reject(new VerificationTransportError('NO_VERIFICATION_RUN', 'Run Verify on a requirement in Semantic Workbench to see a result here.'));
 		}
 		return loadLiveVerification(this.transport, { ...this.workspaceRun, timeoutMs: this.config.getValue<number>('sys.verification.timeoutMs') ?? 60000 });
 	}

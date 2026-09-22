@@ -136,6 +136,15 @@ func (c *Client) WithModel(model string) *Client {
 	}
 }
 
+// WithTimeout returns a client with its own bounded http.Client.
+func (c *Client) WithTimeout(timeout time.Duration) *Client {
+	clone := *c
+	httpClient := *c.httpClient
+	httpClient.Timeout = timeout
+	clone.httpClient = &httpClient
+	return &clone
+}
+
 func (c *Client) WithProviderConfig(cfg ProviderConfig) *Client {
 	if !cfg.Enabled || cfg.APIKey == "" || cfg.BaseURL == "" {
 		return c

@@ -7,8 +7,10 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
-import { IFileService } from '../../../../platform/files/common/files.js';
+import { IFileService, FileOperationError, FileOperationResult } from '../../../../platform/files/common/files.js';
 import { URI } from '../../../../base/common/uri.js';
+import { isAbsolute, relative, sep } from '../../../../base/common/path.js';
+import { VSBuffer } from '../../../../base/common/buffer.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { IViewDescriptorService } from '../../../common/views.js';
 import { ViewPane, IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
@@ -25,6 +27,12 @@ import { ISideXTaskService } from '../../../../platform/sidex/common/sidexTaskSe
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { decodePendingProposal, canApplySysProposal, isSysWorkspaceMissing, validateDraftCandidate } from '../common/sysPlatformFlow.js';
+import { ISidexChatService } from '../../sidexChat/browser/sidexChatService.js';
+import { resolveServerEndpoint, serverHttpUrl } from '../../sidexChat/browser/localServer.js';
+import { assertSysDraftServerAvailable, requestSysFormalSpecDraft } from '../common/sysFormalSpecDraft.js';
+import { generateUuid } from '../../../../base/common/uuid.js';
 import { ISysSemanticSnapshotService, SysProjectSnapshot } from '../common/sysSemanticSnapshot.js';
 import {
 	ISysIntentActionService,
@@ -63,8 +71,10 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		@IFileService private readonly fileService: IFileService,
 		@ISideXTaskService private readonly taskService: ISideXTaskService,
 		@ISysVerificationDataProvider private readonly verificationDataProvider: ISysVerificationDataProvider,
+		@ISidexChatService private readonly sidexChatService: ISidexChatService,
 		@IViewsService private readonly viewsService: IViewsService,
-		@IFileDialogService private readonly fileDialogService: IFileDialogService
+		@IFileDialogService private readonly fileDialogService: IFileDialogService,
+		@IWorkspaceContextService private readonly workspaceContextService: IWorkspaceContextService
 	) {
 		super(
 			options,
@@ -160,6 +170,7 @@ export class SysSemanticWorkbenchView extends ViewPane {
 			}
 			case 'READY': {
 				const section = DOM.append(parent, this._section('Requirements'));
+				DOM.append(section, $('p')).textContent = 'Save a plain-language requirement, generate a draft Formal Spec, review and approve it, then inspect the independently verified code proposal before applying.';
 				for (const row of state.rows) {
 					this._renderRequirementRow(section, row);
 				}
@@ -213,6 +224,147 @@ export class SysSemanticWorkbenchView extends ViewPane {
 
 	private async _createRequirement(): Promise<void> {
 		await this.editorService.openEditor({ resource: await this.projectService.createRequirement() });
+	}
+
+	private _projectRoot(): string {
+		const root = this.workspaceContextService.getWorkspace().folders[0]?.uri.fsPath;
+		if (!root) { throw new Error('Open a single project folder before using the Sys workflow.'); }
+		return root;
+	}
+
+	private async _runSys(platformRoot: string, projectRoot: string, args: string[]): Promise<string> {
+		const debug = URI.joinPath(URI.file(platformRoot), 'product-cli', 'target', 'debug', 'sys').fsPath;
+		const release = URI.joinPath(URI.file(platformRoot), 'product-cli', 'target', 'release', 'sys').fsPath;
+		const binary = await this.fileService.exists(URI.file(debug)) ? debug : release;
+		if (!await this.fileService.exists(URI.file(binary))) {
+			throw new Error(`Sys Platform CLI not found. Build it with: cargo build --manifest-path ${platformRoot}/product-cli/Cargo.toml`);
+		}
+		const transport = new TaskProcessTransport(this.taskService, this.fileService);
+		const timeoutMs = this.configurationService.getValue<number>('sys.verification.timeoutMs') ?? 60000;
+		const result = await transport.run(binary, args, timeoutMs, projectRoot);
+		if (result.exitCode !== 0) {
+			const detail = result.stderr.trim() || result.stdout.trim() || `sys exited with code ${result.exitCode}`;
+			if (detail.includes('no Sys Platform workspace found')) {
+				throw new Error('Initialize Sys Platform in this project first with `sys init .`.');
+			}
+			throw new Error(detail);
+		}
+		return result.stdout;
+	}
+
+	private async _platformRoot(): Promise<string | undefined> {
+		const configured = await this.projectService.getPlatformRoot();
+		if (configured) { return configured; }
+		const selected = await this._promptPlatformRoot(undefined);
+		if (selected) { await this.projectService.setPlatformRoot(selected); }
+		return selected;
+	}
+
+	private async _ensurePlatformWorkspace(platformRoot: string, projectRoot: string): Promise<boolean> {
+		try {
+			await this._runSys(platformRoot, projectRoot, ['status', '--json']);
+			return true;
+		} catch (error) {
+			if (!isSysWorkspaceMissing(error)) { throw error; }
+			const { confirmed } = await this.dialogService.confirm({
+				message: 'Initialize Sys Platform in this project?',
+				detail: 'Sys Platform will create its workspace files under .sys. Existing requirements and other project files will be preserved.',
+				primaryButton: 'Initialize project'
+			});
+			if (!confirmed) { return false; }
+			await this._runSys(platformRoot, projectRoot, ['init', '.']);
+			await this._runSys(platformRoot, projectRoot, ['status', '--json']);
+			return true;
+		}
+	}
+
+	private async _draftSpecFromRequirement(id: string): Promise<void> {
+		const requirement = this.projectService.resourceOf(id);
+		const intent = (await this.fileService.readFile(requirement)).value.toString();
+		if (!intent.trim()) { throw new Error(`Add and save the plain-language requirement in ${requirement.fsPath} first.`); }
+		const spec = this.projectService.resourceOfSpec(id);
+		if (await this.fileService.exists(spec) && (await this.fileService.readFile(spec)).value.toString().trim()) {
+			const { confirmed } = await this.dialogService.confirm({ message: 'Replace the current draft Formal Spec?', detail: 'The existing spec file will be replaced by a new Platform preview.', primaryButton: 'Replace draft' });
+			if (!confirmed) { return; }
+		}
+		const platformRoot = await this._platformRoot();
+		if (!platformRoot) { return; }
+		const projectRoot = this._projectRoot();
+		if (!await this._ensurePlatformWorkspace(platformRoot, projectRoot)) { return; }
+		const model = this.sidexChatService.serverModel;
+		if (!model) { throw new Error('Select a model in SideX Settings → Models before drafting a Formal Spec.'); }
+		const configuredServerUrl = this.configurationService.getValue<string>('sidex.chat.serverUrl');
+		const endpoint = await resolveServerEndpoint();
+		assertSysDraftServerAvailable(endpoint.running, configuredServerUrl, endpoint.error);
+		const httpUrl = serverHttpUrl(configuredServerUrl);
+		const draft = await requestSysFormalSpecDraft(httpUrl, model, intent);
+		const proposals = URI.joinPath(URI.file(projectRoot), '.sys', 'proposals');
+		await this.fileService.createFolder(proposals);
+		const candidatePath = URI.joinPath(proposals, `draft-${generateUuid()}.spec`).fsPath;
+		const preview = await validateDraftCandidate(
+			candidatePath,
+			draft,
+			async (path, text) => { await this.fileService.writeFile(URI.file(path), VSBuffer.fromString(text)); },
+			path => this._runSys(platformRoot, projectRoot, ['requirement', '--file', requirement.fsPath, '--draft-file', path, '--draft-only', '--json']),
+			async path => {
+				try { await this.fileService.del(URI.file(path), { useTrash: false }); }
+				catch (error) { if (!(error instanceof FileOperationError && error.fileOperationResult === FileOperationResult.FILE_NOT_FOUND)) { throw error; } }
+			}
+		);
+		await this.projectService.createSpec(id);
+		await this.fileService.writeFile(spec, VSBuffer.fromString(preview.draftSpec));
+		await this.editorService.openEditor({ resource: spec });
+	}
+
+	private async _approveSpecAndReviewProposal(id: string, title: string): Promise<void> {
+		const requirement = this.projectService.resourceOf(id);
+		const spec = this.projectService.resourceOfSpec(id);
+		const intentText = (await this.fileService.readFile(requirement)).value.toString();
+		const specText = (await this.fileService.readFile(spec)).value.toString();
+		if (!intentText.trim() || !specText.trim()) { throw new Error('Save both the plain-language requirement and the reviewed Formal Spec before continuing.'); }
+		const targetOperation = await this.quickInputService.input({
+			title: `Target operation for ${id}`,
+			prompt: 'The Class.method governed by this spec. This is sent to Sys Platform for independent verification.',
+			placeHolder: 'ClassName.methodName',
+			validateInput: async text => validateTargetOperation(text)
+		});
+		if (!targetOperation) { return; }
+		const target = await this.fileDialogService.showOpenDialog({ title: 'Code file to update', canSelectFiles: true, canSelectFolders: false, canSelectMany: false });
+		if (!target?.[0]) { return; }
+		const sourceRoot = await this.fileDialogService.showOpenDialog({ title: 'Source root for independent verification', canSelectFiles: false, canSelectFolders: true, canSelectMany: false });
+		if (!sourceRoot?.[0]) { return; }
+		const projectRoot = this._projectRoot();
+		const sourceRootRelative = relative(projectRoot, sourceRoot[0].fsPath);
+		if (isAbsolute(sourceRootRelative) || sourceRootRelative === '..' || sourceRootRelative.startsWith(`..${sep}`)) {
+			throw new Error('Choose a source root inside the open project folder.');
+		}
+		const platformRoot = await this._platformRoot();
+		if (!platformRoot) { return; }
+		if (!await this._ensurePlatformWorkspace(platformRoot, projectRoot)) { return; }
+		const { confirmed } = await this.dialogService.confirm({
+			message: `Approve the Formal Spec for ${title} and ask Sys Platform to generate and verify a code proposal?`,
+			detail: specText,
+			primaryButton: 'Approve spec'
+		});
+		if (!confirmed) { return; }
+		await this._runSys(platformRoot, projectRoot, [
+			'requirement', '--file', requirement.fsPath, '--draft-file', spec.fsPath, '--target-file', target[0].fsPath,
+			'--target-operation', targetOperation, '--source-root', sourceRootRelative || '.', '--approve-spec', '--json'
+		]);
+		const proposalText = await this._runSys(platformRoot, projectRoot, ['proposal', 'show', '--json']);
+		const proposal = decodePendingProposal(proposalText);
+		const verified = canApplySysProposal(proposal);
+		const summary = `Verification: ${proposal.verificationState}\nTarget: ${proposal.targetFile}\n\n${proposal.diff}`;
+		if (!verified) {
+			await this.dialogService.confirm({ message: 'Code proposal is not verified. It remains pending and cannot be applied.', detail: summary, primaryButton: 'Close' });
+			return;
+		}
+		const apply = await this.dialogService.confirm({ message: 'Sys Platform verified this proposal. Apply the code change?', detail: summary, primaryButton: 'Apply verified code' });
+		if (!apply.confirmed) { return; }
+		const appliedText = await this._runSys(platformRoot, projectRoot, ['proposal', 'apply', '--approve-code', '--json']);
+		let applied: unknown;
+		try { applied = JSON.parse(appliedText); } catch { throw new Error('Sys Platform applied the proposal but returned invalid post-apply verification JSON.'); }
+		await this.dialogService.confirm({ message: 'Sys Platform post-apply result', detail: JSON.stringify(applied, null, 2), primaryButton: 'Close' });
 	}
 
 	private _specLabel(check: SpecCheckResult | undefined): string {
@@ -290,8 +442,14 @@ export class SysSemanticWorkbenchView extends ViewPane {
 			? 'Intent approved · unformalized · not verified'
 			: 'Draft · unformalized · needs review';
 		const actions = DOM.append(el, $('div.sys-req-actions'));
+		if (!row.missing) {
+			this._action(actions, 'Draft spec from request', 'sys-req-action', () => this._draftSpecFromRequirement(row.id));
+			if (row.hasSpec) {
+				this._action(actions, 'Approve spec & review code', 'sys-req-action', () => this._approveSpecAndReviewProposal(row.id, row.title));
+			}
+		}
 		if (row.status === 'DRAFT_UNFORMALIZED' && !row.missing) {
-			this._action(actions, 'Approve', 'sys-req-action', () => this.projectService.approveRequirement(row.id));
+			this._action(actions, 'Approve intent', 'sys-req-action', () => this.projectService.approveRequirement(row.id));
 		}
 		const specCheck = row.hasSpec ? this.specChecks.get(row.id) : undefined;
 		DOM.append(el, $('div.sys-req-binding')).textContent = row.hasSpec ? `spec: ${this._specLabel(specCheck)}` : 'No .spec file yet';
