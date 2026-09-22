@@ -189,7 +189,7 @@ export class SysSemanticWorkbenchView extends ViewPane {
 				title: `Source operation for ${row.id}`,
 				prompt: 'Class.method that implements this requirement (leave empty to unbind). Not checked against the code.',
 				value: row.operation ?? '',
-				placeHolder: 'BookingService.createBooking',
+				placeHolder: 'ClassName.methodName',
 				validateInput: async text => { const p = parseOperation(text); return 'error' in p ? p.error : undefined; }
 			});
 			if (value === undefined) { return; }
