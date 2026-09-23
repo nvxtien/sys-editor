@@ -75,6 +75,7 @@ The intended architecture is:
         = deterministic preparation of proposal context
         = deterministic acceptance / persistence of externally produced candidates
         = invocation/orchestration of sys-platform capabilities
+        = no ownership of spec-to-source mapping
 
     sys-platform
         = Formal Spec grammar
@@ -129,7 +130,8 @@ At minimum, sys-core should own APIs conceptually equivalent to:
     createRequirement(...)
     normalizeRequirement(reqId, ...)
     approveStructuredIntent(reqId, exactContentIdentity)
-    generateFormalSpec(reqId, ...)
+    prepareFormalSpecContext(reqId, ...)
+    acceptFormalSpecCandidate(reqId, ...)
     approveFormalSpec(reqId, exactContentIdentity)
     mark/recomputeStaleness(...)
     verifyRequirement(reqId, ...)
@@ -464,6 +466,119 @@ Add tests proving:
     0 | explain
 
 
+# Source mapping ownership: no manual source mapping
+
+This mission removes manual source-source mapping from the product lifecycle.
+
+Required invariant:
+
+    NO_USER_SOURCE_BINDING
+    NO_EDITOR_SOURCE_BINDING
+    NO_CORE_SOURCE_BINDING
+
+    SPEC_CODE_RELATIONSHIP_OWNER = sys-platform
+
+The user must not be required to bind a requirement, Structured Intent, or Formal Spec to a source-code identity such as:
+
+    Class.method
+    BookingService.createBooking
+    controller action
+    function symbol
+    file path
+    AST node
+
+before Formal Spec generation or verification.
+
+The reason is architectural:
+
+    Human governs intent.
+    sys-platform governs semantic correspondence between Formal Spec and source code.
+
+A Formal Spec may still contain a semantic operation declaration if the grammar requires one, for example:
+
+    Operation: create booking
+
+That is a semantic operation in the governed specification.
+
+It is NOT a source-code binding and must not be rewritten as:
+
+    Operation: BookingService.createBooking
+
+unless such syntax is part of the Formal Spec language itself and represents semantic intent rather than a UI-supplied source mapping.
+
+The canonical flow is:
+
+    raw requirement
+      -> client invokes LLM
+      -> Structured Intent Draft
+      -> human confirms
+      -> capability gate
+      -> client invokes LLM
+      -> Formal Spec candidate
+      -> sys-platform validates
+      -> human approves exact Formal Spec
+      -> sys-platform independently recovers source semantics
+      -> sys-platform determines spec/code correspondence
+      -> verification verdict
+
+If sys-platform cannot determine the relevant source correspondence, return an explicit non-green/unknown result such as:
+
+    SOURCE_MAPPING_UNKNOWN
+    RECOVERY_INCOMPLETE
+    UNSUPPORTED
+
+Use the actual existing platform verdict vocabulary where available. Do not invent a green result.
+
+Do NOT fall back to asking the user to manually bind a Class.method merely because source recovery is incomplete.
+
+Delete or migrate editor/core concepts that make source binding a prerequisite, including where applicable:
+
+    targetOperation
+    semantic source mapping
+    Bind operation UI action
+    assertSysDraftOperationBinding
+    operation provenance = OBSERVED solely because user typed Class.method
+    canGenerateFormalSpec(... requires bound Class.method ...)
+    verification flows that prompt for Class.method before platform recovery
+
+Before deleting a field named `operation`, distinguish carefully between:
+
+    semantic Formal Spec operation
+    vs
+    source-code binding metadata
+
+Only source-code binding metadata is removed by this mission.
+
+Required acceptance tests:
+
+1. A supported OPERATION_RULE Structured Intent can reach Formal Spec generation without any user-supplied Class.method binding.
+2. The Editor exposes no mandatory "Bind operation" step.
+3. CLI lifecycle exposes no mandatory source-binding command.
+4. sys-core lifecycle APIs do not require source symbol identity for Formal Spec generation.
+5. sys-platform remains solely responsible for source recovery and spec/code correspondence.
+6. Failure to recover source correspondence produces an explicit non-green/unknown result, never a request to fake or manually supply a binding.
+7. No regression converts semantic `Operation: create booking` into a Java/TypeScript/Rust symbol identity.
+8. Existing operation-rule Formal Spec support continues to work when the semantic operation is supplied by the approved Structured Intent or generated candidate.
+9. DATA_MODEL and other unsupported kinds still report capability gaps independently of source mapping.
+10. LLM calls remain in sys-editor/product-cli only; sys-core and sys-platform perform zero provider calls.
+
+Required final report additions:
+
+    MANUAL_SOURCE_BINDING_REQUIRED:
+    NO
+
+    EDITOR_BIND_OPERATION_UI:
+    REMOVED | explain
+
+    CORE_SOURCE_BINDING_DEPENDENCY:
+    0 | explain
+
+    PLATFORM_SOURCE_MAPPING_OWNER:
+    YES
+
+    SOURCE_MAPPING_FAILURE_BEHAVIOR:
+    ...
+
 # Product thesis
 
 Sys should not jump directly from free-form natural language to Formal Spec.
@@ -735,7 +850,7 @@ Do not preserve a boolean approval across changed content.
 Formal Spec generation must consume:
 
     human-confirmed Structured Intent
-    + authoritative operation binding
+    + semantic source mapping
     + canonical sys-platform Formal Spec grammar/template
 
 It must NOT consume the raw requirement as the semantic source of truth once Structured Intent is approved.
@@ -905,7 +1020,7 @@ Do not ask the model to collapse uncertainty.
 The Formal Spec generation prompt should explicitly require:
 
 - consume approved Structured Intent;
-- use authoritative operation binding exactly;
+- use semantic source mapping exactly;
 - use canonical Formal Spec grammar;
 - return only candidate Formal Spec text;
 - no markdown fences;
@@ -1050,7 +1165,7 @@ Expected:
 
     generator consumes approved Structured Intent
     canonical grammar used
-    authoritative operation inserted exactly
+    semantic operation inserted exactly
     sys-platform validates candidate
     Formal Spec Draft visible
 
@@ -1124,7 +1239,7 @@ Add tests for at least:
 8. edit invalidates Structured Intent approval;
 9. Formal Spec generation consumes approved Structured Intent, not raw requirement;
 10. missing Structured Intent approval blocks Formal Spec generation;
-11. missing operation binding blocks Formal Spec generation when required;
+11. missing source mapping blocks Formal Spec generation when required;
 12. canonical grammar/template is used;
 13. provider candidate remains draft until human approval;
 14. Formal Spec approval binds to exact content;
@@ -1202,7 +1317,7 @@ The current persisted model cannot represent Structured Intent + provenance soun
 
 ## OPERATION_BINDING_REQUIRED
 
-Formal Spec generation is blocked because no authoritative operation binding exists.
+Formal Spec generation is blocked because no semantic source mapping exists.
 
 Do not guess.
 
