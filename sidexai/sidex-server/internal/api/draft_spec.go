@@ -35,6 +35,11 @@ After those declarations, use only these exact rule forms, each ending with a pe
 - If <property> is <value>, the operation must fail with <FailureName>.
 - When the operation succeeds, <property> becomes <value>.
 Conditions may also use "is not". Do not emit classes, relationships, lists, schema notation, free-form sentences, or Markdown.
+Sys Platform compiles only these three rule combinations, so the rules you emit must form exactly one of them:
+1. One or more "If ... must fail with ..." rules on their own.
+2. One "The operation is allowed when ..." rule together with at least one "When the operation succeeds, ..." rule.
+3. One or more "If ... must fail with ..." rules together with at least one "When the operation succeeds, ..." rule.
+So an allowed-when rule always needs at least one "When the operation succeeds" rule with it, and is never emitted alone. Never combine an allowed-when rule with a failure rule; if the requirement states both a permission and a failure, express it with the failure rules alone.
 Emit at least one rule in one of these forms when the requirement supplies an operation behavior. State only facts explicit in the requirement; do not invent conditions, types, exceptions, state changes, or other behavior.`
 
 func (h *Handler) DraftSpec(w http.ResponseWriter, r *http.Request) {
