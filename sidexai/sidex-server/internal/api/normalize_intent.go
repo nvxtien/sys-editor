@@ -12,13 +12,32 @@ import (
 type normalizeIntentRequest struct {
 	Model     string `json:"model"`
 	Intent    string `json:"intent"`
-	Operation string `json:"operation,omitempty"`
 }
 
 const normalizeIntentSystemPrompt = `Normalize the user's raw requirement into a human-reviewable Structured Intent JSON object.
-Return JSON only: no Markdown fences, explanation, approval language, or Formal Spec syntax.
-Use exactly these fields: version (1), requirementId (copy the supplied id), intentStatement, scope, operation, inputs, constraints, effects, failureBehavior, unknowns.
-Each scalar fact is an object with value and provenance. Provenance must be one of SPECIFIED, OBSERVED, DERIVED, INFERRED, UNKNOWN. Use SPECIFIED only for facts stated by the user, OBSERVED only for supplied authoritative source facts, DERIVED for deterministic consequences, INFERRED for model interpretations, and UNKNOWN when a fact is missing. Keep unknowns explicit. Never invent an operation identity; use UNKNOWN unless an authoritative operation is supplied. Do not emit Formal Spec declarations or rules.`
+Return only the JSON object, never Markdown fences or explanation.
+Use exactly these fields: version (1), requirementId, kind, intentStatement, scope, operation, inputs, constraints, effects, failureBehavior, unknowns.
+
+Shape:
+FACT = {"value": string, "provenance": "SPECIFIED"|"OBSERVED"|"DERIVED"|"INFERRED"|"UNKNOWN"}
+intentStatement, scope and operation are each ONE FACT object.
+inputs, constraints, effects and failureBehavior are each an ARRAY of FACT objects; use [] when there are none, never an object keyed by name.
+requirementId is the supplied id as a plain string, and unknowns is an array of plain strings.
+
+Provenance: SPECIFIED only for facts the user stated, OBSERVED only for supplied authoritative source facts, DERIVED for deterministic consequences, INFERRED for model interpretations, UNKNOWN when a fact is missing. Keep unknowns explicit.
+
+Classification:
+"kind":"OPERATION_RULE"|"DATA_MODEL"|"RELATIONSHIP"|"INVARIANT"|"WORKFLOW"|"UNKNOWN"
+kind is a plain string classifying what the requirement is about, not a fact object.
+OPERATION_RULE: an action with conditions, effects or failures.
+DATA_MODEL: entities, fields and their types.
+RELATIONSHIP: how entities relate to one another.
+INVARIANT: a condition that must always hold.
+WORKFLOW: an ordered sequence of steps.
+UNKNOWN: the requirement does not settle which of these it is.
+Classify from what the requirement says, and never invent an operation to fit a kind: a data model or a relationship has no operation, so its operation FACT is {"value": "UNKNOWN", "provenance": "UNKNOWN"}.
+For an OPERATION_RULE the operation is the semantic action the requirement governs, such as "create booking" — never a class, method or qualified source name.
+Do not emit Formal Spec declarations or rules.`
 
 func (h *Handler) NormalizeIntent(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, draftSpecMaxRequestBytes)
@@ -28,9 +47,6 @@ func (h *Handler) NormalizeIntent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := req.Intent
-	if strings.TrimSpace(req.Operation) != "" {
-		user += "\n\nAuthoritative operation binding: " + req.Operation
-	}
 	var output strings.Builder
 	tooLarge := false
 	err := h.clientFor(req.Model, auth.UserIDFromContext(r.Context())).WithTimeout(draftSpecTimeout).StreamChat(

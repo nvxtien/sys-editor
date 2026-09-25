@@ -353,7 +353,7 @@ export class SysSemanticWorkbenchView extends ViewPane {
 			sysTrace(requestId, 'prepared', `context_bytes=${proposalContext.length}`);
 			// Read the port after prepare: a stale cached port is re-resolved by the core call above.
 			const httpUrl = serverHttpUrl(configuredServerUrl);
-			const structuredIntent = await requestStructuredIntent(httpUrl, model, id, proposalContext, undefined, requestId);
+			const structuredIntent = await requestStructuredIntent(httpUrl, model, id, proposalContext, requestId);
 			await this.projectService.writeStructuredIntent(id, structuredIntent);
 			sysTrace(requestId, 'saved', `requirement=${id}`);
 			await this.editorService.openEditor({ resource: await this.projectService.writeStructuredIntentReview(id) });

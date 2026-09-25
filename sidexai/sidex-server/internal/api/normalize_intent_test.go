@@ -1,6 +1,7 @@
 package api
 
 import (
+	"os"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -41,4 +42,22 @@ func TestNormalizeIntentRejectsNonJSONProviderOutput(t *testing.T) {
 	rr := httptest.NewRecorder()
 	h.NormalizeIntent(rr, normalizeRequest(`{"model":"openrouter/test-model","intent":"intent"}`))
 	if rr.Code != http.StatusBadGateway { t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String()) }
+}
+
+// "Authoritative operation binding" was how a user-supplied Class.method reached the model. Source
+// binding is not the editor's or the server's to own, so neither the request nor the prompt may
+// carry one — otherwise the removed lifecycle step has a live path back in.
+func TestNormalizeIntentCarriesNoSourceOperationBinding(t *testing.T) {
+	source, err := os.ReadFile("normalize_intent.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{"Authoritative operation binding", "req.Operation", "operation,omitempty"} {
+		if strings.Contains(string(source), forbidden) {
+			t.Errorf("normalize_intent.go still carries %q", forbidden)
+		}
+	}
+	if strings.Contains(normalizeIntentSystemPrompt, "authoritative operation") {
+		t.Error("the prompt still asks for an authoritative operation")
+	}
 }

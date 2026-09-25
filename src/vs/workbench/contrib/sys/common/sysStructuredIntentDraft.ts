@@ -8,7 +8,7 @@ export function sysTrace(requestId: string, stage: string, detail = ''): void {
 	console.info(`[SYS_NORMALIZE_INTENT] id=${requestId} stage=${stage}${detail ? ` ${detail}` : ''}`);
 }
 
-export async function requestStructuredIntent(httpUrl: string, model: string, requirementId: string, intent: string, operation?: string, requestId: string = newSysRequestId()): Promise<SysStructuredIntent> {
+export async function requestStructuredIntent(httpUrl: string, model: string, requirementId: string, intent: string, requestId: string = newSysRequestId()): Promise<SysStructuredIntent> {
 	const url = `${httpUrl.replace(/\/+$/, '')}/v1/sys/normalize-intent`;
 	sysTrace(requestId, 'request_sent', `url=${url} model=${model}`);
 	let response: Response;
@@ -17,7 +17,7 @@ export async function requestStructuredIntent(httpUrl: string, model: string, re
 			method: 'POST',
 			// The id rides in the body: a custom header would need a CORS preflight allowance the server does not grant.
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ model, intent, requestId, ...(operation ? { operation } : {}) }),
+			body: JSON.stringify({ model, intent, requestId }),
 			signal: AbortSignal.timeout(90_000)
 		});
 	} catch (error) {
