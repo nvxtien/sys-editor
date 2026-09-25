@@ -1,3 +1,6 @@
+import { SysDraftRepair } from './sysFormalSpecRepair.js';
+import { SYS_INTENT_KIND_LABEL, SysFormalizationCapability } from './sysStructuredIntent.js';
+
 export function assertSysDraftServerAvailable(running: boolean, configuredUrl: string | undefined, serverError?: string | null): void {
 	if (!configuredUrl?.trim() && !running) {
 		const detail = serverError?.trim();
@@ -7,19 +10,23 @@ export function assertSysDraftServerAvailable(running: boolean, configuredUrl: s
 	}
 }
 
-export function assertSysDraftOperationBinding(operation: string | undefined): void {
-	if (!operation?.trim()) {
-		throw new Error('Bind this requirement to a source operation before drafting a Formal Spec.');
+export function assertSysDraftFormalizable(capability: SysFormalizationCapability): void {
+	switch (capability.outcome) {
+		case 'FORMAL_SPEC_SUPPORTED': return;
+		case 'PLATFORM_FORMAL_SPEC_GAP':
+			throw new Error(`PLATFORM_FORMAL_SPEC_GAP: the current Sys Platform grammar does not represent this ${SYS_INTENT_KIND_LABEL[capability.kind].toLowerCase()} intent yet. Its confirmed Structured Intent remains the governed record.`);
+		case 'NOT_FORMALIZABLE':
+			throw new Error('This Structured Intent has no formalizable kind yet (UNKNOWN). Clarify the requirement and normalize again.');
 	}
 }
 
-export async function requestSysFormalSpecDraft(httpUrl: string, model: string, intent: string): Promise<string> {
+export async function requestSysFormalSpecDraft(httpUrl: string, model: string, intent: string, repair?: SysDraftRepair): Promise<string> {
 	let response: Response;
 	try {
 		response = await fetch(`${httpUrl.replace(/\/+$/, '')}/v1/sys/draft-spec`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ model, intent }),
+			body: JSON.stringify({ model, intent, ...(repair ? { repair: { previousDraft: repair.previousDraft, error: repair.error } } : {}) }),
 			signal: AbortSignal.timeout(90_000)
 		});
 	} catch (error) {
