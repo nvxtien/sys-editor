@@ -1,40 +1,53 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildManifest, validateTargetOperation } from '../sysManifest.js';
+import { buildManifest, specOperation } from '../sysManifest.js';
 
 const input = {
-	projectId: 'my-java21-app',
-	projectRoot: '/Volumes/Work/dev/my-java21-app',
-	targetOperation: 'BookingService.createBooking',
-	sourceFile: '/Volumes/Work/dev/my-java21-app/src/main/java/com/example/BookingService.java',
+	projectId: 'cinema-booking',
+	projectRoot: '/tmp/cinema',
+	operation: 'create booking',
 	ruleId: 'REQ-001',
-	title: 'A booking request must contain at least one seat.',
-	specFile: '/Volumes/Work/dev/my-java21-app/.sys/specs/REQ-001.spec'
+	title: 'Requested seats non-empty',
+	specFile: '/tmp/cinema/.sys/specs/REQ-001.spec'
 };
 
-test('buildManifest matches the real verification.v0.1 manifest shape, one rule per requirement', () => {
-	assert.deepEqual(buildManifest(input), {
-		project_id: 'my-java21-app',
-		project_root: '/Volumes/Work/dev/my-java21-app',
-		target_operation: 'BookingService.createBooking',
-		rules: [{
-			id: 'REQ-001',
-			title: 'A booking request must contain at least one seat.',
-			spec_file: '/Volumes/Work/dev/my-java21-app/.sys/specs/REQ-001.spec',
-			source_anchor: { kind: 'SOURCE', label: 'BookingService.createBooking', file: input.sourceFile, symbol: 'createBooking' },
-			spec_anchor: { kind: 'SPEC', label: 'REQ-001.spec', file: input.specFile }
-		}]
-	});
+test('the manifest carries the semantic operation verbatim', () => {
+	assert.equal(buildManifest(input).target_operation, 'create booking');
+	assert.equal(buildManifest(input).project_id, 'cinema-booking');
+	assert.equal(buildManifest(input).project_root, '/tmp/cinema');
 });
 
-test('symbol is the last segment of a dotted operation, even when nested', () => {
-	assert.equal(buildManifest({ ...input, targetOperation: 'com.example.Outer.Inner.run' }).target_operation, 'com.example.Outer.Inner.run');
-	assert.equal(buildManifest({ ...input, targetOperation: 'com.example.Outer.Inner.run' }).rules[0].source_anchor.symbol, 'run');
+test('the manifest declares no source anchor, because the platform recovers source', () => {
+	const rule = buildManifest(input).rules[0];
+	assert.equal('source_anchor' in rule, false);
+	assert.deepEqual(rule.spec_anchor, { kind: 'SPEC', label: 'REQ-001.spec', file: '/tmp/cinema/.sys/specs/REQ-001.spec' });
+	assert.equal(rule.id, 'REQ-001');
+	assert.equal(rule.title, 'Requested seats non-empty');
 });
 
-test('validateTargetOperation accepts a qualified name and rejects anything else', () => {
-	assert.equal(validateTargetOperation('BookingService.createBooking'), undefined);
-	for (const bad of ['createBooking', 'A.', '.b', '1A.b']) {
-		assert.ok(validateTargetOperation(bad));
+test('the manifest never derives a source symbol from the operation', () => {
+	const json = JSON.stringify(buildManifest({ ...input, operation: 'create booking' }));
+	assert.doesNotMatch(json, /BookingService/);
+	assert.equal(json.includes('"symbol"'), false);
+});
+
+test('specOperation reads the semantic Operation declaration', () => {
+	assert.equal(specOperation('Requirement: Cinema booking\n\nOperation: create booking\n\nProperty: x.\n'), 'create booking');
+	assert.equal(specOperation('Operation:    create booking   \n'), 'create booking');
+});
+
+test('specOperation takes the first declaration when a spec repeats it', () => {
+	assert.equal(specOperation('Operation: create booking\nOperation: cancel booking\n'), 'create booking');
+});
+
+test('specOperation refuses a spec with no operation, without suggesting a binding', () => {
+	for (const bad of ['Requirement: Cinema booking\n', 'Operation:\n', 'Operation:    \n', '']) {
+		assert.throws(() => specOperation(bad), (error: Error) => /Operation:/.test(error.message) && !/Class\.method|bind/i.test(error.message));
 	}
+});
+
+test('a semantic operation keeps its spaces and is never validated as a qualified symbol', async () => {
+	assert.equal(buildManifest({ ...input, operation: 'cancel a confirmed booking' }).target_operation, 'cancel a confirmed booking');
+	const module = await import('../sysManifest.js') as Record<string, unknown>;
+	assert.equal(module.validateTargetOperation, undefined);
 });
