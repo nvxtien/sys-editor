@@ -67,8 +67,10 @@ func resolveSysCoreBinary(workspace string) (string, error) {
 	if configured := strings.TrimSpace(os.Getenv("SYS_PLATFORM_ROOT")); configured != "" {
 		roots = append(roots, configured)
 	}
+	// The server runs from src-tauri, one level below the repo, so climb two levels to reach the
+	// checkout's own siblings — that is where a sys-platform checkout usually sits.
 	if cwd, err := os.Getwd(); err == nil {
-		roots = append(roots, cwd, filepath.Dir(cwd))
+		roots = append(roots, cwd, filepath.Dir(cwd), filepath.Dir(filepath.Dir(cwd)))
 	}
 	if workspace != "" {
 		roots = append(roots, filepath.Dir(workspace))

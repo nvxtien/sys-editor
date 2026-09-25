@@ -92,3 +92,33 @@ func TestResolveSysCoreBinaryHonoursSysPlatformRoot(t *testing.T) {
 		t.Errorf("resolved %q, want %q", resolved, binary)
 	}
 }
+
+// The server's working directory is src-tauri, one level below the repo, so a search that climbs
+// only to the parent never reaches the checkout's own sibling directory.
+func TestResolveSysCoreBinaryClimbsPastTheServerWorkingDirectory(t *testing.T) {
+	root := t.TempDir()
+	binary := filepath.Join(root, "sys-platform", "sys-core", "target", "debug", "sys-core")
+	if err := os.MkdirAll(filepath.Dir(binary), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(binary, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// Mirror the real layout: <root>/an-editor/src-tauri is the working directory.
+	workdir := filepath.Join(root, "an-editor", "src-tauri")
+	if err := os.MkdirAll(workdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(workdir)
+
+	t.Setenv("SYS_CORE_BIN", "")
+	t.Setenv("SYS_PLATFORM_ROOT", "")
+	t.Setenv("PATH", filepath.Join(root, "empty"))
+	resolved, err := resolveSysCoreBinary(filepath.Join(root, "elsewhere", "a-project"))
+	if err != nil {
+		t.Fatalf("not found from src-tauri working directory: %v", err)
+	}
+	if resolved != binary {
+		t.Errorf("resolved %q, want %q", resolved, binary)
+	}
+}
