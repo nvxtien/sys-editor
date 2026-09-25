@@ -104,19 +104,16 @@ const OUTCOMES: readonly SysFormalizationOutcome[] = ['FORMAL_SPEC_SUPPORTED', '
 
 /**
  * The capability is decided by sys-core (`sys-core intent capability`), never here. The editor only
- * validates the reply against the contract so a malformed answer cannot unlock Formal Spec generation,
- * and drops source binding from that contract: sys-core's `operationBinding` field is ignored, and its
- * legacy `OPERATION_BINDING_REQUIRED` outcome reads as supported, because a source symbol is no longer a
- * lifecycle prerequisite. A fresh object is returned so no stray binding field reaches the rest of the editor.
+ * validates the reply against the contract so a malformed answer cannot unlock Formal Spec generation.
+ * Source binding is not part of that contract: sys-core's `operationBinding` field is ignored, and a
+ * reply still carrying the retired `OPERATION_BINDING_REQUIRED` outcome is refused rather than read as
+ * supported — such a sys-core would reject the very generation the button would offer. A fresh object
+ * is returned so no stray binding field reaches the rest of the editor.
  */
 export function parseFormalizationCapability(value: unknown): SysFormalizationCapability {
 	const raw = value as Partial<Record<string, unknown>> | null;
 	if (!raw || typeof raw !== 'object') { throw new Error('sys-core returned an invalid formalization capability'); }
-	// A legacy reply only loses its binding requirement; it must not gain formalizability. An
-	// unsupported kind that asked for a binding is still a platform gap, not a Formal Spec.
-	const outcome = raw.outcome !== 'OPERATION_BINDING_REQUIRED'
-		? raw.outcome
-		: raw.status === 'UNSUPPORTED' ? 'PLATFORM_FORMAL_SPEC_GAP' : 'FORMAL_SPEC_SUPPORTED';
+	const outcome = raw.outcome;
 	if (!SYS_INTENT_KINDS.includes(raw.kind as SysIntentKind)
 		|| !STATUSES.includes(raw.status as SysFormalizationStatus)
 		|| !CONTEXTS.includes(raw.requiredContext as SysRequiredContext)

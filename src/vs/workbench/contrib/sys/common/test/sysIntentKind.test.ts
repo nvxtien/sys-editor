@@ -52,21 +52,18 @@ test('the capability reply from sys-core is accepted only in its exact contract 
 	assert.throws(() => parseFormalizationCapability({ ...CAPABILITY.ready, requiredContext: 'VIBES' }), /invalid formalization capability/);
 });
 
-test('a legacy OPERATION_BINDING_REQUIRED reply becomes FORMAL_SPEC_SUPPORTED', () => {
+test('a sys-core that still demands a binding is refused, not silently unlocked', () => {
+	// An older sys-core rejects `spec prepare` with OperationBindingRequired. Reading its reply as
+	// "supported" would render a Generate button that fails with a 502, so the reply is refused and
+	// the row falls back to "options unavailable" instead of offering a broken action.
 	const legacy = { kind: 'OPERATION_RULE', status: 'SUPPORTED', requiredContext: 'OPERATION', operationBinding: 'REQUIRED', outcome: 'OPERATION_BINDING_REQUIRED' };
-	assert.equal(parseFormalizationCapability(legacy).outcome, 'FORMAL_SPEC_SUPPORTED');
+	assert.throws(() => parseFormalizationCapability(legacy), /invalid formalization capability/);
 });
 
-test('a legacy operationBinding field is ignored, not validated', () => {
+test('a legacy operationBinding field alongside a current outcome is ignored, not validated', () => {
 	assert.equal(parseFormalizationCapability({ ...CAPABILITY.ready, operationBinding: 'REQUIRED' }).outcome, 'FORMAL_SPEC_SUPPORTED');
 	assert.equal(parseFormalizationCapability({ ...CAPABILITY.ready, operationBinding: 'nonsense' }).outcome, 'FORMAL_SPEC_SUPPORTED');
 	assert.equal((parseFormalizationCapability({ ...CAPABILITY.ready, operationBinding: 'REQUIRED' }) as unknown as Record<string, unknown>).operationBinding, undefined);
-});
-
-test('a legacy OPERATION_BINDING_REQUIRED does not unlock a kind the platform cannot formalize', () => {
-	const legacyGap = { kind: 'DATA_MODEL', status: 'UNSUPPORTED', requiredContext: 'ENTITY_MODEL', operationBinding: 'REQUIRED', outcome: 'OPERATION_BINDING_REQUIRED' };
-	assert.equal(parseFormalizationCapability(legacyGap).outcome, 'PLATFORM_FORMAL_SPEC_GAP');
-	assert.throws(() => assertSysDraftFormalizable(parseFormalizationCapability(legacyGap)), /PLATFORM_FORMAL_SPEC_GAP/);
 });
 
 test('a capability with no operationBinding at all parses', () => {
@@ -84,7 +81,7 @@ test('no note tells a user to bind an operation', () => {
 
 test('a record written before kinds existed needs no binding to be formalizable', () => {
 	assert.equal(parseStructuredIntent(raw(undefined), 'REQ-001').kind, undefined);
-	assert.doesNotThrow(() => assertSysDraftFormalizable(parseFormalizationCapability({ ...CAPABILITY.ready, operationBinding: 'REQUIRED', outcome: 'OPERATION_BINDING_REQUIRED' })));
+	assert.doesNotThrow(() => assertSysDraftFormalizable(parseFormalizationCapability(CAPABILITY.ready)));
 });
 
 test('drafting is refused with the reason that matches the outcome', () => {

@@ -5,7 +5,42 @@ Branch: `remove-manual-source-binding`
 Date: 2026-09-25
 
 RESULT:
-GO
+GO — but only after a follow-up fix to sys-core (2026-09-26).
+
+**Correction.** The first version of this report claimed GO while the feature was
+broken in the running app. Pressing `Generate Formal Spec` on an operation rule
+with no operation failed with:
+
+    sys-core failed (502): OperationBindingRequired (exit status 1)
+
+Root cause: this mission removed the binding gate from sys-editor only.
+`sys-core/src/capability.rs` still answered `OperationBindingRequired` for an
+operation rule without an operation, and `require_supported()` rejected the very
+generation the editor now offered. Normalizing that outcome to
+`FORMAL_SPEC_SUPPORTED` at the editor's parse boundary did not remove the
+dependency — it hid it until the user clicked, turning a clearly-explained gate
+into an opaque 502.
+
+The tests missed it because they checked that the button *appears*, never that it
+*works*: `OPERATION_RULE reaches Generate with no operation of its own` asserted a
+count of 1 and stopped there.
+
+Fixed by changing sys-core, which is what the mission's `NO_CORE_SOURCE_BINDING`
+invariant asked for all along and what the plan wrongly excluded:
+
+- `capability.rs`: an operation rule is `FORMAL_SPEC_SUPPORTED` regardless of any
+  operation; the `OperationBindingRequired` outcome and the `operation_binding`
+  field are gone.
+- `lifecycle.rs`: `generate_formal_spec` takes the semantic operation from the
+  intent (`semantic_operation`) and reports `OperationUnspecified` when the intent
+  states none — a semantic gap, never a missing source binding. `bind_operation`
+  and the `intent bind-operation` CLI command are removed.
+- sys-core suite: 28 tests, 0 failures. Verified end to end: `intent capability`
+  returns `FORMAL_SPEC_SUPPORTED` and `spec prepare` succeeds with no binding.
+
+sys-editor also stopped normalizing the retired outcome. A sys-core that still
+sends `OPERATION_BINDING_REQUIRED` is now refused, so the row shows "options
+unavailable" instead of offering a button that 502s.
 
 The editor-side mission is complete and verified by both unit tests and live
 Playwright coverage of the visible lifecycle.
@@ -40,7 +75,7 @@ root. The only remaining prompt in the flow is for the sys-platform installation
 root, which locates the platform, not a source symbol.
 
 CORE_SOURCE_BINDING_DEPENDENCY:
-0
+0 — only after the sys-core fix above. It was NOT 0 when first reported.
 
 The editor no longer reads sys-core's `operationBinding` field, and
 `parseFormalizationCapability` returns a fresh object so the field cannot escape
