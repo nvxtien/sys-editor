@@ -18,7 +18,7 @@
 - No replacement source-binding UI under another label. No new action may ask for a class, method, symbol, source file, or source root.
 - sys-core and sys-platform are not edited by this plan. Neither is the provider boundary: `LLM_CALLS_FROM_SYS_CORE = 0`, `LLM_CALLS_FROM_SYS_PLATFORM = 0`.
 - UI copy must not tell a user to bind an operation. The unsupported-kind state renders the literal token `PLATFORM_FORMAL_SPEC_GAP`.
-- Unit tests compile to `/private/tmp/sys-editor-unbind-test` following the repo's existing pattern; `npm run lint` passes before each commit.
+- Unit tests compile to `/private/tmp/sys-editor-unbind-test` with `--rootDir src`, never a narrower rootDir. A rootDir under the test's own directory makes `tsc` emit every out-of-rootDir dependency as a `.js` file **next to its `.ts` source**, and Vite then serves that stale `.js` instead of the `.ts` — which breaks the app at runtime. `npm run lint` passes before each commit.
 
 ## Review Focus
 
@@ -93,8 +93,8 @@ Then delete any remaining test in this file that asserts `operationBinding` is r
 Run:
 ```bash
 cd /Volumes/Work/dev/sys-editor
-npx tsc --skipLibCheck --target ES2022 --module NodeNext --moduleResolution NodeNext --rootDir src/vs/workbench/contrib/sys/common --outDir /private/tmp/sys-editor-unbind-test --noEmitOnError false src/vs/workbench/contrib/sys/common/test/sysIntentKind.test.ts
-node --test /private/tmp/sys-editor-unbind-test/test/sysIntentKind.test.js
+npx tsc --skipLibCheck --target ES2022 --module NodeNext --moduleResolution NodeNext --rootDir src --outDir /private/tmp/sys-editor-unbind-test --noEmitOnError false src/vs/workbench/contrib/sys/common/test/sysIntentKind.test.ts
+node --test /private/tmp/sys-editor-unbind-test/vs/workbench/contrib/sys/common/test/sysIntentKind.test.js
 ```
 Standalone compilation may report missing Node test type declarations; it must still emit the JavaScript.
 Expected: FAIL — the legacy reply throws `sys-core returned an invalid formalization capability`, and the gap note does not contain `PLATFORM_FORMAL_SPEC_GAP`.
@@ -212,8 +212,8 @@ test('the module exports no operation-binding assertion', async () => {
 Run:
 ```bash
 cd /Volumes/Work/dev/sys-editor
-npx tsc --skipLibCheck --target ES2022 --module NodeNext --moduleResolution NodeNext --rootDir src/vs/workbench/contrib/sys/common --outDir /private/tmp/sys-editor-unbind-test --noEmitOnError false src/vs/workbench/contrib/sys/common/test/sysFormalSpecDraft.test.ts
-node --test /private/tmp/sys-editor-unbind-test/test/sysFormalSpecDraft.test.js
+npx tsc --skipLibCheck --target ES2022 --module NodeNext --moduleResolution NodeNext --rootDir src --outDir /private/tmp/sys-editor-unbind-test --noEmitOnError false src/vs/workbench/contrib/sys/common/test/sysFormalSpecDraft.test.ts
+node --test /private/tmp/sys-editor-unbind-test/vs/workbench/contrib/sys/common/test/sysFormalSpecDraft.test.js
 ```
 Expected: FAIL — `assertSysDraftOperationBinding` is still exported and the gap message lacks `PLATFORM_FORMAL_SPEC_GAP`.
 
@@ -326,8 +326,8 @@ test('a semantic operation keeps its spaces and is never validated as a qualifie
 Run:
 ```bash
 cd /Volumes/Work/dev/sys-editor
-npx tsc --skipLibCheck --target ES2022 --module NodeNext --moduleResolution NodeNext --rootDir src/vs/workbench/contrib/sys/common --outDir /private/tmp/sys-editor-unbind-test --noEmitOnError false src/vs/workbench/contrib/sys/common/test/sysManifest.test.ts
-node --test /private/tmp/sys-editor-unbind-test/test/sysManifest.test.js
+npx tsc --skipLibCheck --target ES2022 --module NodeNext --moduleResolution NodeNext --rootDir src --outDir /private/tmp/sys-editor-unbind-test --noEmitOnError false src/vs/workbench/contrib/sys/common/test/sysManifest.test.ts
+node --test /private/tmp/sys-editor-unbind-test/vs/workbench/contrib/sys/common/test/sysManifest.test.js
 ```
 Expected: FAIL — `specOperation` is not exported and the built rule still has a `source_anchor`.
 
@@ -449,8 +449,8 @@ test('no service error copy tells a user to bind an operation', () => {
 Run:
 ```bash
 cd /Volumes/Work/dev/sys-editor
-npx tsc --skipLibCheck --target ES2022 --module NodeNext --moduleResolution NodeNext --rootDir src/vs/workbench/contrib/sys/common --outDir /private/tmp/sys-editor-unbind-test --noEmitOnError false src/vs/workbench/contrib/sys/common/test/sysProjectServiceContract.test.ts
-node --test /private/tmp/sys-editor-unbind-test/test/sysProjectServiceContract.test.js
+npx tsc --skipLibCheck --target ES2022 --module NodeNext --moduleResolution NodeNext --rootDir src --outDir /private/tmp/sys-editor-unbind-test --noEmitOnError false src/vs/workbench/contrib/sys/common/test/sysProjectServiceContract.test.ts
+node --test /private/tmp/sys-editor-unbind-test/vs/workbench/contrib/sys/common/test/sysProjectServiceContract.test.js
 ```
 Expected: FAIL — `bindOperation` is present and `approveSpec`'s message says "bind its operation".
 
@@ -561,8 +561,8 @@ test('Verify builds its manifest from the spec, not from a prompt', () => {
 Run:
 ```bash
 cd /Volumes/Work/dev/sys-editor
-npx tsc --skipLibCheck --target ES2022 --module NodeNext --moduleResolution NodeNext --rootDir src/vs/workbench/contrib/sys/common --outDir /private/tmp/sys-editor-unbind-test --noEmitOnError false src/vs/workbench/contrib/sys/common/test/sysWorkbenchNoSourceBinding.test.ts
-node --test /private/tmp/sys-editor-unbind-test/test/sysWorkbenchNoSourceBinding.test.js
+npx tsc --skipLibCheck --target ES2022 --module NodeNext --moduleResolution NodeNext --rootDir src --outDir /private/tmp/sys-editor-unbind-test --noEmitOnError false src/vs/workbench/contrib/sys/common/test/sysWorkbenchNoSourceBinding.test.ts
+node --test /private/tmp/sys-editor-unbind-test/vs/workbench/contrib/sys/common/test/sysWorkbenchNoSourceBinding.test.js
 ```
 Expected: FAIL on every test — the button, the prompts and the proposal action are all present.
 
@@ -636,8 +636,8 @@ Then run `npm run lint` and delete every import, constructor parameter and priva
 Run:
 ```bash
 cd /Volumes/Work/dev/sys-editor
-npx tsc --skipLibCheck --target ES2022 --module NodeNext --moduleResolution NodeNext --rootDir src/vs/workbench/contrib/sys/common --outDir /private/tmp/sys-editor-unbind-test --noEmitOnError false src/vs/workbench/contrib/sys/common/test/*.test.ts
-node --test /private/tmp/sys-editor-unbind-test/test/
+npx tsc --skipLibCheck --target ES2022 --module NodeNext --moduleResolution NodeNext --rootDir src --outDir /private/tmp/sys-editor-unbind-test --noEmitOnError false src/vs/workbench/contrib/sys/common/test/*.test.ts
+node --test /private/tmp/sys-editor-unbind-test/vs/workbench/contrib/sys/common/test/
 npm run lint
 ```
 Expected: PASS, with no unused-symbol lint errors.
@@ -792,8 +792,8 @@ Expected: no matches. sys-core stays a process boundary with no provider call.
 Run:
 ```bash
 cd /Volumes/Work/dev/sys-editor
-npx tsc --skipLibCheck --target ES2022 --module NodeNext --moduleResolution NodeNext --rootDir src/vs/workbench/contrib/sys/common --outDir /private/tmp/sys-editor-unbind-test --noEmitOnError false src/vs/workbench/contrib/sys/common/test/*.test.ts
-node --test /private/tmp/sys-editor-unbind-test/test/
+npx tsc --skipLibCheck --target ES2022 --module NodeNext --moduleResolution NodeNext --rootDir src --outDir /private/tmp/sys-editor-unbind-test --noEmitOnError false src/vs/workbench/contrib/sys/common/test/*.test.ts
+node --test /private/tmp/sys-editor-unbind-test/vs/workbench/contrib/sys/common/test/
 npm run lint
 npx playwright test
 ```

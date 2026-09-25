@@ -5,12 +5,21 @@ Branch: `remove-manual-source-binding`
 Date: 2026-09-25
 
 RESULT:
-NARROW
+GO
 
-The editor-side mission is complete and verified by unit tests. It is NARROW, not
-GO, because the mission's own acceptance asks for Playwright coverage of the
-visible lifecycle, and no GUI test in this repository can currently run: the app
-does not boot in the browser build for a reason that predates this work.
+The editor-side mission is complete and verified by both unit tests and live
+Playwright coverage of the visible lifecycle.
+
+An earlier revision of this report said NARROW and attributed a boot failure
+("SideX failed to start: platform.js does not provide an export named
+'OperatingSystem'") to a pre-existing `const enum` problem. That diagnosis was
+wrong. The real cause was 72 stray `.js` files sitting next to their `.ts` sources
+in `src/`, emitted by a `tsc` invocation whose `--rootDir` was narrower than the
+compiled files' dependency tree; `tsc` writes out-of-rootDir dependencies beside
+their sources, and Vite then resolved `./platform.js` to the stale emitted file,
+which inlines the const enum and therefore exports no `OperatingSystem`. The stray
+files were removed, the plan's compile command was corrected to `--rootDir src`,
+and the app boots.
 
 EDITOR_BIND_OPERATION_UI:
 REMOVED
@@ -66,12 +75,12 @@ sys-platform from `project_root`; the editor neither supplies nor infers a mappi
 and no source-mapping heuristic was added.
 
 TESTS:
-153 unit tests across 21 files in `src/vs/workbench/contrib/sys/common/test/`;
-151 pass. The 2 failures are harness artifacts of the repo's ad-hoc `tsc` pattern,
-not this change: `localServerRefresh.test.js` imports `../../sidexChat` from outside
-the compile `rootDir`, and `sysVerificationLive.test.js` needs
-`verification-v0.1.cinema.json`, which is not copied to the out dir. Both were
-verified against a clean checkout of the branch HEAD, not the working tree.
+155 unit tests across 21 files in `src/vs/workbench/contrib/sys/common/test/`;
+154 pass. Compiling with `--rootDir src` (the corrected command) resolved the
+`localServerRefresh` failure previously misreported as a harness limit. The single
+remaining failure is `sysVerificationLive.test.js`, which needs
+`verification-v0.1.cinema.json`, a fixture not copied to the out dir. The suite was
+also verified against a clean checkout of the branch HEAD, not the working tree.
 `npm run lint` reports 0 errors.
 
 New coverage, all written before the code and watched fail: the legacy
@@ -82,7 +91,23 @@ manifest emits no `source_anchor` and no derived symbol; no action label in the
 workbench reintroduces binding under another name.
 
 PLAYWRIGHT:
-WRITTEN, NOT PROVEN.
+PROVEN.
+
+`tests/gui/normalize-intent-live.spec.mjs`: 17 passed, 1 skipped, 1 failed. All
+seven `kind gating` cases pass, including `Bind operation` absent in every case,
+`PLATFORM_FORMAL_SPEC_GAP` shown for DATA_MODEL and RELATIONSHIP, and a supported
+OPERATION_RULE reaching `Generate Formal Spec` with no operation of its own. The new
+`the lifecycle never asks for a source identity` passes.
+
+The one failure is unrelated to this mission: `Normalize intent recovers when the
+server restarted on a new port` asserts `.sys/intents/REQ-001.intent.json` exists,
+an editor-side artifact from before Structured Intent state moved into sys-core.
+`tests/gui/gui-full-requirement-lifecycle.spec.mjs` also fails: its mocked Tauri
+bridge answers no sys-core call, so the row renders `Lifecycle unavailable` and no
+actions. Both predate this change and belong to the lifecycle work, not to source
+binding.
+
+The original text of this section follows, for the record.
 
 `tests/gui/normalize-intent-live.spec.mjs` is updated to the new lifecycle: the
 capability table asserts `Bind operation` has count 0 in every case, `DATA_MODEL`
@@ -120,5 +145,7 @@ REMAINING_PLATFORM_GAPS:
    verification result no longer opens the implementation at its declaration.
    Recovering this without a prompt requires gap 1.
 
-3. The browser build does not boot (`const enum OperatingSystem`), which blocks all
-   GUI verification of this and any other lifecycle work.
+3. Two GUI tests are stale against the sys-core lifecycle, independent of this
+   mission: `gui-full-requirement-lifecycle.spec.mjs` mocks no sys-core reply, and
+   `normalize-intent-live.spec.mjs:145` expects the retired
+   `.sys/intents/REQ-001.intent.json`.
