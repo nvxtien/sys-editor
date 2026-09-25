@@ -500,15 +500,25 @@
 	padding: 8px 16px;
 	background: var(--vscode-button-background);
 	color: var(--vscode-button-foreground);
-	border: none;
+	border: 1px solid color-mix(in srgb, var(--vscode-button-background) 75%, #000 25%);
 	border-radius: 4px;
 	cursor: pointer;
 	font-size: 12px;
 	font-weight: 500;
+	box-shadow: 0 3px 0 color-mix(in srgb, var(--vscode-button-background) 55%, #000 45%), 0 5px 10px rgba(0, 0, 0, 0.18);
+	transform: translateY(0);
+	transition: transform 100ms ease, box-shadow 100ms ease, background 100ms ease;
 }
 
 .sys-error-retry-btn:hover {
 	background: var(--vscode-button-hoverBackground);
+	transform: translateY(-1px);
+	box-shadow: 0 4px 0 color-mix(in srgb, var(--vscode-button-background) 55%, #000 45%), 0 7px 12px rgba(0, 0, 0, 0.2);
+}
+
+.sys-error-retry-btn:active {
+	transform: translateY(2px);
+	box-shadow: 0 1px 0 color-mix(in srgb, var(--vscode-button-background) 55%, #000 45%), 0 2px 5px rgba(0, 0, 0, 0.16);
 }
 
 .sys-error-retry-btn:focus {
@@ -854,22 +864,33 @@
 }
 
 .sys-semantic-workbench .sys-req-action {
-	padding: 2px 8px;
+	padding: 3px 9px;
 	font: inherit;
 	font-size: 11px;
 	color: var(--vscode-button-secondaryForeground);
 	background: var(--vscode-button-secondaryBackground);
-	border: none;
+	border: 1px solid color-mix(in srgb, var(--vscode-button-secondaryBackground) 72%, #000 28%);
 	border-radius: 2px;
 	cursor: pointer;
+	box-shadow: 0 2px 0 color-mix(in srgb, var(--vscode-button-secondaryBackground) 55%, #000 45%), 0 3px 7px rgba(0, 0, 0, 0.14);
+	transform: translateY(0);
+	transition: transform 100ms ease, box-shadow 100ms ease, background 100ms ease;
 }
 
 .sys-semantic-workbench .sys-req-action:hover {
 	background: var(--vscode-button-secondaryHoverBackground);
+	transform: translateY(-1px);
+	box-shadow: 0 3px 0 color-mix(in srgb, var(--vscode-button-secondaryBackground) 55%, #000 45%), 0 5px 9px rgba(0, 0, 0, 0.16);
 }
 
-.sys-semantic-workbench .sys-req-actions .sys-error-message {
-	flex-basis: 100%;
+.sys-semantic-workbench .sys-req-action:active {
+	transform: translateY(1px);
+	box-shadow: 0 1px 0 color-mix(in srgb, var(--vscode-button-secondaryBackground) 55%, #000 45%), 0 2px 4px rgba(0, 0, 0, 0.12);
+}
+
+.sys-semantic-workbench .sys-req-error {
+	margin: 6px 0 0;
 	width: 100%;
-	margin-top: 4px;
+	color: var(--vscode-errorForeground);
+	line-height: 1.4;
 }
