@@ -89,7 +89,7 @@ export function serializeStructuredIntent(intent: SysStructuredIntent): string {
 
 export type SysFormalizationStatus = 'SUPPORTED' | 'UNSUPPORTED' | 'PARTIALLY_SUPPORTED';
 export type SysRequiredContext = 'OPERATION' | 'ENTITY_MODEL' | 'WORKFLOW' | 'NONE';
-export type SysFormalizationOutcome = 'FORMAL_SPEC_SUPPORTED' | 'PLATFORM_FORMAL_SPEC_GAP' | 'NOT_FORMALIZABLE';
+export type SysFormalizationOutcome = 'FORMAL_SPEC_SUPPORTED' | 'OPERATION_UNSPECIFIED' | 'PLATFORM_FORMAL_SPEC_GAP' | 'NOT_FORMALIZABLE';
 
 export interface SysFormalizationCapability {
 	readonly kind: SysIntentKind;
@@ -100,7 +100,7 @@ export interface SysFormalizationCapability {
 
 const STATUSES: readonly SysFormalizationStatus[] = ['SUPPORTED', 'UNSUPPORTED', 'PARTIALLY_SUPPORTED'];
 const CONTEXTS: readonly SysRequiredContext[] = ['OPERATION', 'ENTITY_MODEL', 'WORKFLOW', 'NONE'];
-const OUTCOMES: readonly SysFormalizationOutcome[] = ['FORMAL_SPEC_SUPPORTED', 'PLATFORM_FORMAL_SPEC_GAP', 'NOT_FORMALIZABLE'];
+const OUTCOMES: readonly SysFormalizationOutcome[] = ['FORMAL_SPEC_SUPPORTED', 'OPERATION_UNSPECIFIED', 'PLATFORM_FORMAL_SPEC_GAP', 'NOT_FORMALIZABLE'];
 
 /**
  * The capability is decided by sys-core (`sys-core intent capability`), never here. The editor only
@@ -133,6 +133,7 @@ export function formalizationNote(capability: SysFormalizationCapability): strin
 	const label = SYS_INTENT_KIND_LABEL[capability.kind];
 	switch (capability.outcome) {
 		case 'FORMAL_SPEC_SUPPORTED': return undefined;
+		case 'OPERATION_UNSPECIFIED': return `${label}: this Structured Intent states no operation, and a Formal Spec must declare one. Clarify which operation the requirement governs and normalize again.`;
 		case 'PLATFORM_FORMAL_SPEC_GAP': return `${label}: PLATFORM_FORMAL_SPEC_GAP — the current Sys Platform grammar does not represent this intent kind yet. Its confirmed Structured Intent remains the governed record.`;
 		case 'NOT_FORMALIZABLE': return `${label} kind: nothing to formalize yet. Clarify the requirement and normalize again.`;
 	}

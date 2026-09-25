@@ -21,8 +21,19 @@ function record(kind: string | undefined, approvedContent?: string): SysStructur
 const CAPABILITY: Record<string, SysFormalizationCapability> = {
 	ready: { kind: 'OPERATION_RULE', status: 'SUPPORTED', requiredContext: 'OPERATION', outcome: 'FORMAL_SPEC_SUPPORTED' },
 	gap: { kind: 'DATA_MODEL', status: 'UNSUPPORTED', requiredContext: 'ENTITY_MODEL', outcome: 'PLATFORM_FORMAL_SPEC_GAP' },
-	unknown: { kind: 'UNKNOWN', status: 'UNSUPPORTED', requiredContext: 'NONE', outcome: 'NOT_FORMALIZABLE' }
+	unknown: { kind: 'UNKNOWN', status: 'UNSUPPORTED', requiredContext: 'NONE', outcome: 'NOT_FORMALIZABLE' },
+	unstated: { kind: 'OPERATION_RULE', status: 'SUPPORTED', requiredContext: 'OPERATION', outcome: 'OPERATION_UNSPECIFIED' }
 };
+
+test('an intent that states no operation is refused before a draft is attempted', () => {
+	// The grammar needs an Operation: declaration. Offering Generate here spends three LLM round
+	// trips and ends in "MALFORMED_SPEC missing Operation: declaration", so it is refused up front.
+	assert.equal(parseFormalizationCapability(CAPABILITY.unstated).outcome, 'OPERATION_UNSPECIFIED');
+	assert.throws(() => assertSysDraftFormalizable(CAPABILITY.unstated), /states no operation/);
+	const note = formalizationNote(CAPABILITY.unstated)!;
+	assert.match(note, /operation/i);
+	assert.doesNotMatch(note, /bind|binding|Class\.method/i);
+});
 
 test('parses each semantic kind and rejects an unknown kind value', () => {
 	for (const kind of ['OPERATION_RULE', 'DATA_MODEL', 'RELATIONSHIP', 'INVARIANT', 'WORKFLOW', 'UNKNOWN']) {
