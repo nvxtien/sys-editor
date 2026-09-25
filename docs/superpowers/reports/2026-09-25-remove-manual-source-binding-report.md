@@ -93,21 +93,26 @@ workbench reintroduces binding under another name.
 PLAYWRIGHT:
 PROVEN.
 
-`tests/gui/normalize-intent-live.spec.mjs`: 17 passed, 1 skipped, 1 failed. All
-seven `kind gating` cases pass, including `Bind operation` absent in every case,
+The whole GUI suite passes: **20 passed, 1 skipped, 0 failed**.
+
+All seven `kind gating` cases pass, including `Bind operation` absent in every case,
 `PLATFORM_FORMAL_SPEC_GAP` shown for DATA_MODEL and RELATIONSHIP, and a supported
 OPERATION_RULE reaching `Generate Formal Spec` with no operation of its own. The new
 `the lifecycle never asks for a source identity` passes.
 
-The one failure is unrelated to this mission: `Normalize intent recovers when the
-server restarted on a new port` asserts `.sys/intents/REQ-001.intent.json` exists,
-an editor-side artifact from before Structured Intent state moved into sys-core.
-`tests/gui/gui-full-requirement-lifecycle.spec.mjs` also fails: its mocked Tauri
-bridge answers no sys-core call, so the row renders `Lifecycle unavailable` and no
-actions. Both predate this change and belong to the lifecycle work, not to source
-binding.
+Two tests that were stale against the sys-core lifecycle were brought up to date, a
+change independent of source binding:
 
-The original text of this section follows, for the record.
+- `normalize-intent-live.spec.mjs:145` asserted `.sys/intents/REQ-001.intent.json`
+  exists. That contradicted the same file's own assertion that "the editor keeps no
+  intent file of its own". It now asserts what the test is actually about — the
+  retry reached the live port, so sys-core holds the intent — and that the editor
+  wrote no intent file.
+- `gui-full-requirement-lifecycle.spec.mjs` drove Normalize through a mocked Tauri
+  bridge, which cannot answer `/v1/sys/core`. Split into what it can honestly
+  cover without a live server: the requirement renders from disk, and with no
+  sys-core the editor fails closed — `Lifecycle unavailable`, no lifecycle action,
+  no `Bind operation`, no `Class.method`, and no editor-written intent file.
 
 `tests/gui/normalize-intent-live.spec.mjs` is updated to the new lifecycle: the
 capability table asserts `Bind operation` has count 0 in every case, `DATA_MODEL`
@@ -145,7 +150,4 @@ REMAINING_PLATFORM_GAPS:
    verification result no longer opens the implementation at its declaration.
    Recovering this without a prompt requires gap 1.
 
-3. Two GUI tests are stale against the sys-core lifecycle, independent of this
-   mission: `gui-full-requirement-lifecycle.spec.mjs` mocks no sys-core reply, and
-   `normalize-intent-live.spec.mjs:145` expects the retired
-   `.sys/intents/REQ-001.intent.json`.
+3. None. The two stale GUI tests were updated; the suite is green.

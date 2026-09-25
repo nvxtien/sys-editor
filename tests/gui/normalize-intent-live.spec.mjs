@@ -150,7 +150,9 @@ test('Normalize intent recovers when the server restarted on a new port after th
 	await workbench.getByRole('button', { name: 'Normalize intent' }).click();
 
 	await expect(workbench).toContainText('Review intent', { timeout: 60_000 });
-	expect(fs.existsSync(path.join(root, '.sys', 'intents', 'REQ-001.intent.json'))).toBe(true);
+	// The retry reached the live port: sys-core holds the intent. The editor keeps no intent file of its own.
+	expect((await coreJson(root, ['intent', 'show', 'REQ-001'])).draft.requirementId).toBe('REQ-001');
+	expect(fs.existsSync(path.join(root, '.sys', 'intents', 'REQ-001.intent.json'))).toBe(false);
 	expect(await page.evaluate(() => window.__endpointCalls)).toBeGreaterThanOrEqual(2);
 });
 
