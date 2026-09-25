@@ -112,7 +112,11 @@ const OUTCOMES: readonly SysFormalizationOutcome[] = ['FORMAL_SPEC_SUPPORTED', '
 export function parseFormalizationCapability(value: unknown): SysFormalizationCapability {
 	const raw = value as Partial<Record<string, unknown>> | null;
 	if (!raw || typeof raw !== 'object') { throw new Error('sys-core returned an invalid formalization capability'); }
-	const outcome = raw.outcome === 'OPERATION_BINDING_REQUIRED' ? 'FORMAL_SPEC_SUPPORTED' : raw.outcome;
+	// A legacy reply only loses its binding requirement; it must not gain formalizability. An
+	// unsupported kind that asked for a binding is still a platform gap, not a Formal Spec.
+	const outcome = raw.outcome !== 'OPERATION_BINDING_REQUIRED'
+		? raw.outcome
+		: raw.status === 'UNSUPPORTED' ? 'PLATFORM_FORMAL_SPEC_GAP' : 'FORMAL_SPEC_SUPPORTED';
 	if (!SYS_INTENT_KINDS.includes(raw.kind as SysIntentKind)
 		|| !STATUSES.includes(raw.status as SysFormalizationStatus)
 		|| !CONTEXTS.includes(raw.requiredContext as SysRequiredContext)

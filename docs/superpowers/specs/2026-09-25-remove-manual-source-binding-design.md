@@ -29,11 +29,19 @@ precondition anywhere in the editor reads a source symbol.
 
 ## Two facts that shape the design
 
-**The source-file pickers are already redundant.** In
+**The source-file pickers are not needed for recovery.** In
 `spec-code-sync/src/contract.rs`, `InputRule.source_anchor` is `Option<Anchor>`,
 and recovery runs from `project_root` plus `target_operation` alone
 (`recover_observed_project_located`). Dropping the file and source-root prompts
-costs no capability the platform was actually using.
+therefore costs nothing that verification itself depends on.
+
+It does cost one thing, recorded here rather than glossed over: `with_observed_span`
+attaches an observed span only to an anchor whose `kind` is `SOURCE`. With no
+`source_anchor` in the manifest, no span is ever returned, so `decideNavigation`
+falls through to `SYMBOL_FALLBACK` or `FILE_ONLY`. Clicking a verification result
+can no longer jump to the implementation's exact declaration. Restoring that
+precisely would require a source file, which is the prompt this change removes, so
+it belongs to sys-platform's source recovery and is reported as a remaining gap.
 
 **`target_operation` is still a source symbol.** `semantic-core --target <op>`
 resolves a `Class.method`. The Formal Spec grammar emits a semantic operation

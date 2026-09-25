@@ -63,6 +63,12 @@ test('a legacy operationBinding field is ignored, not validated', () => {
 	assert.equal((parseFormalizationCapability({ ...CAPABILITY.ready, operationBinding: 'REQUIRED' }) as unknown as Record<string, unknown>).operationBinding, undefined);
 });
 
+test('a legacy OPERATION_BINDING_REQUIRED does not unlock a kind the platform cannot formalize', () => {
+	const legacyGap = { kind: 'DATA_MODEL', status: 'UNSUPPORTED', requiredContext: 'ENTITY_MODEL', operationBinding: 'REQUIRED', outcome: 'OPERATION_BINDING_REQUIRED' };
+	assert.equal(parseFormalizationCapability(legacyGap).outcome, 'PLATFORM_FORMAL_SPEC_GAP');
+	assert.throws(() => assertSysDraftFormalizable(parseFormalizationCapability(legacyGap)), /PLATFORM_FORMAL_SPEC_GAP/);
+});
+
 test('a capability with no operationBinding at all parses', () => {
 	assert.equal(parseFormalizationCapability(CAPABILITY.ready).outcome, 'FORMAL_SPEC_SUPPORTED');
 });
