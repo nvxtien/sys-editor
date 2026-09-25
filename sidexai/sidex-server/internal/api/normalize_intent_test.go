@@ -61,3 +61,20 @@ func TestNormalizeIntentCarriesNoSourceOperationBinding(t *testing.T) {
 		t.Error("the prompt still asks for an authoritative operation")
 	}
 }
+
+// A data model states entities, fields and relationships. Putting its fields in `inputs` and its
+// relationships in `constraints` named them wrongly, and an operation of UNKNOWN read as a question
+// the user still had to answer. The shape a kind uses is part of the contract.
+func TestNormalizeIntentPromptStatesTheKindAwareShape(t *testing.T) {
+	for _, want := range []string{
+		`ENTITY = {"name": string, "fields": [FIELD]}`,
+		`FIELD = {"name": string, "type": string, "provenance":`,
+		`DATA_MODEL: entities (required)`,
+		`relationships is an ARRAY of FACT objects`,
+		`"operation": null`,
+	} {
+		if !strings.Contains(normalizeIntentSystemPrompt, want) {
+			t.Errorf("prompt is missing %q", want)
+		}
+	}
+}

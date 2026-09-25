@@ -20,6 +20,18 @@ export interface SysIntentFact {
 	readonly provenance: SysIntentProvenance;
 }
 
+/** One field of an entity: its own name and type, not a generic input fact. */
+export interface SysIntentField {
+	readonly name: string;
+	readonly type: string;
+	readonly provenance: SysIntentProvenance;
+}
+
+export interface SysIntentEntity {
+	readonly name: string;
+	readonly fields: readonly SysIntentField[];
+}
+
 export interface SysStructuredIntent {
 	readonly version: 1;
 	readonly requirementId: string;
@@ -27,7 +39,12 @@ export interface SysStructuredIntent {
 	readonly kind?: SysIntentKind;
 	readonly intentStatement: SysIntentFact;
 	readonly scope: SysIntentFact;
-	readonly operation: SysIntentFact;
+	/** null when the kind has no operation (a data model, a relationship); absent in older records. */
+	readonly operation: SysIntentFact | null;
+	/** Stated by a data model; absent for kinds that describe no entities. */
+	readonly entities?: readonly SysIntentEntity[];
+	/** How entities relate; absent for kinds that describe no relationships. */
+	readonly relationships?: readonly SysIntentFact[];
 	readonly inputs: readonly SysIntentFact[];
 	readonly constraints: readonly SysIntentFact[];
 	readonly effects: readonly SysIntentFact[];
@@ -52,6 +69,26 @@ function fact(value: unknown, label: string): SysIntentFact {
 	return value as SysIntentFact;
 }
 
+function entities(value: unknown): readonly SysIntentEntity[] {
+	if (!Array.isArray(value)) { throw new Error('Structured Intent has invalid entities'); }
+	return value.map(entity => {
+		const raw = entity as { name?: unknown; fields?: unknown };
+		if (!raw || typeof raw !== 'object' || typeof raw.name !== 'string' || !raw.name.trim() || !Array.isArray(raw.fields)) {
+			throw new Error('Structured Intent has invalid entities');
+		}
+		return {
+			name: raw.name,
+			fields: raw.fields.map(field => {
+				const f = field as { name?: unknown; type?: unknown; provenance?: unknown };
+				if (!f || typeof f !== 'object' || typeof f.name !== 'string' || !f.name.trim() || typeof f.type !== 'string' || !provenance.has(f.provenance as SysIntentProvenance)) {
+					throw new Error('Structured Intent has invalid entities');
+				}
+				return { name: f.name, type: f.type, provenance: f.provenance as SysIntentProvenance };
+			})
+		};
+	});
+}
+
 function facts(value: unknown, label: string): readonly SysIntentFact[] {
 	if (!Array.isArray(value)) { throw new Error(`Structured Intent has an invalid ${label}`); }
 	return value.map((item, index) => fact(item, `${label}[${index}]`));
@@ -74,7 +111,9 @@ export function parseStructuredIntent(value: unknown, requirementId: string, opt
 		...(raw.kind !== undefined ? { kind: raw.kind as SysIntentKind } : {}),
 		intentStatement: fact(raw.intentStatement, 'intentStatement'),
 		scope: fact(raw.scope, 'scope'),
-		operation: fact(raw.operation, 'operation'),
+		operation: raw.operation === null ? null : fact(raw.operation, 'operation'),
+		...(raw.entities === undefined ? {} : { entities: entities(raw.entities) }),
+		...(raw.relationships === undefined ? {} : { relationships: facts(raw.relationships, 'relationships') }),
 		inputs: facts(raw.inputs, 'inputs'),
 		constraints: facts(raw.constraints, 'constraints'),
 		effects: facts(raw.effects, 'effects'),

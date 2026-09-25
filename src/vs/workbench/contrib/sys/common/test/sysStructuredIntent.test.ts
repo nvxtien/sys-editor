@@ -34,3 +34,61 @@ test('a candidate with the wrong shape or provenance is rejected, never coerced'
 	assert.throws(() => parseStructuredIntent({ ...draft, inputs: { seats: { value: 's', provenance: 'SPECIFIED' } } }, 'REQ-001'), /invalid inputs/);
 	assert.throws(() => parseStructuredIntent({ ...draft, unknowns: [1] }, 'REQ-001'), /invalid unknowns/);
 });
+
+// Kind-aware shape: a data model states entities and relationships, and has no operation. Keeping
+// its fields in `inputs` and its relationships in `constraints` named them wrongly, and an
+// `operation` of UNKNOWN read as a question the user still had to answer.
+const dataModelRaw = {
+	version: 1,
+	requirementId: 'REQ-001',
+	kind: 'DATA_MODEL',
+	intentStatement: { value: 'Two entities', provenance: 'SPECIFIED' },
+	scope: { value: 'Category and Book', provenance: 'SPECIFIED' },
+	operation: null,
+	entities: [
+		{ name: 'Category', fields: [{ name: 'id', type: 'INT', provenance: 'SPECIFIED' }] },
+		{ name: 'Book', fields: [{ name: 'title', type: 'string', provenance: 'SPECIFIED' }] }
+	],
+	relationships: [{ value: 'Each Book belongs to exactly one Category', provenance: 'SPECIFIED' }],
+	inputs: [], constraints: [], effects: [], failureBehavior: [], unknowns: []
+};
+
+test('a data model intent parses entities, relationships and a null operation', () => {
+	const intent = parseStructuredIntent(dataModelRaw, 'REQ-001');
+	assert.equal(intent.operation, null);
+	assert.equal(intent.entities?.length, 2);
+	assert.equal(intent.entities?.[0].name, 'Category');
+	assert.deepEqual(intent.entities?.[0].fields[0], { name: 'id', type: 'INT', provenance: 'SPECIFIED' });
+	assert.equal(intent.relationships?.[0].value, 'Each Book belongs to exactly one Category');
+});
+
+test('an operation rule still parses its operation fact and needs no entities', () => {
+	const rule = parseStructuredIntent({
+		version: 1, requirementId: 'REQ-001', kind: 'OPERATION_RULE',
+		intentStatement: { value: 'x', provenance: 'SPECIFIED' }, scope: { value: 'x', provenance: 'SPECIFIED' },
+		operation: { value: 'create booking', provenance: 'SPECIFIED' },
+		inputs: [], constraints: [], effects: [], failureBehavior: [], unknowns: []
+	}, 'REQ-001');
+	assert.equal(rule.operation?.value, 'create booking');
+	assert.equal(rule.entities, undefined);
+});
+
+test('a malformed entity or relationship is rejected, never half-read', () => {
+	assert.throws(() => parseStructuredIntent({ ...dataModelRaw, entities: [{ name: 'Category' }] }, 'REQ-001'), /invalid entities/);
+	assert.throws(() => parseStructuredIntent({ ...dataModelRaw, entities: [{ name: '', fields: [] }] }, 'REQ-001'), /invalid entities/);
+	assert.throws(() => parseStructuredIntent({ ...dataModelRaw, entities: [{ name: 'C', fields: [{ name: 'id' }] }] }, 'REQ-001'), /invalid entities/);
+	assert.throws(() => parseStructuredIntent({ ...dataModelRaw, relationships: ['plain string'] }, 'REQ-001'), /invalid relationships/);
+});
+
+test('a record written before entities existed still parses unchanged', () => {
+	const legacy = parseStructuredIntent({
+		version: 1, requirementId: 'REQ-001', kind: 'DATA_MODEL',
+		intentStatement: { value: 'x', provenance: 'SPECIFIED' }, scope: { value: 'x', provenance: 'SPECIFIED' },
+		operation: { value: 'UNKNOWN', provenance: 'UNKNOWN' },
+		inputs: [{ value: 'Category.id: INT', provenance: 'SPECIFIED' }],
+		constraints: [], effects: [], failureBehavior: [], unknowns: []
+	}, 'REQ-001');
+	assert.equal(legacy.entities, undefined);
+	assert.equal(legacy.operation?.value, 'UNKNOWN');
+	assert.equal(legacy.inputs.length, 1);
+});

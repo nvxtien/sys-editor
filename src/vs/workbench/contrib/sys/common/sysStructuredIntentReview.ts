@@ -1,4 +1,4 @@
-import { formalizationNote, SYS_INTENT_KIND_LABEL, SysFormalizationCapability, SysIntentFact, SysIntentProvenance, SysStructuredIntentRecord } from './sysStructuredIntent.js';
+import { formalizationNote, SYS_INTENT_KIND_LABEL, SysFormalizationCapability, SysIntentEntity, SysIntentFact, SysIntentProvenance, SysStructuredIntentRecord } from './sysStructuredIntent.js';
 
 const PROVENANCE: Record<SysIntentProvenance, string> = {
 	SPECIFIED: 'stated by you',
@@ -11,8 +11,17 @@ const PROVENANCE: Record<SysIntentProvenance, string> = {
 const oneLine = (text: string) => text.replace(/\s*\n\s*/g, ' ').trim();
 
 function line(fact: SysIntentFact): string {
-	const value = fact.provenance === 'UNKNOWN' && fact.value.trim().toUpperCase() === 'UNKNOWN' ? 'Not bound yet' : oneLine(fact.value);
+	const value = fact.provenance === 'UNKNOWN' && fact.value.trim().toUpperCase() === 'UNKNOWN' ? 'Not stated' : oneLine(fact.value);
 	return `${value} — ${PROVENANCE[fact.provenance]}`;
+}
+
+function entitySections(entities: readonly SysIntentEntity[]): string[] {
+	return entities.flatMap(entity => [
+		`### ${entity.name}`,
+		'',
+		entity.fields.length ? entity.fields.map(field => `- ${field.name}: ${field.type} — ${PROVENANCE[field.provenance]}`).join('\n') : '_No fields stated._',
+		''
+	]);
 }
 
 function list(facts: readonly SysIntentFact[]): string {
@@ -27,6 +36,23 @@ export function renderStructuredIntentReview(record: SysStructuredIntentRecord, 
 	const d = record.draft;
 	const status = record.state === 'APPROVED' ? 'CONFIRMED' : record.state === 'STALE' ? 'STALE — the requirement changed after this was reviewed' : 'DRAFT — not yet confirmed';
 	const quoted = record.sourceRequirement.trim().split('\n').map(text => `> ${text}`).join('\n');
+	// Each kind states different things. A data model has entities and relationships and no
+	// operation; rendering it with the operation-rule layout asked the reader for an operation that
+	// does not exist. Sections a kind does not use are left out rather than shown empty.
+	const describesEntities = d.entities !== undefined || d.relationships !== undefined;
+	const sections = describesEntities
+		? [
+			...(d.entities?.length ? ['## Entities', '', ...entitySections(d.entities)] : []),
+			...(d.relationships?.length ? ['## Relationships', '', list(d.relationships), ''] : []),
+			...(d.constraints.length ? ['## Constraints', '', list(d.constraints), ''] : [])
+		]
+		: [
+			...(d.operation ? ['## Operation', '', line(d.operation), ''] : []),
+			'## Inputs', '', list(d.inputs), '',
+			'## Constraints', '', list(d.constraints), '',
+			'## Effects', '', list(d.effects), '',
+			'## Failure behavior', '', list(d.failureBehavior), ''
+		];
 	return [
 		`# ${d.requirementId} — Structured Intent review`,
 		'',
@@ -48,26 +74,7 @@ export function renderStructuredIntentReview(record: SysStructuredIntentRecord, 
 		'',
 		line(d.scope),
 		'',
-		'## Operation',
-		'',
-		line(d.operation),
-		'',
-		'## Inputs',
-		'',
-		list(d.inputs),
-		'',
-		'## Constraints',
-		'',
-		list(d.constraints),
-		'',
-		'## Effects',
-		'',
-		list(d.effects),
-		'',
-		'## Failure behavior',
-		'',
-		list(d.failureBehavior),
-		'',
+		...sections,
 		'## Open questions',
 		'',
 		d.unknowns.length ? d.unknowns.map(text => `- ${oneLine(text)}`).join('\n') : '_None._',

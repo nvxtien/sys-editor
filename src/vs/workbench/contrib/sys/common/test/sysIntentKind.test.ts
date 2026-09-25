@@ -120,3 +120,50 @@ test('the review page never claims a capability it could not read from core', ()
 	assert.ok(text.includes('could not be read from sys-core'));
 	assert.ok(!text.includes('A Formal Spec can be generated'));
 });
+
+const dataModelRecord = (): SysStructuredIntentRecord => ({
+	sourceRequirement: 'This requirement designs the data model.',
+	state: 'DRAFT',
+	draft: parseStructuredIntent({
+		version: 1, requirementId: 'REQ-001', kind: 'DATA_MODEL',
+		intentStatement: { value: 'Two entities', provenance: 'SPECIFIED' },
+		scope: { value: 'Category and Book', provenance: 'SPECIFIED' },
+		operation: null,
+		entities: [
+			{ name: 'Category', fields: [{ name: 'id', type: 'INT', provenance: 'SPECIFIED' }, { name: 'description', type: 'string', provenance: 'SPECIFIED' }] },
+			{ name: 'Book', fields: [{ name: 'title', type: 'string', provenance: 'SPECIFIED' }] }
+		],
+		relationships: [{ value: 'Each Book belongs to exactly one Category', provenance: 'SPECIFIED' }],
+		inputs: [], constraints: [], effects: [], failureBehavior: [], unknowns: ['Whether id is auto-generated']
+	}, 'REQ-001')
+});
+
+test('a data model review shows entities and relationships, and no operation section', () => {
+	const page = renderStructuredIntentReview(dataModelRecord(), CAPABILITY.gap);
+	assert.ok(page.includes('## Entities'), 'entities section missing');
+	assert.ok(page.includes('### Category'), 'entity heading missing');
+	assert.ok(page.includes('- id: INT'), 'field not rendered as name: type');
+	assert.ok(page.includes('### Book'));
+	assert.ok(page.includes('## Relationships'));
+	assert.ok(page.includes('Each Book belongs to exactly one Category'));
+	// A data model has no operation, no inputs, no effects and no failure behaviour to state.
+	for (const absent of ['## Operation', '## Inputs', '## Effects', '## Failure behavior', 'Not bound yet']) {
+		assert.ok(!page.includes(absent), `${absent} must not appear for a data model`);
+	}
+	assert.ok(page.includes('## Open questions'));
+	assert.ok(page.includes('PLATFORM_FORMAL_SPEC_GAP'));
+});
+
+test('an operation rule review keeps the operation layout', () => {
+	const page = renderStructuredIntentReview(record('OPERATION_RULE'), CAPABILITY.ready);
+	assert.ok(page.includes('## Operation'));
+	assert.ok(page.includes('## Inputs'));
+	assert.ok(page.includes('## Effects'));
+	assert.ok(!page.includes('## Entities'), 'an operation rule states no entities');
+});
+
+test('no review page ever says an operation is "not bound"', () => {
+	for (const page of [renderStructuredIntentReview(dataModelRecord(), CAPABILITY.gap), renderStructuredIntentReview(record('OPERATION_RULE'), CAPABILITY.ready)]) {
+		assert.doesNotMatch(page, /not bound/i);
+	}
+});
