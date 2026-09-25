@@ -25,10 +25,16 @@ const CAPABILITY: Record<string, SysFormalizationCapability> = {
 	unstated: { kind: 'OPERATION_RULE', status: 'SUPPORTED', requiredContext: 'OPERATION', outcome: 'OPERATION_UNSPECIFIED' }
 };
 
-test('an intent that states no operation is refused before a draft is attempted', () => {
-	// The grammar needs an Operation: declaration. Offering Generate here spends three LLM round
-	// trips and ends in "MALFORMED_SPEC missing Operation: declaration", so it is refused up front.
-	assert.equal(parseFormalizationCapability(CAPABILITY.unstated).outcome, 'OPERATION_UNSPECIFIED');
+test('an operation rule is offered generation even when its intent states no operation', () => {
+	// The Operation: declaration is semantic and the generator derives it from the intent statement.
+	// Gating on the operation field would block exactly the case generation exists to serve.
+	assert.equal(parseFormalizationCapability(CAPABILITY.ready).outcome, 'FORMAL_SPEC_SUPPORTED');
+	assert.doesNotThrow(() => assertSysDraftFormalizable(CAPABILITY.ready));
+});
+
+test('an unspecified-operation outcome reports a semantic gap, never a source binding', () => {
+	// sys-core reports this when generation itself could not ground an operation. It asks for the
+	// requirement to be clarified, never for a Class.method.
 	assert.throws(() => assertSysDraftFormalizable(CAPABILITY.unstated), /states no operation/);
 	const note = formalizationNote(CAPABILITY.unstated)!;
 	assert.match(note, /operation/i);

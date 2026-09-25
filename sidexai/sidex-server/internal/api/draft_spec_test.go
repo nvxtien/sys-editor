@@ -188,3 +188,22 @@ func TestDraftSpecPromptStatesTheSupportedRuleCombinations(t *testing.T) {
 		t.Error("prompt does not forbid combining an allowed-when rule with a failure rule")
 	}
 }
+
+// A Structured Intent often carries operation "UNKNOWN" while its intentStatement plainly describes
+// the action ("Create a booking only when at least one seat is requested"). The Operation:
+// declaration is semantic, so it is derived from that statement — never copied from a source symbol,
+// and never omitted, which the parser rejects as MALFORMED_SPEC.
+func TestDraftSpecPromptDerivesTheSemanticOperationFromTheIntent(t *testing.T) {
+	for _, required := range []string{
+		"derive",
+		"intentStatement",
+		"UNKNOWN",
+	} {
+		if !strings.Contains(draftSpecSystemPrompt, required) {
+			t.Errorf("prompt does not mention %q, so the model has no rule for an intent that states no operation", required)
+		}
+	}
+	if strings.Contains(draftSpecSystemPrompt, "Class.method") || strings.Contains(draftSpecSystemPrompt, "BookingService.createBooking") {
+		t.Error("prompt must never ask for a source symbol")
+	}
+}
