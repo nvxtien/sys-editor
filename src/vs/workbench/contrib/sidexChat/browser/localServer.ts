@@ -205,3 +205,31 @@ export function serverHttpUrl(configured: string | undefined): string {
 	const ws = serverWsUrl(configured);
 	return ws.replace(/^ws/, 'http');
 }
+
+/**
+ * Forget a memoized endpoint and ask the Rust side again. The supervisor restarts
+ * the server on a new port after a crash or rebuild, and a settled cache would
+ * otherwise keep every caller pointed at the dead one until the window reloads.
+ */
+export function refreshServerEndpoint(): Promise<IServerEndpoint> {
+	settled = false;
+	return resolveServerEndpoint();
+}
+
+/**
+ * `fetch` against the local server. If the cached port refuses the connection,
+ * re-resolve the endpoint once and retry. A user-configured server URL is never
+ * second-guessed.
+ */
+export async function fetchServer(configured: string | undefined, path: string, init: RequestInit): Promise<Response> {
+	const url = () => `${serverHttpUrl(configured)}${path}`;
+	try {
+		return await fetch(url(), init);
+	} catch (error) {
+		if (configured?.trim() || !(error instanceof TypeError)) {
+			throw error;
+		}
+		await refreshServerEndpoint();
+		return fetch(url(), init);
+	}
+}

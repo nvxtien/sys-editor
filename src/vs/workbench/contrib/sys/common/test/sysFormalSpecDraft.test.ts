@@ -1,10 +1,28 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { assertSysDraftOperationBinding, assertSysDraftServerAvailable, requestSysFormalSpecDraft } from '../sysFormalSpecDraft.js';
+import { assertSysDraftFormalizable, assertSysDraftServerAvailable, requestSysFormalSpecDraft } from '../sysFormalSpecDraft.js';
 
-test('requires an authoritative operation binding before drafting', () => {
-	assert.throws(() => assertSysDraftOperationBinding(undefined), /Bind this requirement to a source operation before drafting/);
-	assert.doesNotThrow(() => assertSysDraftOperationBinding('BookingService.createBooking'));
+test('a supported capability drafts with no operation binding anywhere in sight', () => {
+	assert.doesNotThrow(() => assertSysDraftFormalizable({ kind: 'OPERATION_RULE', status: 'SUPPORTED', requiredContext: 'OPERATION', outcome: 'FORMAL_SPEC_SUPPORTED' }));
+});
+
+test('an unsupported kind reports the platform gap and never asks for a binding', () => {
+	assert.throws(
+		() => assertSysDraftFormalizable({ kind: 'DATA_MODEL', status: 'UNSUPPORTED', requiredContext: 'ENTITY_MODEL', outcome: 'PLATFORM_FORMAL_SPEC_GAP' }),
+		(error: Error) => /PLATFORM_FORMAL_SPEC_GAP/.test(error.message) && !/bind|binding|Class\.method/i.test(error.message)
+	);
+});
+
+test('an unformalizable kind reports the kind, not a missing binding', () => {
+	assert.throws(
+		() => assertSysDraftFormalizable({ kind: 'UNKNOWN', status: 'UNSUPPORTED', requiredContext: 'NONE', outcome: 'NOT_FORMALIZABLE' }),
+		(error: Error) => /UNKNOWN/.test(error.message) && !/bind|binding/i.test(error.message)
+	);
+});
+
+test('the module exports no operation-binding assertion', async () => {
+	const module = await import('../sysFormalSpecDraft.js') as Record<string, unknown>;
+	assert.equal(module.assertSysDraftOperationBinding, undefined);
 });
 
 test('requires the local SideX server unless a custom server URL is configured', () => {

@@ -1,20 +1,25 @@
 /**
- * Builds a `verification.v0.1` manifest (see spec-code-sync/src/contract.rs `Input`) with exactly one rule, for
- * one requirement's Verify run. All fields are human-declared input, mirroring the real manifest schema — this
- * never infers or looks up an operation's location; the caller supplies it.
+ * Builds a `verification.v0.1` manifest (see spec-code-sync/src/contract.rs `Input`) with exactly one rule,
+ * for one requirement's Verify run. `target_operation` is the Formal Spec's own semantic operation, never a
+ * source symbol: determining which code that operation corresponds to is sys-platform's responsibility, and
+ * `source_anchor` is left out so nothing here claims a mapping the editor has not been told.
  */
-const OPERATION = /^[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*)+$/;
+const OPERATION_LINE = /^Operation:[ \t]*(.*)$/m;
 
-/** Validated immediately before building+running a manifest — never stored as project metadata. */
-export function validateTargetOperation(text: string): string | undefined {
-	return OPERATION.test(text.trim()) ? undefined : 'Use a qualified name like BookingService.createBooking';
+/** The semantic operation a Formal Spec declares, e.g. `create booking`. Throws when the spec declares none. */
+export function specOperation(specText: string): string {
+	const operation = OPERATION_LINE.exec(specText)?.[1].trim();
+	if (!operation) {
+		throw new Error('This Formal Spec declares no `Operation:`. Add one to the spec before verifying.');
+	}
+	return operation;
 }
 
 export interface ManifestInput {
 	readonly projectId: string;
 	readonly projectRoot: string;
-	readonly targetOperation: string;
-	readonly sourceFile: string;
+	/** The Formal Spec's semantic operation. */
+	readonly operation: string;
 	readonly ruleId: string;
 	readonly title: string;
 	readonly specFile: string;
@@ -28,22 +33,19 @@ export interface Verification01Manifest {
 		readonly id: string;
 		readonly title: string;
 		readonly spec_file: string;
-		readonly source_anchor: { readonly kind: 'SOURCE'; readonly label: string; readonly file: string; readonly symbol: string };
 		readonly spec_anchor: { readonly kind: 'SPEC'; readonly label: string; readonly file: string };
 	}[];
 }
 
 export function buildManifest(input: ManifestInput): Verification01Manifest {
-	const symbol = input.targetOperation.slice(input.targetOperation.lastIndexOf('.') + 1);
 	return {
 		project_id: input.projectId,
 		project_root: input.projectRoot,
-		target_operation: input.targetOperation,
+		target_operation: input.operation,
 		rules: [{
 			id: input.ruleId,
 			title: input.title,
 			spec_file: input.specFile,
-			source_anchor: { kind: 'SOURCE', label: input.targetOperation, file: input.sourceFile, symbol },
 			spec_anchor: { kind: 'SPEC', label: `${input.ruleId}.spec`, file: input.specFile }
 		}]
 	};
