@@ -23,7 +23,8 @@ import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { TaskProcessTransport } from './sysVerificationProviderService.js';
 import { ISideXTaskService } from '../../../../platform/sidex/common/sidexTaskService.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
-import { IEditorService } from '../../../services/editor/common/editorService.js';
+import { IEditorService, SIDE_GROUP } from '../../../services/editor/common/editorService.js';
+import { requestGeneratedCode } from '../common/sysGeneratedCode.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { isSysWorkspaceMissing, validateDraftCandidate } from '../common/sysPlatformFlow.js';
@@ -32,7 +33,8 @@ import { resolveServerEndpoint, serverHttpUrl, waitForServerEndpoint } from '../
 import { assertSysDraftFormalizable, assertSysDraftServerAvailable, requestSysFormalSpecDraft } from '../common/sysFormalSpecDraft.js';
 import { draftFormalSpecWithRepair } from '../common/sysFormalSpecRepair.js';
 import { newSysRequestId, requestStructuredIntent, sysTrace } from '../common/sysStructuredIntentDraft.js';
-import { formalizationNote } from '../common/sysStructuredIntent.js';
+import { formalizationNote, serializeStructuredIntent } from '../common/sysStructuredIntent.js';
+import { requestIntentScenarios } from '../common/sysIntentScenarios.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { ISysSemanticSnapshotService, SysProjectSnapshot } from '../common/sysSemanticSnapshot.js';
 import {
@@ -115,6 +117,12 @@ export class SysSemanticWorkbenchView extends ViewPane {
 	private loadPromise: Promise<void> | undefined;
 	private loadError: string | undefined;
 	private readonly actionErrors = new Map<string, string>();
+	/**
+	 * The failure of an action that belongs to no requirement row ("New requirement"). Rendering
+	 * clears the whole panel, so a message written straight into the DOM is wiped by the very
+	 * render the action triggers; remembering it here is what lets the reader see it.
+	 */
+	private sectionError: string | undefined;
 
 	protected override renderBody(parent: HTMLElement): void {
 		console.info('[SYS_LOAD_01] renderBody entered');
@@ -168,6 +176,7 @@ export class SysSemanticWorkbenchView extends ViewPane {
 				const section = DOM.append(parent, this._section('Get started'));
 				DOM.append(section, $('p')).textContent = 'No governed requirements yet. Create the first requirement for this workspace.';
 				this._action(section, 'Create first requirement', 'sys-error-retry-btn', () => this._createRequirement());
+				if (this.sectionError) { DOM.append(section, $('p.sys-error-message')).textContent = this.sectionError; }
 				return;
 			}
 			case 'READY': {
@@ -177,6 +186,7 @@ export class SysSemanticWorkbenchView extends ViewPane {
 					this._renderRequirementRow(section, row);
 				}
 				this._action(section, 'New requirement', 'sys-error-retry-btn', () => this._createRequirement());
+				if (this.sectionError) { DOM.append(section, $('p.sys-error-message')).textContent = this.sectionError; }
 				this._renderPlatformRow(parent, state.project.platformRoot);
 			}
 		}
@@ -216,15 +226,31 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		b.textContent = label;
 		b.addEventListener('click', e => {
 			e.stopPropagation();
+			// Normalize and Review call a provider and take seconds. Without this the button looks
+			// inert and the click reads as having done nothing, so it gets pressed again.
+			if (b.disabled) { return; }
+			b.disabled = true;
+			b.setAttribute('aria-busy', 'true');
+			b.textContent = `${label}…`;
 			const requirementId = host.dataset.sysRequirementId;
-			if (requirementId) { this.actionErrors.delete(requirementId); }
+			if (requirementId) { this.actionErrors.delete(requirementId); } else { this.sectionError = undefined; }
 			void run().catch(err => {
 				const message = `${label} failed: ${err instanceof Error ? err.message : String(err)}`;
-				if (requirementId) { this.actionErrors.set(requirementId, message); }
-				const row = host.parentElement;
-				if (!row) { return; }
-				const slot = row.querySelector('.sys-req-error') ?? DOM.append(row, $('p.sys-error-message.sys-req-error'));
+				if (requirementId) { this.actionErrors.set(requirementId, message); } else { this.sectionError = message; }
+				// An action rendered on a section ("New requirement") has no row to report into.
+				// Falling back to the host keeps the message next to the button that failed instead
+				// of dropping it, which made a failed click read as having done nothing at all.
+				const target = host.parentElement ?? host;
+				const slot = target.querySelector('.sys-req-error') ?? DOM.append(target, $('p.sys-error-message.sys-req-error'));
 				slot.textContent = message;
+				// Nothing about a swallowed failure is recoverable from the UI alone.
+				console.error(`[SYS_ACTION] ${label}: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
+			}).finally(() => {
+				// The row is usually re-rendered by now and this button discarded; restoring it is
+				// what makes the case where it is not — an error, or a no-op action — recoverable.
+				b.disabled = false;
+				b.removeAttribute('aria-busy');
+				b.textContent = label;
 			});
 		});
 		return b;
@@ -353,10 +379,11 @@ export class SysSemanticWorkbenchView extends ViewPane {
 			sysTrace(requestId, 'prepared', `context_bytes=${proposalContext.length}`);
 			// Read the port after prepare: a stale cached port is re-resolved by the core call above.
 			const httpUrl = serverHttpUrl(configuredServerUrl);
-			const structuredIntent = await requestStructuredIntent(httpUrl, model, id, proposalContext, undefined, requestId);
+			const structuredIntent = await requestStructuredIntent(httpUrl, model, id, proposalContext, requestId);
 			await this.projectService.writeStructuredIntent(id, structuredIntent);
 			sysTrace(requestId, 'saved', `requirement=${id}`);
-			await this.editorService.openEditor({ resource: await this.projectService.writeStructuredIntentReview(id) });
+			const scenarios = await this._scenariosFor(id, httpUrl);
+			await this.editorService.openEditor({ resource: await this.projectService.writeStructuredIntentReview(id, scenarios) });
 			sysTrace(requestId, 'ui_refresh', 'row re-renders from .sys/intents');
 		} catch (error) {
 			sysTrace(requestId, 'failed', `error=${error instanceof Error ? error.message : String(error)}`);
@@ -364,11 +391,66 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		}
 	}
 
+	/**
+	 * Opens the review page, with Gherkin scenarios generated for this viewing. The scenarios are a
+	 * reading aid only: they are rendered into the page, never written into the intent, so opening a
+	 * review never changes the identity of what was confirmed. If the provider cannot be reached the
+	 * page still opens without them — a reviewer must always be able to see what they are confirming.
+	 */
+	/**
+	 * Gherkin scenarios for the review page, generated for this viewing. They are a reading aid:
+	 * rendered into the page, never written into the intent, so opening a review never changes the
+	 * identity of what was confirmed. Any failure yields undefined — a reviewer must always be able
+	 * to see what they are confirming, whatever the provider is doing.
+	 */
+	private async _scenariosFor(id: string, httpUrl?: string): Promise<string | undefined> {
+		const model = this.sidexChatService.serverModel;
+		if (!model) { return undefined; }
+		try {
+			const record = await this.projectService.readStructuredIntent(id);
+			if (!record) { return undefined; }
+			if (httpUrl === undefined) {
+				const configuredServerUrl = this.configurationService.getValue<string>('sidex.chat.serverUrl');
+				const endpoint = configuredServerUrl?.trim() ? await resolveServerEndpoint() : await waitForServerEndpoint();
+				if (!endpoint.running && !configuredServerUrl?.trim()) { return undefined; }
+				httpUrl = serverHttpUrl(configuredServerUrl);
+			}
+			return await requestIntentScenarios(httpUrl, model, serializeStructuredIntent(record.draft));
+		} catch {
+			return undefined;
+		}
+	}
+
+
 	private async _confirmIntent(id: string): Promise<void> {
 		const record = await this.projectService.readStructuredIntent(id);
 		if (!record) { throw new Error('Normalize this requirement before confirming its Structured Intent.'); }
-		const { confirmed } = await this.dialogService.confirm({ message: 'Confirm this Structured Intent?', detail: 'Only the exact reviewed Structured Intent will authorize Formal Spec generation.', primaryButton: 'Confirm intent' });
-		if (confirmed) { await this.projectService.approveStructuredIntent(id); }
+		const { confirmed } = await this.dialogService.confirm({ message: 'Confirm this Structured Intent?', detail: 'Confirming records this exact Structured Intent as approved, then generates code from it into this project’s source tree. No file that already exists is overwritten.', primaryButton: 'Confirm intent' });
+		if (!confirmed) { return; }
+		// Approval is the governed record and is recorded first, on its own. Code generation runs
+		// after and can fail without unmaking it: the provider does not get a vote on what the user
+		// confirmed, and a failed generation is retried by confirming again.
+		await this.projectService.approveStructuredIntent(id);
+		await this._generateCode(id);
+	}
+
+	/**
+	 * Code for a confirmed Structured Intent, written into the project's own source tree in the
+	 * language it is already written in, and opened beside the intent it came from. It is ordinary
+	 * source: sys-core does not know it exists, and nothing ties it to a Formal Spec generated later.
+	 */
+	private async _generateCode(id: string): Promise<void> {
+		const model = this.sidexChatService.serverModel;
+		if (!model) { throw new Error('No model is selected. Open SideX Settings → Models and choose one.'); }
+		const configuredServerUrl = this.configurationService.getValue<string>('sidex.chat.serverUrl');
+		const endpoint = configuredServerUrl?.trim() ? await resolveServerEndpoint() : await waitForServerEndpoint();
+		assertSysDraftServerAvailable(endpoint.running, configuredServerUrl, endpoint.error);
+		// The platform prepares the context and reads the answer. Everything between is transport.
+		const context = await this.projectService.prepareCodeContext(id);
+		const candidate = await requestGeneratedCode(serverHttpUrl(configuredServerUrl), model, context);
+		const files = await this.projectService.acceptCodeCandidate(id, candidate);
+		const written = await this.projectService.writeGeneratedCode(files);
+		for (const resource of written) { await this.editorService.openEditor({ resource }, SIDE_GROUP); }
 	}
 
 	private async _approveFormalSpec(id: string): Promise<void> {
@@ -445,12 +527,11 @@ export class SysSemanticWorkbenchView extends ViewPane {
 			: 'Draft · unformalized · needs review';
 		const actions = DOM.append(el, $('div.sys-req-actions'));
 		actions.dataset.sysRequirementId = row.id;
-		if (!row.missing && !row.lifecycleUnavailable) {
+		if (!row.missing && !row.empty && !row.lifecycleUnavailable) {
 			const intentState = row.structuredIntentState ?? 'NOT_CREATED';
 			if (intentState === 'NOT_CREATED' || intentState === 'STALE') {
 				this._action(actions, 'Normalize intent', 'sys-req-action', () => this._normalizeIntent(row.id));
 			} else {
-				this._action(actions, 'Review intent', 'sys-req-action', async () => { await this.editorService.openEditor({ resource: await this.projectService.writeStructuredIntentReview(row.id) }); });
 				if (intentState === 'DRAFT') {
 					this._action(actions, 'Confirm intent', 'sys-req-action', () => this._confirmIntent(row.id));
 				}
@@ -462,17 +543,21 @@ export class SysSemanticWorkbenchView extends ViewPane {
 				this._action(actions, 'Approve Formal Spec', 'sys-req-action', () => this._approveFormalSpec(row.id));
 			}
 		}
-		if (row.status === 'DRAFT_UNFORMALIZED' && !row.missing && !row.lifecycleUnavailable) {
-			this._action(actions, 'Approve intent', 'sys-req-action', () => this.projectService.approveRequirement(row.id));
-		}
 		const kindNote = intentStateOf(row) === 'APPROVED' ? (row.formalization ? formalizationNote(row.formalization) : 'Formal Spec options unavailable: sys-core did not answer.') : undefined;
 		if (kindNote) { DOM.append(el, $('div.sys-req-binding.sys-req-kind-note')).textContent = kindNote; }
 		if (row.lifecycleUnavailable) { DOM.append(el, $('div.sys-req-binding.sys-req-kind-note')).textContent = 'Lifecycle unavailable: sys-core did not answer, so no state is shown.'; }
+		// A blank requirement has nothing to normalize or approve, so it offers neither. Say what to
+		// do instead of leaving the row with only Delete and no explanation.
+		if (row.empty) { DOM.append(el, $('div.sys-req-binding.sys-req-kind-note')).textContent = 'Write the requirement in the editor and save it, then normalize its intent.'; }
 		const specCheck = row.hasSpec ? this.specChecks.get(row.id) : undefined;
 		DOM.append(el, $('div.sys-req-binding')).textContent = row.hasSpec ? `spec: ${this._specLabel(specCheck)}` : 'No .spec file yet';
-		this._action(actions, row.hasSpec ? 'Edit spec' : 'Add spec', 'sys-req-action', async () => {
-			await this.editorService.openEditor({ resource: await this.projectService.createSpec(row.id) });
-		});
+		// Authoring a spec by hand for a kind the platform cannot formalize is a dead end: the spec
+		// can be written but never approved, because approval requires the same capability.
+		if (row.hasSpec || row.formalization?.outcome === 'FORMAL_SPEC_SUPPORTED') {
+			this._action(actions, row.hasSpec ? 'Edit spec' : 'Add spec', 'sys-req-action', async () => {
+				await this.editorService.openEditor({ resource: await this.projectService.createSpec(row.id) });
+			});
+		}
 		if (row.hasSpec) {
 			this._action(actions, 'Check syntax', 'sys-req-action', () => this._checkSpec(row.id));
 			this._action(actions, 'Verify', 'sys-req-action', () => this._verify(row.id, row.title));
@@ -814,7 +899,7 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		DOM.append(formSection, $('h3.sys-intent-section-title')).textContent = 'Your clarification:';
 
 		const inputContainer = DOM.append(formSection, $('div.sys-intent-input-container'));
-		const textarea = DOM.append(inputContainer, $('textarea.sys-intent-textarea'));
+		const textarea = DOM.append(inputContainer, $<HTMLTextAreaElement>('textarea.sys-intent-textarea'));
 		textarea.placeholder = 'Enter your clarification here...';
 		textarea.value = item.candidateMeaning ?? '';
 		textarea.setAttribute('aria-label', 'Enter clarification for intent item');
@@ -918,7 +1003,7 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		const newMeaningSection = DOM.append(replaceSection, $('div.sys-intent-replacement-part'));
 		DOM.append(newMeaningSection, $('h4.sys-intent-replacement-label')).textContent = 'Proposed replacement:';
 		const inputContainer = DOM.append(newMeaningSection, $('div.sys-intent-input-container'));
-		const textarea = DOM.append(inputContainer, $('textarea.sys-intent-textarea'));
+		const textarea = DOM.append(inputContainer, $<HTMLTextAreaElement>('textarea.sys-intent-textarea'));
 		textarea.value = details.replacementNewMeaning ?? '';
 		textarea.placeholder = 'Enter replacement clarification...';
 		textarea.setAttribute('aria-label', 'Enter replacement clarification');

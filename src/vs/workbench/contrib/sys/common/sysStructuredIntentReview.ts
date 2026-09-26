@@ -1,4 +1,4 @@
-import { formalizationNote, SYS_INTENT_KIND_LABEL, SysFormalizationCapability, SysIntentFact, SysIntentProvenance, SysStructuredIntentRecord } from './sysStructuredIntent.js';
+import { formalizationNote, SYS_INTENT_KIND_LABEL, SysFormalizationCapability, SysIntentEntity, SysIntentFact, SysIntentProvenance, SysStructuredIntentRecord } from './sysStructuredIntent.js';
 
 const PROVENANCE: Record<SysIntentProvenance, string> = {
 	SPECIFIED: 'stated by you',
@@ -11,8 +11,25 @@ const PROVENANCE: Record<SysIntentProvenance, string> = {
 const oneLine = (text: string) => text.replace(/\s*\n\s*/g, ' ').trim();
 
 function line(fact: SysIntentFact): string {
-	const value = fact.provenance === 'UNKNOWN' && fact.value.trim().toUpperCase() === 'UNKNOWN' ? 'Not bound yet' : oneLine(fact.value);
+	const value = fact.provenance === 'UNKNOWN' && fact.value.trim().toUpperCase() === 'UNKNOWN' ? 'Not stated' : oneLine(fact.value);
 	return `${value} — ${PROVENANCE[fact.provenance]}`;
+}
+
+/**
+ * Scenarios are multi-line Gherkin, so they are fenced and kept verbatim — `line()` would collapse
+ * them to one line and `list()` would bullet them, and either makes them unreadable.
+ */
+function scenarioSection(gherkin: string): string[] {
+	return ['## Scenarios', '', '```gherkin', gherkin.trimEnd(), '```', ''];
+}
+
+function entitySections(entities: readonly SysIntentEntity[]): string[] {
+	return entities.flatMap(entity => [
+		`### ${entity.name}`,
+		'',
+		entity.fields.length ? entity.fields.map(field => `- ${field.name}: ${field.type} — ${PROVENANCE[field.provenance]}`).join('\n') : '_No fields stated._',
+		''
+	]);
 }
 
 function list(facts: readonly SysIntentFact[]): string {
@@ -20,13 +37,45 @@ function list(facts: readonly SysIntentFact[]): string {
 }
 
 /**
+ * Only a kind the platform can actually formalize is promised a Formal Spec. A kind it cannot
+ * formalize says nothing: the promise would be false, and the reason is platform vocabulary the
+ * reader did not ask for. A capability sys-core could not answer is not a gap, and says so.
+ */
+function capabilityLines(capability: SysFormalizationCapability | undefined): string[] {
+	if (!capability) { return ['What can be formalized for this kind could not be read from sys-core.', '']; }
+	if (capability.outcome === 'FORMAL_SPEC_SUPPORTED') { return ['A Formal Spec can be generated from this intent once it is confirmed.', '']; }
+	const note = formalizationNote(capability);
+	return note ? [note, ''] : [];
+}
+
+/**
  * A plain-language projection of the Structured Intent JSON for human review. It is derived from the
  * same record that gets confirmed, never edited, and never a second source of truth.
  */
-export function renderStructuredIntentReview(record: SysStructuredIntentRecord, capability: SysFormalizationCapability | undefined): string {
+export function renderStructuredIntentReview(record: SysStructuredIntentRecord, capability: SysFormalizationCapability | undefined, scenarios?: string): string {
 	const d = record.draft;
 	const status = record.state === 'APPROVED' ? 'CONFIRMED' : record.state === 'STALE' ? 'STALE — the requirement changed after this was reviewed' : 'DRAFT — not yet confirmed';
 	const quoted = record.sourceRequirement.trim().split('\n').map(text => `> ${text}`).join('\n');
+	// Each kind states different things. A data model has entities and relationships and no
+	// operation; rendering it with the operation-rule layout asked the reader for an operation that
+	// does not exist. Sections a kind does not use are left out rather than shown empty.
+	const describesEntities = d.entities !== undefined || d.relationships !== undefined;
+	const scenarioLines = scenarios?.trim() ? scenarioSection(scenarios) : [];
+	const sections = describesEntities
+		? [
+			...scenarioLines,
+			...(d.entities?.length ? ['## Entities', '', ...entitySections(d.entities)] : []),
+			...(d.relationships?.length ? ['## Relationships', '', list(d.relationships), ''] : []),
+			...(d.constraints.length ? ['## Constraints', '', list(d.constraints), ''] : [])
+		]
+		: [
+			...scenarioLines,
+			...(d.operation ? ['## Operation', '', line(d.operation), ''] : []),
+			'## Inputs', '', list(d.inputs), '',
+			'## Constraints', '', list(d.constraints), '',
+			'## Effects', '', list(d.effects), '',
+			'## Failure behavior', '', list(d.failureBehavior), ''
+		];
 	return [
 		`# ${d.requirementId} — Structured Intent review`,
 		'',
@@ -38,8 +87,7 @@ export function renderStructuredIntentReview(record: SysStructuredIntentRecord, 
 		'',
 		d.kind ? `${SYS_INTENT_KIND_LABEL[d.kind]} — ⚠ model’s classification, please check` : `${SYS_INTENT_KIND_LABEL.OPERATION_RULE} — recorded before kinds existed`,
 		'',
-		capability ? formalizationNote(capability) ?? 'A Formal Spec can be generated from this intent once it is confirmed.' : 'What can be formalized for this kind could not be read from sys-core.',
-		'',
+		...capabilityLines(capability),
 		'## Intent',
 		'',
 		line(d.intentStatement),
@@ -48,26 +96,7 @@ export function renderStructuredIntentReview(record: SysStructuredIntentRecord, 
 		'',
 		line(d.scope),
 		'',
-		'## Operation',
-		'',
-		line(d.operation),
-		'',
-		'## Inputs',
-		'',
-		list(d.inputs),
-		'',
-		'## Constraints',
-		'',
-		list(d.constraints),
-		'',
-		'## Effects',
-		'',
-		list(d.effects),
-		'',
-		'## Failure behavior',
-		'',
-		list(d.failureBehavior),
-		'',
+		...sections,
 		'## Open questions',
 		'',
 		d.unknowns.length ? d.unknowns.map(text => `- ${oneLine(text)}`).join('\n') : '_None._',

@@ -11,6 +11,8 @@ import { EMPTY_PROJECT, SYS_PROJECT_FILE, SysProject, SysProjectState, addRequir
 import { isSysArtifactState, parseLifecycle, SysLifecycle } from '../common/sysLifecycle.js';
 import { parseFormalizationCapability, parseStructuredIntent, serializeStructuredIntent, SysFormalizationCapability, SysStructuredIntent, SysStructuredIntentRecord } from '../common/sysStructuredIntent.js';
 import { Verification01Manifest } from '../common/sysManifest.js';
+import { refuseToOverwrite, SysGeneratedFile } from '../common/sysGeneratedCode.js';
+import { sysCoreErrorMessage } from '../common/sysCoreError.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { fetchServer, resolveServerEndpoint, waitForServerEndpoint } from '../../sidexChat/browser/localServer.js';
 
@@ -27,8 +29,12 @@ export interface ISysProjectService {
 	createRequirement(): Promise<URI>;
 	resourceOf(id: string): URI;
 	resourceOfSpec(id: string): URI;
-	/** Regenerates the plain-language review page from the Structured Intent JSON and returns its resource. */
-	writeStructuredIntentReview(id: string): Promise<URI>;
+	/**
+	 * Regenerates the plain-language review page from the Structured Intent JSON and returns its
+	 * resource. `scenarios` is an optional Gherkin projection shown alongside; it is rendered, never
+	 * persisted into the intent, so reviewing never changes what was confirmed.
+	 */
+	writeStructuredIntentReview(id: string, scenarios?: string): Promise<URI>;
 	/** Creates an empty .spec file (if absent) and returns it, ready to be opened in the editor. */
 	createSpec(id: string): Promise<URI>;
 	/** Approves the exact current requirement text in sys-core. */
@@ -45,6 +51,16 @@ export interface ISysProjectService {
 	setPlatformRoot(path: string | undefined): Promise<void>;
 	/** '' from getState() when not configured; the READY/NO_SYS_PROJECT_YET project's platformRoot. */
 	getPlatformRoot(): Promise<string | undefined>;
+	/** Everything sys-core says is needed to realise this confirmed intent as code, forwarded unread. */
+	prepareCodeContext(id: string): Promise<string>;
+	/** Asks sys-core what a provider's answer means: the files to write, or an error naming why not. */
+	acceptCodeCandidate(id: string, candidate: string): Promise<readonly SysGeneratedFile[]>;
+	/**
+	 * Writes generated code into the project's source tree and returns the files written, in order.
+	 * Writes nothing at all if any of them already exists: overwriting a file the user wrote is not
+	 * something a generation step gets to do silently.
+	 */
+	writeGeneratedCode(files: readonly SysGeneratedFile[]): Promise<readonly URI[]>;
 	/** Writes a one-rule manifest for a single requirement's Verify run to .sys/verification/<id>.manifest.json. */
 	writeManifest(id: string, manifest: Verification01Manifest): Promise<URI>;
 }
@@ -130,14 +146,41 @@ class SysProjectService extends Disposable implements ISysProjectService {
 		return URI.joinPath(this.folders()[0], specFile(id));
 	}
 
-	async writeStructuredIntentReview(id: string): Promise<URI> {
+	async writeStructuredIntentReview(id: string, scenarios?: string): Promise<URI> {
 		const record = await this.readStructuredIntent(id);
 		if (!record) { throw new Error('Structured Intent has not been normalized yet.'); }
 		const folder = URI.joinPath(this.folders()[0], '.sys', 'intents');
 		const resource = URI.joinPath(folder, `${id}.intent.review.md`);
 		await this.files.createFolder(folder);
-		await this.files.writeFile(resource, VSBuffer.fromString(renderStructuredIntentReview(record, await this.formalizationCapability(id))));
+		await this.files.writeFile(resource, VSBuffer.fromString(renderStructuredIntentReview(record, await this.formalizationCapability(id), scenarios)));
 		return resource;
+	}
+
+	async prepareCodeContext(id: string): Promise<string> {
+		return this.coreResponse(['code', 'prepare', id]);
+	}
+
+	async acceptCodeCandidate(id: string, candidate: string): Promise<readonly SysGeneratedFile[]> {
+		// The platform states the answer format and reads it; interpreting it here would put a
+		// decision about meaning in the editor, where it could not be verified.
+		const answer = JSON.parse(await this.coreResponse(['code', 'accept', id], candidate)) as { files?: SysGeneratedFile[] };
+		return answer.files ?? [];
+	}
+
+	async writeGeneratedCode(files: readonly SysGeneratedFile[]): Promise<readonly URI[]> {
+		const root = this.folders()[0];
+		const targets = files.map(file => ({ file, resource: URI.joinPath(root, file.path) }));
+		// Every one is checked before any is written: a half-written generation leaves the project
+		// in a state neither the user nor the next generation can reason about.
+		const clashes: string[] = [];
+		for (const { file, resource } of targets) {
+			if (await this.files.exists(resource)) { clashes.push(file.path); }
+		}
+		refuseToOverwrite(clashes);
+		for (const { file, resource } of targets) {
+			await this.files.writeFile(resource, VSBuffer.fromString(file.code.endsWith('\n') ? file.code : file.code + '\n'));
+		}
+		return targets.map(target => target.resource);
 	}
 
 	async createSpec(id: string): Promise<URI> {
@@ -162,15 +205,25 @@ class SysProjectService extends Disposable implements ISysProjectService {
 		this._onDidChange.fire();
 	}
 
+	/**
+	 * Every call here is a round trip to a server that may never answer. A hung call never settles,
+	 * and because a running action disables its button, the whole row goes silent: later clicks are
+	 * swallowed and the app looks dead. The deadline covers resolving the endpoint too, which is
+	 * where a missing server actually stalls.
+	 */
 	private async coreResponse(args: readonly string[], input?: string): Promise<string> {
 		const configured = this.configuration.getValue<string>('sidex.chat.serverUrl');
-		if (configured?.trim()) { await resolveServerEndpoint(); } else { await waitForServerEndpoint(); }
-		const response = await fetchServer(configured, '/v1/sys/core', {
+		const deadline = new Promise<never>((_, reject) =>
+			setTimeout(() => reject(new Error('sys-core did not answer in time')), 15000));
+		await Promise.race([configured?.trim() ? resolveServerEndpoint() : waitForServerEndpoint(), deadline]);
+		const response = await Promise.race([fetchServer(configured, '/v1/sys/core', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ workspace: this.folders()[0].fsPath, args, ...(input === undefined ? {} : { input }) })
-		});
-		if (!response.ok) { throw new Error(`sys-core failed (${response.status}): ${await response.text()}`); }
+		}), deadline]);
+		// Every platform failure reaches a person through here, so it is said in their words once,
+		// rather than each caller deciding whether to print a code at them.
+		if (!response.ok) { throw new Error(sysCoreErrorMessage(await response.text())); }
 		return response.text();
 	}
 
@@ -260,6 +313,12 @@ class SysProjectService extends Disposable implements ISysProjectService {
 		await this.files.del(this.resourceOf(id)).catch(ignoreMissing);
 		await this.files.del(this.resourceOfSpec(id)).catch(ignoreMissing);
 		await this.files.del(URI.joinPath(this.folders()[0], '.sys', 'intents', `${id}.intent.review.md`)).catch(ignoreMissing);
+		// Generated code is ordinary project source, not a lifecycle artifact: deleting a
+		// requirement does not delete source files the user may since have built on.
+		// sys-core owns the record, intent and spec. Without this they outlive the requirement, and
+		// because ids are reused the next one created inherits them — approval it never earned.
+		// Asked before the project file forgets the id, so a failure here leaves nothing orphaned.
+		await this.core(['requirement', 'forget', id]);
 		await this.save(removeRequirement(project, id));
 	}
 }

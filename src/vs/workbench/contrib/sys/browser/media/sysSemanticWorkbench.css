@@ -894,3 +894,39 @@
 	color: var(--vscode-errorForeground);
 	line-height: 1.4;
 }
+
+/*
+ * A running action. Normalize waits on a provider for tens of seconds; three dots on the label are
+ * easy to miss, so the button also carries a moving bar. Without it the click reads as a no-op and
+ * gets repeated.
+ */
+.sys-semantic-workbench button[aria-busy="true"] {
+	position: relative;
+	overflow: hidden;
+	opacity: 0.85;
+	cursor: progress;
+}
+
+.sys-semantic-workbench button[aria-busy="true"]::after {
+	content: '';
+	position: absolute;
+	left: 0;
+	bottom: 0;
+	height: 2px;
+	width: 40%;
+	background: var(--vscode-progressBar-background, var(--vscode-focusBorder, #0078d4));
+	animation: sys-action-busy 1.1s ease-in-out infinite;
+}
+
+@keyframes sys-action-busy {
+	0% { transform: translateX(-100%); }
+	100% { transform: translateX(250%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.sys-semantic-workbench button[aria-busy="true"]::after {
+		animation: none;
+		width: 100%;
+		opacity: 0.6;
+	}
+}

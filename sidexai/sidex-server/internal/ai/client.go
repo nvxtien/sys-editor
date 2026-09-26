@@ -608,5 +608,10 @@ func SanitizeErrorForDisplay(err error) string {
 			return "The AI service is temporarily unavailable. Please try again."
 		}
 	}
+	// A rate limit is temporary and the reader's next move is simply to wait. The provider's raw
+	// JSON says nothing they can act on and reads like the app is misconfigured.
+	if strings.Contains(lower, "error 429") || strings.Contains(lower, "rate_limit") || strings.Contains(lower, "rate limit") {
+		return "The model provider's rate limit was reached. Wait a moment and try again."
+	}
 	return msg
 }

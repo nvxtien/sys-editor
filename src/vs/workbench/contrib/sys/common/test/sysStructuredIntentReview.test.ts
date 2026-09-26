@@ -39,7 +39,7 @@ test('renders every section as plain text with no JSON syntax', () => {
 test('tells the reviewer what to check: model guesses and unknowns are flagged, explicit facts are not', () => {
 	const text = renderStructuredIntentReview(record(), undefined);
 	assert.ok(text.includes('Data model only — ⚠ model’s guess, please check'));
-	assert.ok(text.includes('Not bound yet — ⚠ unknown, needs an answer'));
+	assert.ok(text.includes('Not stated — ⚠ unknown, needs an answer'));
 	assert.ok(text.includes('category_id must reference a category — derived from what you stated'));
 	assert.ok(!text.includes('Define Category and Book with a one-to-many relationship — ⚠'));
 });

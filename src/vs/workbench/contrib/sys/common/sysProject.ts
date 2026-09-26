@@ -17,7 +17,7 @@ export const specFile = (id: string) => `${SYS_SPECS_DIR}/${id}.spec`;
 export type SysRequirementStatus = 'DRAFT_UNFORMALIZED' | 'APPROVED_UNFORMALIZED';
 export interface SysRequirementRef { readonly id: string }
 export interface SysProject { readonly version: 1; readonly requirements: readonly SysRequirementRef[]; readonly platformRoot?: string }
-export interface SysRequirementRow { readonly id: string; readonly title: string; readonly status: SysRequirementStatus; readonly missing: boolean; readonly hasSpec: boolean; readonly structuredIntentState?: SysStructuredIntentState; readonly formalization?: SysFormalizationCapability; readonly formalSpecState?: SysFormalSpecState; readonly lifecycleUnavailable?: true }
+export interface SysRequirementRow { readonly id: string; readonly title: string; readonly status: SysRequirementStatus; readonly missing: boolean; /** The file exists but holds no text yet: nothing to normalize or approve. */ readonly empty: boolean; readonly hasSpec: boolean; readonly structuredIntentState?: SysStructuredIntentState; readonly formalization?: SysFormalizationCapability; readonly formalSpecState?: SysFormalSpecState; readonly lifecycleUnavailable?: true }
 
 export type SysProjectState =
 	| { readonly kind: 'NO_WORKSPACE' }
@@ -100,6 +100,7 @@ export async function loadProjectState(
 				title: body === undefined ? '(file missing)' : titleOf(body),
 				status: lifecycle?.requirement.approved ? 'APPROVED_UNFORMALIZED' : 'DRAFT_UNFORMALIZED',
 				missing: body === undefined,
+				empty: body !== undefined && !body.trim(),
 				hasSpec,
 				...(lifecycle ? { structuredIntentState: lifecycle.structuredIntent.state, formalSpecState: lifecycle.formalSpec.state } : { lifecycleUnavailable: true as const })
 			});

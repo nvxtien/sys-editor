@@ -39,7 +39,7 @@ test('ids are sequential, stable and independent of text; removal never renumber
 test('persist and reload: project.json + requirement file + core lifecycle give the same id, title and honest DRAFT status', async () => {
 	const p = addRequirement(EMPTY_PROJECT).project;
 	const state = await loadProjectState(['/a'], files({ [A]: serializeProject(p), '/a/.sys/requirements/REQ-001.md': '# A booking needs a seat\nmore' }), core());
-	assert.deepEqual(state, { kind: 'READY', project: p, rows: [{ id: 'REQ-001', title: 'A booking needs a seat', status: 'DRAFT_UNFORMALIZED', missing: false, hasSpec: false, structuredIntentState: 'NOT_CREATED', formalSpecState: 'NOT_CREATED' }] });
+	assert.deepEqual(state, { kind: 'READY', project: p, rows: [{ id: 'REQ-001', title: 'A booking needs a seat', status: 'DRAFT_UNFORMALIZED', missing: false, empty: false, hasSpec: false, structuredIntentState: 'NOT_CREATED', formalSpecState: 'NOT_CREATED' }] });
 });
 
 test('workspace A state never appears in workspace B', async () => {
@@ -70,14 +70,14 @@ test('approval fields left in project.json by older editors are ignored and drop
 test('when sys-core cannot answer the row says so and invents no state', async () => {
 	const p = addRequirement(EMPTY_PROJECT).project;
 	const state = await loadProjectState(['/a'], files({ [A]: serializeProject(p), '/a/.sys/requirements/REQ-001.md': 'x' }), noCore);
-	assert.deepEqual((state as { rows: unknown }).rows, [{ id: 'REQ-001', title: 'x', status: 'DRAFT_UNFORMALIZED', missing: false, hasSpec: false, lifecycleUnavailable: true }]);
+	assert.deepEqual((state as { rows: unknown }).rows, [{ id: 'REQ-001', title: 'x', status: 'DRAFT_UNFORMALIZED', missing: false, empty: false, hasSpec: false, lifecycleUnavailable: true }]);
 });
 
 test('a requirement file deleted by hand is shown as missing, not hidden or approved', async () => {
 	const p = addRequirement(EMPTY_PROJECT).project;
 	const gone = lifecycle('REQ-001', { requirement: { present: false, approved: false, identity: null } });
 	const state = await loadProjectState(['/a'], files({ [A]: serializeProject(p) }), core({ 'REQ-001': gone }));
-	assert.deepEqual((state as { rows: unknown }).rows, [{ id: 'REQ-001', title: '(file missing)', status: 'DRAFT_UNFORMALIZED', missing: true, hasSpec: false, structuredIntentState: 'NOT_CREATED', formalSpecState: 'NOT_CREATED' }]);
+	assert.deepEqual((state as { rows: unknown }).rows, [{ id: 'REQ-001', title: '(file missing)', status: 'DRAFT_UNFORMALIZED', missing: true, empty: false, hasSpec: false, structuredIntentState: 'NOT_CREATED', formalSpecState: 'NOT_CREATED' }]);
 });
 
 test('titleOf uses the first non-empty line without markdown heading marks', () => {
@@ -123,4 +123,25 @@ test('the editor keeps no lifecycle rules of its own: approval, staleness and ge
 	for (const gone of ['structuredIntentState', 'approveStructuredIntent', 'formalSpecState', 'canGenerateFormalSpec', 'formalizationCapability']) {
 		assert.ok(!(gone in intent), `sysStructuredIntent still exports ${gone}`);
 	}
+});
+
+// A requirement created but not yet written has nothing to normalize or approve. Offering those
+// actions leads straight to "Save the raw requirement before normalizing intent."
+test('a requirement with no text yet is marked empty', async () => {
+	const project = { version: 1 as const, requirements: [{ id: 'REQ-001' }] };
+	const state = await loadProjectState(['file:///w'], async path =>
+		path.endsWith('project.json') ? JSON.stringify(project) : path.endsWith('REQ-001.md') ? '   \n\n' : undefined,
+		async () => undefined);
+	const row = (state as { rows: { empty: boolean; missing: boolean; title: string }[] }).rows[0];
+	assert.equal(row.empty, true);
+	assert.equal(row.missing, false, 'the file exists, it is just blank');
+	assert.equal(row.title, '(empty)');
+});
+
+test('a requirement with text is not empty', async () => {
+	const project = { version: 1 as const, requirements: [{ id: 'REQ-001' }] };
+	const state = await loadProjectState(['file:///w'], async path =>
+		path.endsWith('project.json') ? JSON.stringify(project) : path.endsWith('REQ-001.md') ? 'A booking needs a seat' : undefined,
+		async () => undefined);
+	assert.equal((state as { rows: { empty: boolean }[] }).rows[0].empty, false);
 });

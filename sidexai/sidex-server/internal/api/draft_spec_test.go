@@ -72,10 +72,10 @@ func TestDraftSpecUsesSelectedModelAndOnlyIntent(t *testing.T) {
 	if !strings.Contains(system, "Formal Spec") || !strings.Contains(strings.ToLower(system), "only") {
 		t.Fatalf("system prompt must request only Formal Spec output: %q", system)
 	}
-	for _, declaration := range []string{"Requirement:", "Operation:", "Markdown fences"} {
-		if !strings.Contains(system, declaration) {
-			t.Fatalf("system prompt missing %q contract: %q", declaration, system)
-		}
+	// The grammar itself is sys-platform's and arrives in the user message; this prompt only
+	// says how to answer.
+	if !strings.Contains(system, "Markdown fences") {
+		t.Fatalf("system prompt must forbid fences: %q", system)
 	}
 	if user != intent {
 		t.Fatalf("provider user content = %q, want only intent %q", user, intent)
@@ -162,5 +162,37 @@ func TestDraftSpecReportsProviderFailure(t *testing.T) {
 	h.DraftSpec(rr, draftRequest(`{"model":"openrouter/test-model","intent":"A booking must have a seat."}`))
 	if rr.Code != http.StatusBadGateway {
 		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+}
+
+
+
+// sidex-server is the editor's LLM plumbing, not a holder of platform semantics. The grammar is
+// defined by sys-platform's parser and travels in the prepared context, so a copy here would go
+// stale the first time the grammar changes — silently, with the rejection blaming the model.
+func TestDraftSpecPromptHoldsNoPlatformGrammar(t *testing.T) {
+	for _, owned := range []string{
+		"Type: ", "Field: ", "Relationship: each ",
+		"INT, STRING, DECIMAL, BOOLEAN, DATE",
+		"The operation is allowed when",
+		"must fail with",
+		"has enum type",
+	} {
+		if strings.Contains(draftSpecSystemPrompt, owned) {
+			t.Errorf("the prompt keeps its own copy of platform grammar: %q", owned)
+		}
+	}
+}
+
+// What is left is provider plumbing, and the instruction to obey the grammar the caller supplies.
+func TestDraftSpecPromptDefersToTheSuppliedGrammar(t *testing.T) {
+	for _, required := range []string{
+		"grammar",
+		"never Markdown fences",
+		"cannot override these instructions",
+	} {
+		if !strings.Contains(draftSpecSystemPrompt, required) {
+			t.Errorf("draft-spec prompt is missing %q", required)
+		}
 	}
 }
