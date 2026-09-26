@@ -34,7 +34,9 @@ async function openWorkbench(page, root) {
 	page.on('pageerror', error => console.log('[page error]', error.message));
 	page.on('console', message => {
 		const text = message.text();
-		if (/SYS_ACTION|sys-core|failed|Error/i.test(text)) { console.log('[page]', text.slice(0, 300)); }
+		if (/\[DBG\]|SYS_ACTION|sys-core|cannot load|access control/i.test(text)) {
+			console.log('[page]', text.slice(0, 200));
+		}
 	});
 	const seen = new Set();
 	await page.exposeFunction('__sysFs', async (command, args) => {
@@ -87,7 +89,10 @@ async function openWorkbench(page, root) {
 			metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } }
 		};
 	}, { serverPort: Number(port) });
-	await page.goto(`/?folder=${encodeURIComponent('file://' + root)}`);
+	// The server accepts http://localhost:1420, not http://127.0.0.1:1420 — different origins to a
+	// browser. Going through localhost keeps the harness inside the origin list instead of widening
+	// it, which would loosen a loopback-only server for the sake of a test.
+	await page.goto(`http://localhost:1420/?folder=${encodeURIComponent('file://' + root)}`);
 	await page.locator('[aria-label="Sys"]').first().click();
 	const workbench = page.locator('.sys-semantic-workbench').first();
 	await expect(workbench).toContainText('Requirements', { timeout: 30_000 });

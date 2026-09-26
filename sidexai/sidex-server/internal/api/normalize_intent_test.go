@@ -79,7 +79,7 @@ func TestNormalizeIntentPromptStatesTheKindAwareShape(t *testing.T) {
 	for _, want := range []string{
 		`ENTITY = {"name": string, "fields": [FIELD]}`,
 		`FIELD = {"name": string, "type": string, "provenance":`,
-		`DATA_MODEL: entities (required)`,
+		`DATA_MODEL: entities, fields and their types. Uses entities (required)`,
 		`relationships is an ARRAY of FACT objects`,
 		`"operation": null`,
 	} {
