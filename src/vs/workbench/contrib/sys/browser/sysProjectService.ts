@@ -11,6 +11,7 @@ import { EMPTY_PROJECT, SYS_PROJECT_FILE, SysProject, SysProjectState, addRequir
 import { isSysArtifactState, parseLifecycle, SysLifecycle } from '../common/sysLifecycle.js';
 import { parseFormalizationCapability, parseStructuredIntent, serializeStructuredIntent, SysFormalizationCapability, SysStructuredIntent, SysStructuredIntentRecord } from '../common/sysStructuredIntent.js';
 import { Verification01Manifest } from '../common/sysManifest.js';
+import { projectLanguage, SysProjectLanguage } from '../common/sysGeneratedCode.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { fetchServer, resolveServerEndpoint, waitForServerEndpoint } from '../../sidexChat/browser/localServer.js';
 
@@ -49,6 +50,10 @@ export interface ISysProjectService {
 	setPlatformRoot(path: string | undefined): Promise<void>;
 	/** '' from getState() when not configured; the READY/NO_SYS_PROJECT_YET project's platformRoot. */
 	getPlatformRoot(): Promise<string | undefined>;
+	/** The language the open project is written in, read from the build file at its root; undefined when no marker is there. */
+	projectLanguage(): Promise<SysProjectLanguage | undefined>;
+	/** Writes code generated from a confirmed Structured Intent beside it, at .sys/intents/<id>.code.<ext>. */
+	writeGeneratedCode(id: string, language: SysProjectLanguage, code: string): Promise<URI>;
 	/** Writes a one-rule manifest for a single requirement's Verify run to .sys/verification/<id>.manifest.json. */
 	writeManifest(id: string, manifest: Verification01Manifest): Promise<URI>;
 }
@@ -141,6 +146,21 @@ class SysProjectService extends Disposable implements ISysProjectService {
 		const resource = URI.joinPath(folder, `${id}.intent.review.md`);
 		await this.files.createFolder(folder);
 		await this.files.writeFile(resource, VSBuffer.fromString(renderStructuredIntentReview(record, await this.formalizationCapability(id), scenarios)));
+		return resource;
+	}
+
+	async projectLanguage(): Promise<SysProjectLanguage | undefined> {
+		const folders = this.folders();
+		if (folders.length !== 1) { return undefined; }
+		const root = await this.files.resolve(folders[0]);
+		return projectLanguage(root.children?.map(child => child.name) ?? []);
+	}
+
+	async writeGeneratedCode(id: string, language: SysProjectLanguage, code: string): Promise<URI> {
+		const folder = URI.joinPath(this.folders()[0], '.sys', 'intents');
+		const resource = URI.joinPath(folder, `${id}.code.${language.extension}`);
+		await this.files.createFolder(folder);
+		await this.files.writeFile(resource, VSBuffer.fromString(code.endsWith('\n') ? code : code + '\n'));
 		return resource;
 	}
 
@@ -271,7 +291,13 @@ class SysProjectService extends Disposable implements ISysProjectService {
 		const ignoreMissing = (e: unknown) => { if (!(e instanceof FileOperationError && e.fileOperationResult === FileOperationResult.FILE_NOT_FOUND)) { throw e; } };
 		await this.files.del(this.resourceOf(id)).catch(ignoreMissing);
 		await this.files.del(this.resourceOfSpec(id)).catch(ignoreMissing);
-		await this.files.del(URI.joinPath(this.folders()[0], '.sys', 'intents', `${id}.intent.review.md`)).catch(ignoreMissing);
+		const intents = URI.joinPath(this.folders()[0], '.sys', 'intents');
+		await this.files.del(URI.joinPath(intents, `${id}.intent.review.md`)).catch(ignoreMissing);
+		// The generated code's extension is whatever the project's language was when it was written,
+		// which nothing records. Matched by name so a later language change cannot orphan it.
+		for (const child of (await this.files.resolve(intents).catch(() => undefined))?.children ?? []) {
+			if (child.name.startsWith(`${id}.code.`)) { await this.files.del(child.resource).catch(ignoreMissing); }
+		}
 		// sys-core owns the record, intent and spec. Without this they outlive the requirement, and
 		// because ids are reused the next one created inherits them — approval it never earned.
 		// Asked before the project file forgets the id, so a failure here leaves nothing orphaned.

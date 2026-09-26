@@ -70,17 +70,22 @@ func (h *Handler) IntentScenarios(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"scenarios": stripFence(out.String())})
 }
 
-// Models wrap output in a fence unprompted; a fence rendered inside the review page is noise.
+// Models wrap output in a fence unprompted; a fence rendered inside the review page is noise, and
+// one saved into a source file is a syntax error.
+//
+// Every fence line goes, not just the outer pair: an answer in several blocks kept its inner
+// fences, which put "```" in the middle of a .java file the editor then wrote to disk.
 func stripFence(text string) string {
 	trimmed := strings.TrimSpace(text)
 	if !strings.HasPrefix(trimmed, "```") {
 		return trimmed
 	}
-	if newline := strings.IndexByte(trimmed, '\n'); newline >= 0 {
-		trimmed = trimmed[newline+1:]
+	lines := strings.Split(trimmed, "\n")
+	kept := lines[:0]
+	for _, line := range lines {
+		if !strings.HasPrefix(strings.TrimSpace(line), "```") {
+			kept = append(kept, line)
+		}
 	}
-	if end := strings.LastIndex(trimmed, "```"); end >= 0 {
-		trimmed = trimmed[:end]
-	}
-	return strings.TrimSpace(trimmed)
+	return strings.TrimSpace(strings.Join(kept, "\n"))
 }

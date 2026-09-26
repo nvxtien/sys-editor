@@ -23,7 +23,8 @@ import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { TaskProcessTransport } from './sysVerificationProviderService.js';
 import { ISideXTaskService } from '../../../../platform/sidex/common/sidexTaskService.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
-import { IEditorService } from '../../../services/editor/common/editorService.js';
+import { IEditorService, SIDE_GROUP } from '../../../services/editor/common/editorService.js';
+import { requestGeneratedCode, SYS_UNKNOWN_LANGUAGE_MESSAGE } from '../common/sysGeneratedCode.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { isSysWorkspaceMissing, validateDraftCandidate } from '../common/sysPlatformFlow.js';
@@ -424,8 +425,33 @@ export class SysSemanticWorkbenchView extends ViewPane {
 	private async _confirmIntent(id: string): Promise<void> {
 		const record = await this.projectService.readStructuredIntent(id);
 		if (!record) { throw new Error('Normalize this requirement before confirming its Structured Intent.'); }
-		const { confirmed } = await this.dialogService.confirm({ message: 'Confirm this Structured Intent?', detail: 'Only the exact reviewed Structured Intent will authorize Formal Spec generation.', primaryButton: 'Confirm intent' });
-		if (confirmed) { await this.projectService.approveStructuredIntent(id); }
+		const { confirmed } = await this.dialogService.confirm({ message: 'Confirm this Structured Intent?', detail: 'Confirming records this exact Structured Intent as approved, then generates code from it in this project’s language.', primaryButton: 'Confirm intent' });
+		if (!confirmed) { return; }
+		// Approval is the governed record and is recorded first, on its own. Code generation runs
+		// after and can fail without unmaking it: the provider does not get a vote on what the user
+		// confirmed, and a failed generation is retried by confirming again.
+		await this.projectService.approveStructuredIntent(id);
+		await this._generateCode(id);
+	}
+
+	/**
+	 * Code for a confirmed Structured Intent, in the language the open project is written in, opened
+	 * beside the intent it came from. It is a reading aid: sys-core does not know it exists, and
+	 * nothing ties it to a Formal Spec generated later.
+	 */
+	private async _generateCode(id: string): Promise<void> {
+		const record = await this.projectService.readStructuredIntent(id);
+		if (!record) { throw new Error('Normalize this requirement before generating code from its Structured Intent.'); }
+		const language = await this.projectService.projectLanguage();
+		if (!language) { throw new Error(SYS_UNKNOWN_LANGUAGE_MESSAGE); }
+		const model = this.sidexChatService.serverModel;
+		if (!model) { throw new Error('No model is selected. Open SideX Settings → Models and choose one.'); }
+		const configuredServerUrl = this.configurationService.getValue<string>('sidex.chat.serverUrl');
+		const endpoint = configuredServerUrl?.trim() ? await resolveServerEndpoint() : await waitForServerEndpoint();
+		assertSysDraftServerAvailable(endpoint.running, configuredServerUrl, endpoint.error);
+		const code = await requestGeneratedCode(serverHttpUrl(configuredServerUrl), model, serializeStructuredIntent(record.draft), language.name);
+		const resource = await this.projectService.writeGeneratedCode(id, language, code);
+		await this.editorService.openEditor({ resource }, SIDE_GROUP);
 	}
 
 	private async _approveFormalSpec(id: string): Promise<void> {

@@ -24,7 +24,10 @@ test('no service error copy tells a user to bind an operation', () => {
 // Ids are reused, so the next requirement created inherited the deleted one's approved intent.
 test('deleting a requirement also tells sys-core to forget it', () => {
 	const source = read('src/vs/workbench/contrib/sys/browser/sysProjectService.ts');
-	const body = source.slice(source.indexOf('async deleteRequirement('), source.indexOf('async deleteRequirement(') + 900);
+	// To the end of the method, not a fixed number of characters: a window counted in characters
+	// turns red when the method grows, which is not what this test is about.
+	const start = source.indexOf('async deleteRequirement(');
+	const body = source.slice(start, source.indexOf('\n\t}', start));
 	assert.match(body, /'requirement', 'forget'/, 'delete leaves sys-core state behind');
 	// sys-core must be asked before the project file forgets the id, or a failure there would
 	// leave an orphan the editor can no longer see or clean up.

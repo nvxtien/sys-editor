@@ -221,3 +221,83 @@ test('Normalize intent classifies a data model and writes a review a person can 
 	await expect(workbench.getByRole('button', { name: 'Confirm intent' })).toHaveCount(1, { timeout: 20_000 });
 	await expect(workbench.getByRole('button', { name: 'Generate Formal Spec' })).toHaveCount(0);
 });
+
+const POM = `<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.example</groupId>
+  <artifactId>app</artifactId>
+  <version>1.0</version>
+</project>
+`;
+
+/**
+ * Confirming an intent records it as approved and then generates code from it in the language the
+ * open project is written in. The code is a reading aid, so the assertions are the ones a reader
+ * would notice: it is in their language, it is about their entities, and it is a file their
+ * compiler accepts — not a fenced answer pasted into a .java file.
+ */
+test('Confirm intent generates code in the project’s own language and opens it', async ({ page }) => {
+	test.setTimeout(300_000);
+	const root = emptyWorkspace();
+	fs.writeFileSync(path.join(root, 'pom.xml'), POM);
+	fs.writeFileSync(path.join(root, '.sys', 'project.json'), JSON.stringify({ version: 1, requirements: [{ id: 'REQ-001' }] }));
+	fs.writeFileSync(path.join(root, '.sys', 'requirements', 'REQ-001.md'), DATA_MODEL);
+	const workbench = await openWorkbench(page, root);
+
+	await workbench.getByRole('button', { name: 'Normalize intent' }).click();
+	const confirm = workbench.getByRole('button', { name: 'Confirm intent' });
+	await expect(confirm).toHaveCount(1, { timeout: 180_000 });
+	await confirm.click();
+
+	const dialog = page.locator('.monaco-dialog-box');
+	await expect(dialog).toBeVisible({ timeout: 10_000 });
+	await dialog.getByRole('button', { name: 'Confirm intent' }).click();
+
+	// Java, because pom.xml is at the workspace root — the model never picks the language.
+	const generated = path.join(root, '.sys', 'intents', 'REQ-001.code.java');
+	await expect.poll(() => fs.existsSync(generated), { timeout: 180_000 }).toBe(true);
+	const code = fs.readFileSync(generated, 'utf8');
+
+	// A fence saved into a .java file is a syntax error, and an answer in several blocks used to
+	// leave its inner fences behind in the middle of the file.
+	expect(code).not.toContain('```');
+	expect(code).toContain('Category');
+	expect(code).toContain('Book');
+
+	// The file is named after the requirement, so a public type in it would not compile under that
+	// name. javac is the only witness that actually settles this.
+	expect(code).not.toMatch(/\bpublic\s+(class|interface|record|enum)\b/);
+	try {
+		execFileSync('javac', ['-d', fs.mkdtempSync(path.join(os.tmpdir(), 'sys-javac-')), generated], { encoding: 'utf8', stdio: 'pipe' });
+	} catch (error) {
+		if (error.code !== 'ENOENT') { throw new Error(`the generated Java does not compile:\n${error.stderr}`); }
+	}
+
+	// Approval is the governed record and is made before any code is asked for.
+	expect(JSON.parse(core(root, ['intent', 'show', 'REQ-001'])).state).toBe('APPROVED');
+
+	// Opened beside the intent, not written and left for the user to find.
+	await expect(page.locator('.tabs-container').getByText('REQ-001.code.java')).toBeVisible({ timeout: 20_000 });
+});
+
+// A project whose language the editor cannot name gets no guessed code, and the approval still
+// stands: the provider does not get a vote on what the user confirmed.
+test('a project with no build file it recognizes is told so, and stays confirmed', async ({ page }) => {
+	test.setTimeout(240_000);
+	const root = emptyWorkspace();
+	fs.writeFileSync(path.join(root, '.sys', 'project.json'), JSON.stringify({ version: 1, requirements: [{ id: 'REQ-001' }] }));
+	fs.writeFileSync(path.join(root, '.sys', 'requirements', 'REQ-001.md'), DATA_MODEL);
+	const workbench = await openWorkbench(page, root);
+
+	await workbench.getByRole('button', { name: 'Normalize intent' }).click();
+	const confirm = workbench.getByRole('button', { name: 'Confirm intent' });
+	await expect(confirm).toHaveCount(1, { timeout: 180_000 });
+	await confirm.click();
+	const dialog = page.locator('.monaco-dialog-box');
+	await expect(dialog).toBeVisible({ timeout: 10_000 });
+	await dialog.getByRole('button', { name: 'Confirm intent' }).click();
+
+	await expect(workbench.getByText(/Could not tell what language this project is written in/)).toBeVisible({ timeout: 60_000 });
+	expect(JSON.parse(core(root, ['intent', 'show', 'REQ-001'])).state).toBe('APPROVED');
+	expect((fs.existsSync(path.join(root, '.sys', 'intents')) ? fs.readdirSync(path.join(root, '.sys', 'intents')) : []).filter(f => f.includes('.code.'))).toEqual([]);
+});
