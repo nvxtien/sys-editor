@@ -24,7 +24,7 @@ import { TaskProcessTransport } from './sysVerificationProviderService.js';
 import { ISideXTaskService } from '../../../../platform/sidex/common/sidexTaskService.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IEditorService, SIDE_GROUP } from '../../../services/editor/common/editorService.js';
-import { requestGeneratedCode, SYS_UNKNOWN_LANGUAGE_MESSAGE } from '../common/sysGeneratedCode.js';
+import { requestGeneratedCode } from '../common/sysGeneratedCode.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { isSysWorkspaceMissing, validateDraftCandidate } from '../common/sysPlatformFlow.js';
@@ -440,17 +440,15 @@ export class SysSemanticWorkbenchView extends ViewPane {
 	 * source: sys-core does not know it exists, and nothing ties it to a Formal Spec generated later.
 	 */
 	private async _generateCode(id: string): Promise<void> {
-		const record = await this.projectService.readStructuredIntent(id);
-		if (!record) { throw new Error('Normalize this requirement before generating code from its Structured Intent.'); }
-		const language = await this.projectService.projectLanguage();
-		if (!language) { throw new Error(SYS_UNKNOWN_LANGUAGE_MESSAGE); }
 		const model = this.sidexChatService.serverModel;
 		if (!model) { throw new Error('No model is selected. Open SideX Settings → Models and choose one.'); }
 		const configuredServerUrl = this.configurationService.getValue<string>('sidex.chat.serverUrl');
 		const endpoint = configuredServerUrl?.trim() ? await resolveServerEndpoint() : await waitForServerEndpoint();
 		assertSysDraftServerAvailable(endpoint.running, configuredServerUrl, endpoint.error);
-		const sourceFiles = await this.projectService.sourceFiles(language);
-		const files = await requestGeneratedCode(serverHttpUrl(configuredServerUrl), model, serializeStructuredIntent(record.draft), language.name, sourceFiles);
+		// The platform prepares the context and reads the answer. Everything between is transport.
+		const context = await this.projectService.prepareCodeContext(id);
+		const candidate = await requestGeneratedCode(serverHttpUrl(configuredServerUrl), model, context);
+		const files = await this.projectService.acceptCodeCandidate(id, candidate);
 		const written = await this.projectService.writeGeneratedCode(files);
 		for (const resource of written) { await this.editorService.openEditor({ resource }, SIDE_GROUP); }
 	}

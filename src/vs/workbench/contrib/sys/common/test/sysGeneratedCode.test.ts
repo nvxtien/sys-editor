@@ -1,65 +1,36 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { projectLanguage, refuseToOverwrite, requestGeneratedCode } from '../sysGeneratedCode.js';
-
-// The language is the project's, never the model's: the code is added to a source tree already
-// written in one language.
-test('reads the project language from the build file at the workspace root', () => {
-	assert.deepEqual(projectLanguage(['pom.xml', 'src', '.sys']), { name: 'Java', sourceDir: 'src' });
-	assert.deepEqual(projectLanguage(['build.gradle.kts', 'src']), { name: 'Java', sourceDir: 'src' });
-	assert.deepEqual(projectLanguage(['go.mod']), { name: 'Go', sourceDir: '.' });
-	assert.deepEqual(projectLanguage(['Cargo.toml']), { name: 'Rust', sourceDir: 'src' });
-	assert.deepEqual(projectLanguage(['pyproject.toml']), { name: 'Python', sourceDir: '.' });
-	// A TypeScript project has a package.json too, so the more specific marker has to win.
-	assert.deepEqual(projectLanguage(['package.json', 'tsconfig.json']), { name: 'TypeScript', sourceDir: 'src' });
-	assert.deepEqual(projectLanguage(['package.json']), { name: 'JavaScript', sourceDir: 'src' });
-});
-
-test('a project with no build file it recognizes gets no guess', () => {
-	assert.equal(projectLanguage(['README.md', '.sys']), undefined);
-	assert.equal(projectLanguage([]), undefined);
-});
+import { refuseToOverwrite, requestGeneratedCode } from '../sysGeneratedCode.js';
 
 const originalFetch = globalThis.fetch;
-const oneFile = (path: string, code = 'class A {}') => ({ files: [{ path, code }] });
 
-test('sends the intent, the language and the project’s existing source files', async () => {
+// The editor forwards the platform's context unread and brings the answer back unread. What the
+// answer means is sys-core's to say.
+test('carries the prepared context to the provider and the answer home', async () => {
 	let request: Record<string, unknown> | undefined;
 	let url = '';
 	globalThis.fetch = async (input, init) => {
 		url = String(input);
 		request = JSON.parse(String(init?.body));
-		return new Response(JSON.stringify(oneFile('src/main/java/com/example/Category.java')), { status: 200 });
+		return new Response(JSON.stringify({ candidate: '=== src/A.java ===\nclass A {}' }), { status: 200 });
 	};
 	try {
-		const files = await requestGeneratedCode('http://sidex/', 'm', '{"kind":"DATA_MODEL"}', 'Java', ['src/main/java/com/example/App.java']);
-		assert.deepEqual(files, [{ path: 'src/main/java/com/example/Category.java', code: 'class A {}' }]);
+		const answer = await requestGeneratedCode('http://sidex/', 'm', 'THE PREPARED CONTEXT');
+		assert.equal(answer, '=== src/A.java ===\nclass A {}');
 		assert.equal(url, 'http://sidex/v1/sys/generate-code');
-		assert.deepEqual(request, { model: 'm', intent: '{"kind":"DATA_MODEL"}', language: 'Java', sourceFiles: ['src/main/java/com/example/App.java'] });
+		assert.deepEqual(request, { model: 'm', intent: 'THE PREPARED CONTEXT' });
 	} finally { globalThis.fetch = originalFetch; }
 });
 
-// The server checks these paths too. This is the second check, because a path from here becomes a
-// write into the user's project and one check between a model and their disk is not enough.
-test('refuses a path that leaves the project, whatever the server returned', async () => {
-	for (const path of ['../outside.java', '/etc/passwd', 'src/../../x.java', 'src\\..\\..\\x.java', '']) {
-		globalThis.fetch = async () => new Response(JSON.stringify(oneFile(path)), { status: 200 });
-		try { await assert.rejects(requestGeneratedCode('http://sidex', 'm', '{}', 'Java', []), /outside the project/, `accepted ${path}`); }
-		finally { globalThis.fetch = originalFetch; }
-	}
-});
-
-// Unlike the review page's scenarios, generated code is the whole point of the click: failing
-// silently would leave the user staring at a button that did nothing.
 test('surfaces the backend error instead of returning nothing', async () => {
 	globalThis.fetch = async () => new Response(JSON.stringify({ error: 'anthropic is not connected' }), { status: 502 });
-	try { await assert.rejects(requestGeneratedCode('http://sidex', 'm', '{}', 'Java', []), /SideX could not generate code: anthropic is not connected/); }
+	try { await assert.rejects(requestGeneratedCode('http://sidex', 'm', '{}'), /SideX could not generate code: anthropic is not connected/); }
 	finally { globalThis.fetch = originalFetch; }
 });
 
-test('an answer with no files is an error, not an empty write', async () => {
-	globalThis.fetch = async () => new Response(JSON.stringify({ files: [] }), { status: 200 });
-	try { await assert.rejects(requestGeneratedCode('http://sidex', 'm', '{}', 'Java', []), /returned no code/); }
+test('an empty answer is an error, not an empty write', async () => {
+	globalThis.fetch = async () => new Response(JSON.stringify({ candidate: '   ' }), { status: 200 });
+	try { await assert.rejects(requestGeneratedCode('http://sidex', 'm', '{}'), /returned no code/); }
 	finally { globalThis.fetch = originalFetch; }
 });
 

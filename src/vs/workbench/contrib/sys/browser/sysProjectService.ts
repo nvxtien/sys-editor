@@ -11,7 +11,7 @@ import { EMPTY_PROJECT, SYS_PROJECT_FILE, SysProject, SysProjectState, addRequir
 import { isSysArtifactState, parseLifecycle, SysLifecycle } from '../common/sysLifecycle.js';
 import { parseFormalizationCapability, parseStructuredIntent, serializeStructuredIntent, SysFormalizationCapability, SysStructuredIntent, SysStructuredIntentRecord } from '../common/sysStructuredIntent.js';
 import { Verification01Manifest } from '../common/sysManifest.js';
-import { projectLanguage, refuseToOverwrite, SysGeneratedFile, SysProjectLanguage } from '../common/sysGeneratedCode.js';
+import { refuseToOverwrite, SysGeneratedFile } from '../common/sysGeneratedCode.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { fetchServer, resolveServerEndpoint, waitForServerEndpoint } from '../../sidexChat/browser/localServer.js';
 
@@ -50,10 +50,10 @@ export interface ISysProjectService {
 	setPlatformRoot(path: string | undefined): Promise<void>;
 	/** '' from getState() when not configured; the READY/NO_SYS_PROJECT_YET project's platformRoot. */
 	getPlatformRoot(): Promise<string | undefined>;
-	/** The language the open project is written in, read from the build file at its root; undefined when no marker is there. */
-	projectLanguage(): Promise<SysProjectLanguage | undefined>;
-	/** The project's existing source file paths, relative to the workspace root, for the model to place its own files by. */
-	sourceFiles(language: SysProjectLanguage): Promise<readonly string[]>;
+	/** Everything sys-core says is needed to realise this confirmed intent as code, forwarded unread. */
+	prepareCodeContext(id: string): Promise<string>;
+	/** Asks sys-core what a provider's answer means: the files to write, or an error naming why not. */
+	acceptCodeCandidate(id: string, candidate: string): Promise<readonly SysGeneratedFile[]>;
 	/**
 	 * Writes generated code into the project's source tree and returns the files written, in order.
 	 * Writes nothing at all if any of them already exists: overwriting a file the user wrote is not
@@ -155,28 +155,15 @@ class SysProjectService extends Disposable implements ISysProjectService {
 		return resource;
 	}
 
-	async projectLanguage(): Promise<SysProjectLanguage | undefined> {
-		const folders = this.folders();
-		if (folders.length !== 1) { return undefined; }
-		const root = await this.files.resolve(folders[0]);
-		return projectLanguage(root.children?.map(child => child.name) ?? []);
+	async prepareCodeContext(id: string): Promise<string> {
+		return this.coreResponse(['code', 'prepare', id]);
 	}
 
-	async sourceFiles(language: SysProjectLanguage): Promise<readonly string[]> {
-		const root = this.folders()[0];
-		const base = language.sourceDir === '.' ? root : URI.joinPath(root, language.sourceDir);
-		const walk = async (folder: URI): Promise<string[]> => {
-			const entries = await this.files.resolve(folder).catch(() => undefined);
-			const paths: string[] = [];
-			for (const child of entries?.children ?? []) {
-				// .sys holds the governed record, not the project's source; showing it to the model
-				// would invite it to write its answer back into the lifecycle's own folder.
-				if (child.name.startsWith('.')) { continue; }
-				paths.push(...child.isDirectory ? await walk(child.resource) : [child.resource.path.slice(root.path.length + 1)]);
-			}
-			return paths;
-		};
-		return (await walk(base)).sort();
+	async acceptCodeCandidate(id: string, candidate: string): Promise<readonly SysGeneratedFile[]> {
+		// The platform states the answer format and reads it; interpreting it here would put a
+		// decision about meaning in the editor, where it could not be verified.
+		const answer = JSON.parse(await this.coreResponse(['code', 'accept', id], candidate)) as { files?: SysGeneratedFile[] };
+		return answer.files ?? [];
 	}
 
 	async writeGeneratedCode(files: readonly SysGeneratedFile[]): Promise<readonly URI[]> {
