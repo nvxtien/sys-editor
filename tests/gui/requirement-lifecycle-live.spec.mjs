@@ -333,6 +333,9 @@ test('a project with no build file it recognizes is told so, and stays confirmed
 	await workbench.getByRole('button', { name: 'Normalize intent' }).click();
 	await confirmIntent(page, workbench);
 
+	// sys-platform decides that the language is unknown; the editor says so in a sentence. The
+	// row must never show the platform's own code, which is what the review page was cleaned of.
 	await expect(workbench.getByText(/Could not tell what language this project is written in/)).toBeVisible({ timeout: 60_000 });
+	await expect(workbench.getByText(/UNKNOWN_PROJECT_LANGUAGE/)).toHaveCount(0);
 	expect(JSON.parse(core(root, ['intent', 'show', 'REQ-001'])).state).toBe('APPROVED');
 });

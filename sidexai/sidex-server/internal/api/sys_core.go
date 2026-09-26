@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -35,7 +36,14 @@ func runSysCoreWithInput(binary, workspace string, args []string, input string) 
 	command.Stderr = &stderr
 	output, err := command.Output()
 	if err != nil {
-		if text := strings.TrimSpace(stderr.String()); text != "" {
+		text := strings.TrimSpace(stderr.String())
+		// The bridge is transport. A wire error is the platform stating a condition, and it
+		// reaches the product exactly as written — wrapping it in prose and an exit status
+		// leaves the product parsing a code back out of a sentence.
+		if isWireError(text) {
+			return nil, errors.New(text)
+		}
+		if text != "" {
 			return nil, fmt.Errorf("sys-core failed: %s (%w)", text, err)
 		}
 		return nil, fmt.Errorf("sys-core failed: %w", err)
@@ -46,6 +54,15 @@ func runSysCoreWithInput(binary, workspace string, args []string, input string) 
 // sys-core normally lives in a sibling sys-platform checkout rather than on $PATH. An explicit
 // SYS_CORE_BIN wins and is never silently ignored; otherwise $PATH, then SYS_PLATFORM_ROOT, the
 // working directory and its parent, and the workspace's parent are searched for a built binary.
+// Whether sys-core stated a condition, as opposed to crashing. Only the shape is read here; what
+// the code means is the platform's to define and the product's to say.
+func isWireError(text string) bool {
+	var wire struct {
+		Error string `json:"error"`
+	}
+	return json.Unmarshal([]byte(text), &wire) == nil && wire.Error != ""
+}
+
 func resolveSysCoreBinary(workspace string) (string, error) {
 	if configured := strings.TrimSpace(os.Getenv("SYS_CORE_BIN")); configured != "" {
 		if filepath.IsAbs(configured) {
@@ -101,6 +118,14 @@ func (h *Handler) SysCore(w http.ResponseWriter, r *http.Request) {
 	}
 	output, err := runSysCoreWithInput(binary, req.Workspace, req.Args, req.Input)
 	if err != nil {
+		// A wire error is already the shape a product reads; wrapping it again would leave the
+		// product unwrapping a string to find the code the platform stated plainly.
+		if isWireError(err.Error()) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadGateway)
+			_, _ = w.Write([]byte(err.Error()))
+			return
+		}
 		writeDraftSpecError(w, http.StatusBadGateway, err.Error())
 		return
 	}

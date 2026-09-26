@@ -12,6 +12,7 @@ import { isSysArtifactState, parseLifecycle, SysLifecycle } from '../common/sysL
 import { parseFormalizationCapability, parseStructuredIntent, serializeStructuredIntent, SysFormalizationCapability, SysStructuredIntent, SysStructuredIntentRecord } from '../common/sysStructuredIntent.js';
 import { Verification01Manifest } from '../common/sysManifest.js';
 import { refuseToOverwrite, SysGeneratedFile } from '../common/sysGeneratedCode.js';
+import { sysCoreErrorMessage } from '../common/sysCoreError.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { fetchServer, resolveServerEndpoint, waitForServerEndpoint } from '../../sidexChat/browser/localServer.js';
 
@@ -220,7 +221,9 @@ class SysProjectService extends Disposable implements ISysProjectService {
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ workspace: this.folders()[0].fsPath, args, ...(input === undefined ? {} : { input }) })
 		}), deadline]);
-		if (!response.ok) { throw new Error(`sys-core failed (${response.status}): ${await response.text()}`); }
+		// Every platform failure reaches a person through here, so it is said in their words once,
+		// rather than each caller deciding whether to print a code at them.
+		if (!response.ok) { throw new Error(sysCoreErrorMessage(await response.text())); }
 		return response.text();
 	}
 

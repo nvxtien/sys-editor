@@ -1,10 +1,32 @@
 package api
 
 import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+// A stand-in sys-core that prints what the test wants on stdout and stderr and exits with `code`.
+func fakeSysCore(t *testing.T, stdout, stderr string, code int) string {
+	t.Helper()
+	bin := filepath.Join(t.TempDir(), "sys-core")
+	script := fmt.Sprintf("#!/bin/sh\nprintf '%%s' %s\nprintf '%%s' %s >&2\nexit %d\n",
+		shellQuote(stdout), shellQuote(stderr), code)
+	if err := os.WriteFile(bin, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return bin
+}
+
+func shellQuote(text string) string {
+	return "'" + strings.ReplaceAll(text, "'", `'\''`) + "'"
+}
 
 func TestRunSysCoreDelegatesWorkspaceAndArguments(t *testing.T) {
 	root := t.TempDir()
@@ -120,5 +142,50 @@ func TestResolveSysCoreBinaryClimbsPastTheServerWorkingDirectory(t *testing.T) {
 	}
 	if resolved != binary {
 		t.Errorf("resolved %q, want %q", resolved, binary)
+	}
+}
+
+// The bridge is transport. When sys-core states a wire error, it reaches the product exactly as
+// the platform wrote it: wrapping it in prose and an exit status leaves the product parsing a
+// code back out of a sentence.
+func TestSysCorePassesThePlatformsWireErrorThrough(t *testing.T) {
+	wire := `{"error":"UNKNOWN_PROJECT_LANGUAGE","detail":"pom.xml, go.mod"}`
+	_, err := runSysCoreWithInput(fakeSysCore(t, "", wire, 1), t.TempDir(), []string{"code", "prepare", "REQ-001"}, "")
+	if err == nil {
+		t.Fatal("a failing sys-core must be an error")
+	}
+	if err.Error() != wire {
+		t.Errorf("the platform's error was mangled on the way through:\n got  %s\n want %s", err.Error(), wire)
+	}
+}
+
+// A crash, a missing binary, a panic: nothing structured to pass through, so say what happened.
+func TestSysCoreExplainsAFailureThatIsNotAWireError(t *testing.T) {
+	_, err := runSysCoreWithInput(fakeSysCore(t, "", "thread 'main' panicked", 101), t.TempDir(), []string{"x"}, "")
+	if err == nil || !strings.Contains(err.Error(), "sys-core failed") || !strings.Contains(err.Error(), "panicked") {
+		t.Errorf("err = %v", err)
+	}
+}
+
+// The handler must not wrap the wire error a second time: {"error":"{\"error\":…}"} leaves the
+// product unwrapping a string to find the code the platform already stated plainly.
+func TestSysCoreHandlerReturnsTheWireErrorAsTheBody(t *testing.T) {
+	wire := `{"error":"UNKNOWN_PROJECT_LANGUAGE","detail":"pom.xml"}`
+	t.Setenv("SYS_CORE_BIN", fakeSysCore(t, "", wire, 1))
+	req := httptestRequestForUser(http.MethodPost, "/v1/sys/core", "local")
+	req.Body = io.NopCloser(strings.NewReader(`{"workspace":"` + t.TempDir() + `","args":["code","prepare","REQ-001"]}`))
+
+	rr := httptest.NewRecorder()
+	(&Handler{}).SysCore(rr, req)
+
+	if rr.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d", rr.Code)
+	}
+	var body map[string]string
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["error"] != "UNKNOWN_PROJECT_LANGUAGE" || body["detail"] != "pom.xml" {
+		t.Errorf("the wire error was wrapped again: %s", rr.Body.String())
 	}
 }
