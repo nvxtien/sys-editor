@@ -18,7 +18,7 @@ func normalizeRequest(body string) *http.Request {
 	return req
 }
 
-func TestNormalizeIntentReturnsStructuredIntentAndForwardsBinding(t *testing.T) {
+func TestNormalizeIntentReturnsTheStructuredIntentAndSendsNoSourceBinding(t *testing.T) {
 	var providerBody map[string]any
 	h, server := draftHandler(t, func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&providerBody)
@@ -28,9 +28,19 @@ func TestNormalizeIntentReturnsStructuredIntentAndForwardsBinding(t *testing.T) 
 	defer server.Close()
 
 	rr := httptest.NewRecorder()
+	// An "operation" in the request is a leftover from manual source binding and must be ignored:
+	// what code implements an intent is sys-platform's to recover, never the author's to declare.
 	h.NormalizeIntent(rr, normalizeRequest(`{"model":"openrouter/test-model","intent":"A booking needs a seat.","operation":"BookingService.createBooking"}`))
-	if rr.Code != http.StatusOK { t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String()) }
-	if !strings.Contains(providerBody["messages"].([]any)[1].(map[string]any)["content"].(string), "BookingService.createBooking") { t.Fatalf("binding missing from provider input: %#v", providerBody) }
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	user := providerBody["messages"].([]any)[1].(map[string]any)["content"].(string)
+	if strings.Contains(user, "BookingService.createBooking") {
+		t.Fatalf("a source symbol reached the model: %q", user)
+	}
+	if user != "A booking needs a seat." {
+		t.Fatalf("the model was sent more than the requirement: %q", user)
+	}
 }
 
 func TestNormalizeIntentRejectsNonJSONProviderOutput(t *testing.T) {
@@ -78,3 +88,4 @@ func TestNormalizeIntentPromptStatesTheKindAwareShape(t *testing.T) {
 		}
 	}
 }
+

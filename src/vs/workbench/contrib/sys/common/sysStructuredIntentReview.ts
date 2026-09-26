@@ -15,6 +15,14 @@ function line(fact: SysIntentFact): string {
 	return `${value} — ${PROVENANCE[fact.provenance]}`;
 }
 
+/**
+ * Scenarios are multi-line Gherkin, so they are fenced and kept verbatim — `line()` would collapse
+ * them to one line and `list()` would bullet them, and either makes them unreadable.
+ */
+function scenarioSection(gherkin: string): string[] {
+	return ['## Scenarios', '', '```gherkin', gherkin.trimEnd(), '```', ''];
+}
+
 function entitySections(entities: readonly SysIntentEntity[]): string[] {
 	return entities.flatMap(entity => [
 		`### ${entity.name}`,
@@ -32,7 +40,7 @@ function list(facts: readonly SysIntentFact[]): string {
  * A plain-language projection of the Structured Intent JSON for human review. It is derived from the
  * same record that gets confirmed, never edited, and never a second source of truth.
  */
-export function renderStructuredIntentReview(record: SysStructuredIntentRecord, capability: SysFormalizationCapability | undefined): string {
+export function renderStructuredIntentReview(record: SysStructuredIntentRecord, capability: SysFormalizationCapability | undefined, scenarios?: string): string {
 	const d = record.draft;
 	const status = record.state === 'APPROVED' ? 'CONFIRMED' : record.state === 'STALE' ? 'STALE — the requirement changed after this was reviewed' : 'DRAFT — not yet confirmed';
 	const quoted = record.sourceRequirement.trim().split('\n').map(text => `> ${text}`).join('\n');
@@ -40,13 +48,16 @@ export function renderStructuredIntentReview(record: SysStructuredIntentRecord, 
 	// operation; rendering it with the operation-rule layout asked the reader for an operation that
 	// does not exist. Sections a kind does not use are left out rather than shown empty.
 	const describesEntities = d.entities !== undefined || d.relationships !== undefined;
+	const scenarioLines = scenarios?.trim() ? scenarioSection(scenarios) : [];
 	const sections = describesEntities
 		? [
+			...scenarioLines,
 			...(d.entities?.length ? ['## Entities', '', ...entitySections(d.entities)] : []),
 			...(d.relationships?.length ? ['## Relationships', '', list(d.relationships), ''] : []),
 			...(d.constraints.length ? ['## Constraints', '', list(d.constraints), ''] : [])
 		]
 		: [
+			...scenarioLines,
 			...(d.operation ? ['## Operation', '', line(d.operation), ''] : []),
 			'## Inputs', '', list(d.inputs), '',
 			'## Constraints', '', list(d.constraints), '',

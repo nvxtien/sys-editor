@@ -195,6 +195,8 @@ export function formalizationNote(capability: SysFormalizationCapability): strin
 				: '';
 			return `${label}: PLATFORM_FORMAL_SPEC_GAP — the current Sys Platform grammar cannot represent everything this requirement states.${missing} Its confirmed Structured Intent remains the governed record.`;
 		}
-		case 'NOT_FORMALIZABLE': return `${label} kind: nothing to formalize yet. Clarify the requirement and normalize again.`;
+		// No note: an intent stating no governable fact is not the author's mistake to fix, and
+		// "clarify and normalize again" blames them for what the platform's grammar cannot represent.
+		case 'NOT_FORMALIZABLE': return undefined;
 	}
 }

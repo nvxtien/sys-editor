@@ -18,7 +18,7 @@ export function assertSysDraftFormalizable(capability: SysFormalizationCapabilit
 		case 'PLATFORM_FORMAL_SPEC_GAP':
 			throw new Error(`PLATFORM_FORMAL_SPEC_GAP: the current Sys Platform grammar does not represent this ${SYS_INTENT_KIND_LABEL[capability.kind].toLowerCase()} intent yet. Its confirmed Structured Intent remains the governed record.`);
 		case 'NOT_FORMALIZABLE':
-			throw new Error('This Structured Intent has no formalizable kind yet (UNKNOWN). Clarify the requirement and normalize again.');
+			throw new Error('The current Sys Platform grammar cannot represent anything this Structured Intent states.');
 	}
 }
 

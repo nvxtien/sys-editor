@@ -92,3 +92,7 @@ test('a record written before entities existed still parses unchanged', () => {
 	assert.equal(legacy.operation?.value, 'UNKNOWN');
 	assert.equal(legacy.inputs.length, 1);
 });
+
+// Scenarios are a plain-language projection for the reviewer, in the same FACT shape as every other
+// fact so nothing new has to be validated. The JSON stays the governed record.
+

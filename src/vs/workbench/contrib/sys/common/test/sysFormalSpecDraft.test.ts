@@ -13,10 +13,11 @@ test('an unsupported kind reports the platform gap and never asks for a binding'
 	);
 });
 
-test('an unformalizable kind reports the kind, not a missing binding', () => {
+test('an unformalizable intent blames the grammar, not the author', () => {
 	assert.throws(
 		() => assertSysDraftFormalizable({ kind: 'UNKNOWN', status: 'UNSUPPORTED', requiredContext: 'NONE', outcome: 'NOT_FORMALIZABLE' }),
-		(error: Error) => /UNKNOWN/.test(error.message) && !/bind|binding/i.test(error.message)
+		(error: Error) => /grammar cannot represent/.test(error.message)
+			&& !/bind|binding|clarify/i.test(error.message)
 	);
 });
 
