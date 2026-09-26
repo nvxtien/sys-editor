@@ -1,4 +1,6 @@
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import { formalizationNote, parseFormalizationCapability, parseStructuredIntent, serializeStructuredIntent, SysFormalizationCapability, SysStructuredIntentRecord } from '../sysStructuredIntent.js';
 import { assertSysDraftFormalizable } from '../sysFormalSpecDraft.js';
@@ -166,4 +168,31 @@ test('no review page ever says an operation is "not bound"', () => {
 	for (const page of [renderStructuredIntentReview(dataModelRecord(), CAPABILITY.gap), renderStructuredIntentReview(record('OPERATION_RULE'), CAPABILITY.ready)]) {
 		assert.doesNotMatch(page, /not bound/i);
 	}
+});
+
+const gapWithConstructs: SysFormalizationCapability = {
+	kind: 'DATA_MODEL', status: 'UNSUPPORTED', requiredContext: 'ENTITY_MODEL', outcome: 'PLATFORM_FORMAL_SPEC_GAP',
+	requiredConstructs: ['DECLARED_TYPE', 'FIELD', 'RELATIONSHIP', 'CARDINALITY'],
+	unsupportedConstructs: ['DECLARED_TYPE', 'FIELD', 'RELATIONSHIP', 'CARDINALITY']
+};
+
+test('the capability reply carries the construct sets through to the editor', () => {
+	const parsed = parseFormalizationCapability(JSON.parse(JSON.stringify(gapWithConstructs)));
+	assert.deepEqual(parsed.unsupportedConstructs, ['DECLARED_TYPE', 'FIELD', 'RELATIONSHIP', 'CARDINALITY']);
+	// A reply from an older sys-core carries neither set and must still parse.
+	assert.deepEqual(parseFormalizationCapability(CAPABILITY.gap).unsupportedConstructs, undefined);
+});
+
+test('a gap names the constructs the platform cannot represent', () => {
+	// "this kind is unsupported" tells a reader nothing they can act on. The missing constructs do.
+	const note = formalizationNote(gapWithConstructs)!;
+	for (const construct of ['DECLARED_TYPE', 'FIELD', 'RELATIONSHIP', 'CARDINALITY']) {
+		assert.ok(note.includes(construct), `note does not name ${construct}`);
+	}
+});
+
+test('Add spec is offered only when the platform can formalize the intent', () => {
+	const source = readFileSync(join(process.cwd(), 'src/vs/workbench/contrib/sys/browser/sysSemanticWorkbenchView.ts'), 'utf8');
+	const addSpec = source.slice(source.indexOf("row.hasSpec ? 'Edit spec' : 'Add spec'") - 400, source.indexOf("row.hasSpec ? 'Edit spec' : 'Add spec'"));
+	assert.match(addSpec, /FORMAL_SPEC_SUPPORTED/, 'Add spec is not gated on the capability');
 });

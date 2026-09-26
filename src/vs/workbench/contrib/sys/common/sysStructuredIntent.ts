@@ -135,6 +135,10 @@ export interface SysFormalizationCapability {
 	readonly status: SysFormalizationStatus;
 	readonly requiredContext: SysRequiredContext;
 	readonly outcome: SysFormalizationOutcome;
+	/** Governed constructs this intent's facts require; absent from an older sys-core. */
+	readonly requiredConstructs?: readonly string[];
+	/** The subset the platform cannot represent yet, named so a reader knows what is missing. */
+	readonly unsupportedConstructs?: readonly string[];
 }
 
 const STATUSES: readonly SysFormalizationStatus[] = ['SUPPORTED', 'UNSUPPORTED', 'PARTIALLY_SUPPORTED'];
@@ -163,8 +167,19 @@ export function parseFormalizationCapability(value: unknown): SysFormalizationCa
 		kind: raw.kind as SysIntentKind,
 		status: raw.status as SysFormalizationStatus,
 		requiredContext: raw.requiredContext as SysRequiredContext,
-		outcome: outcome as SysFormalizationOutcome
+		outcome: outcome as SysFormalizationOutcome,
+		...constructs(raw.requiredConstructs, 'requiredConstructs'),
+		...constructs(raw.unsupportedConstructs, 'unsupportedConstructs')
 	};
+}
+
+/** Additive: an older sys-core sends neither set, and the editor must still read the reply. */
+function constructs(value: unknown, key: 'requiredConstructs' | 'unsupportedConstructs'): Record<string, readonly string[]> {
+	if (value === undefined) { return {}; }
+	if (!Array.isArray(value) || value.some(item => typeof item !== 'string')) {
+		throw new Error('sys-core returned an invalid formalization capability');
+	}
+	return { [key]: value as readonly string[] };
 }
 
 /** One human sentence for a capability that is not ready; undefined when a Formal Spec can be generated. */
@@ -173,7 +188,13 @@ export function formalizationNote(capability: SysFormalizationCapability): strin
 	switch (capability.outcome) {
 		case 'FORMAL_SPEC_SUPPORTED': return undefined;
 		case 'OPERATION_UNSPECIFIED': return `${label}: this Structured Intent states no operation, and a Formal Spec must declare one. Clarify which operation the requirement governs and normalize again.`;
-		case 'PLATFORM_FORMAL_SPEC_GAP': return `${label}: PLATFORM_FORMAL_SPEC_GAP — the current Sys Platform grammar does not represent this intent kind yet. Its confirmed Structured Intent remains the governed record.`;
+		case 'PLATFORM_FORMAL_SPEC_GAP': {
+			// Naming the constructs tells the reader what is missing; "this kind is unsupported" does not.
+			const missing = capability.unsupportedConstructs?.length
+				? ` Not representable yet: ${capability.unsupportedConstructs.join(', ')}.`
+				: '';
+			return `${label}: PLATFORM_FORMAL_SPEC_GAP — the current Sys Platform grammar cannot represent everything this requirement states.${missing} Its confirmed Structured Intent remains the governed record.`;
+		}
 		case 'NOT_FORMALIZABLE': return `${label} kind: nothing to formalize yet. Clarify the requirement and normalize again.`;
 	}
 }
