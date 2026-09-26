@@ -38,9 +38,11 @@ async function openWorkbench(page, root) {
 			console.log('[page]', text.slice(0, 200));
 		}
 	});
-	const seen = new Set();
+	const calls = [];
+	page.__calls = calls;
 	await page.exposeFunction('__sysFs', async (command, args) => {
-		if (!seen.has(command)) { seen.add(command); }
+		const p0 = args.path ?? args.filePath ?? '';
+		calls.push(`${Date.now() % 100000} ${command} ${String(p0).split('/').slice(-2).join('/')}`);
 		const p = args.path ?? args.filePath;
 		const stat = () => {
 			const s = fs.statSync(p);
@@ -111,8 +113,16 @@ test('New requirement creates one, and it is offered no lifecycle action until i
 	await expect(workbench.getByRole('button', { name: 'Normalize intent' })).toHaveCount(0);
 	await expect(workbench).toContainText('Write the requirement in the editor');
 
+});
+
+test('a requirement that already has text is offered normalization, and no guidance', async ({ page }) => {
+	const root = emptyWorkspace();
+	fs.writeFileSync(path.join(root, '.sys', 'project.json'), JSON.stringify({ version: 1, requirements: [{ id: 'REQ-001' }] }));
 	fs.writeFileSync(path.join(root, '.sys', 'requirements', 'REQ-001.md'), REQUIREMENT);
-	await expect(workbench.getByRole('button', { name: 'Normalize intent' })).toHaveCount(1, { timeout: 15_000 });
+	const workbench = await openWorkbench(page, root);
+
+	await expect(workbench.getByRole('button', { name: 'Normalize intent' })).toHaveCount(1, { timeout: 20_000 });
+	await expect(workbench).not.toContainText('Write the requirement in the editor');
 });
 
 test('a deleted requirement leaves nothing behind for the next one to inherit', async ({ page }) => {
@@ -132,6 +142,12 @@ test('a deleted requirement leaves nothing behind for the next one to inherit', 
 	expect(fs.existsSync(path.join(root, '.sys', 'core', 'intents', 'REQ-001.json'))).toBe(true);
 
 	await workbench.getByRole('button', { name: 'Delete' }).first().click();
+	// Delete asks first. Without answering, the action waits forever and the button stays disabled —
+	// which reads exactly like a hang, and cost a long detour to tell apart from one.
+	const dialog = page.locator('.monaco-dialog-box');
+	await expect(dialog).toBeVisible({ timeout: 10_000 });
+	await expect(dialog).toContainText('Delete REQ-001?');
+	await dialog.getByRole('button', { name: 'Delete' }).click();
 	await expect.poll(() => ids(root), { timeout: 15_000 }).toEqual([]);
 
 	// The whole point: ids are reused, so anything left here comes back on the next requirement.
