@@ -308,3 +308,19 @@ test('a running action is visibly running, not just relabelled', () => {
 	assert.match(css, /\[aria-busy="true"\]/, 'no style for a running action');
 	assert.match(css, /@keyframes/, 'the running indicator does not move');
 });
+
+test('only an intent the platform can formalize is promised a Formal Spec', () => {
+	// Removing the gap paragraph made the page fall through to the default sentence, which promises
+	// generation for a kind that will never offer the button.
+	const supported = renderStructuredIntentReview(record('OPERATION_RULE'), CAPABILITY.ready);
+	assert.ok(supported.includes('A Formal Spec can be generated'), 'a supported kind says so');
+
+	for (const capability of [CAPABILITY.gap, CAPABILITY.unknown, gapWithConstructs]) {
+		const page = renderStructuredIntentReview(record('DATA_MODEL'), capability);
+		assert.ok(!page.includes('A Formal Spec can be generated'), 'promised generation the reader will not get');
+		assert.ok(!page.includes('PLATFORM_FORMAL_SPEC_GAP'), 'platform vocabulary is back');
+	}
+
+	// Core silent is still said out loud: an unread capability is not the same as a known gap.
+	assert.ok(renderStructuredIntentReview(record('DATA_MODEL'), undefined).includes('could not be read from sys-core'));
+});
