@@ -353,7 +353,7 @@ export class SysSemanticWorkbenchView extends ViewPane {
 			sysTrace(requestId, 'prepared', `context_bytes=${proposalContext.length}`);
 			// Read the port after prepare: a stale cached port is re-resolved by the core call above.
 			const httpUrl = serverHttpUrl(configuredServerUrl);
-			const structuredIntent = await requestStructuredIntent(httpUrl, model, id, proposalContext, undefined, requestId);
+			const structuredIntent = await requestStructuredIntent(httpUrl, model, id, proposalContext, requestId);
 			await this.projectService.writeStructuredIntent(id, structuredIntent);
 			sysTrace(requestId, 'saved', `requirement=${id}`);
 			await this.editorService.openEditor({ resource: await this.projectService.writeStructuredIntentReview(id) });
@@ -470,9 +470,13 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		if (row.lifecycleUnavailable) { DOM.append(el, $('div.sys-req-binding.sys-req-kind-note')).textContent = 'Lifecycle unavailable: sys-core did not answer, so no state is shown.'; }
 		const specCheck = row.hasSpec ? this.specChecks.get(row.id) : undefined;
 		DOM.append(el, $('div.sys-req-binding')).textContent = row.hasSpec ? `spec: ${this._specLabel(specCheck)}` : 'No .spec file yet';
-		this._action(actions, row.hasSpec ? 'Edit spec' : 'Add spec', 'sys-req-action', async () => {
-			await this.editorService.openEditor({ resource: await this.projectService.createSpec(row.id) });
-		});
+		// Authoring a spec by hand for a kind the platform cannot formalize is a dead end: the spec
+		// can be written but never approved, because approval requires the same capability.
+		if (row.hasSpec || row.formalization?.outcome === 'FORMAL_SPEC_SUPPORTED') {
+			this._action(actions, row.hasSpec ? 'Edit spec' : 'Add spec', 'sys-req-action', async () => {
+				await this.editorService.openEditor({ resource: await this.projectService.createSpec(row.id) });
+			});
+		}
 		if (row.hasSpec) {
 			this._action(actions, 'Check syntax', 'sys-req-action', () => this._checkSpec(row.id));
 			this._action(actions, 'Verify', 'sys-req-action', () => this._verify(row.id, row.title));

@@ -164,3 +164,46 @@ func TestDraftSpecReportsProviderFailure(t *testing.T) {
 		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
 	}
 }
+
+// ontology-compiler accepts only three rule combinations (ontology-compiler/src/compiler.rs).
+// A prompt that teaches the three sentence forms without the combinations that may be built from
+// them lets the model emit, say, an "allowed when" with no success state change — which compiles
+// nowhere and costs the user three repair attempts before failing with a validator message.
+func TestDraftSpecPromptStatesTheSupportedRuleCombinations(t *testing.T) {
+	for _, required := range []string{
+		"The operation is allowed when",
+		"When the operation succeeds,",
+		"must fail with",
+	} {
+		if !strings.Contains(draftSpecSystemPrompt, required) {
+			t.Fatalf("prompt no longer teaches %q", required)
+		}
+	}
+	// It must say that an allowed-when rule needs a success state change.
+	if !strings.Contains(draftSpecSystemPrompt, "at least one \"When the operation succeeds\"") {
+		t.Error("prompt does not require a success state change alongside an allowed-when rule")
+	}
+	// It must forbid combining the two guards, which the compiler rejects.
+	if !strings.Contains(draftSpecSystemPrompt, "Never combine") {
+		t.Error("prompt does not forbid combining an allowed-when rule with a failure rule")
+	}
+}
+
+// A Structured Intent often carries operation "UNKNOWN" while its intentStatement plainly describes
+// the action ("Create a booking only when at least one seat is requested"). The Operation:
+// declaration is semantic, so it is derived from that statement — never copied from a source symbol,
+// and never omitted, which the parser rejects as MALFORMED_SPEC.
+func TestDraftSpecPromptDerivesTheSemanticOperationFromTheIntent(t *testing.T) {
+	for _, required := range []string{
+		"derive",
+		"intentStatement",
+		"UNKNOWN",
+	} {
+		if !strings.Contains(draftSpecSystemPrompt, required) {
+			t.Errorf("prompt does not mention %q, so the model has no rule for an intent that states no operation", required)
+		}
+	}
+	if strings.Contains(draftSpecSystemPrompt, "Class.method") || strings.Contains(draftSpecSystemPrompt, "BookingService.createBooking") {
+		t.Error("prompt must never ask for a source symbol")
+	}
+}

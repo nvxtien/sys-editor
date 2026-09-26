@@ -13,6 +13,8 @@ export function assertSysDraftServerAvailable(running: boolean, configuredUrl: s
 export function assertSysDraftFormalizable(capability: SysFormalizationCapability): void {
 	switch (capability.outcome) {
 		case 'FORMAL_SPEC_SUPPORTED': return;
+		case 'OPERATION_UNSPECIFIED':
+			throw new Error('This Structured Intent states no operation, and a Formal Spec must declare one. Clarify which operation the requirement governs and normalize again.');
 		case 'PLATFORM_FORMAL_SPEC_GAP':
 			throw new Error(`PLATFORM_FORMAL_SPEC_GAP: the current Sys Platform grammar does not represent this ${SYS_INTENT_KIND_LABEL[capability.kind].toLowerCase()} intent yet. Its confirmed Structured Intent remains the governed record.`);
 		case 'NOT_FORMALIZABLE':

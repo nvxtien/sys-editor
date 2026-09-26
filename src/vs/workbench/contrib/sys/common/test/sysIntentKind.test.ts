@@ -1,4 +1,6 @@
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import { formalizationNote, parseFormalizationCapability, parseStructuredIntent, serializeStructuredIntent, SysFormalizationCapability, SysStructuredIntentRecord } from '../sysStructuredIntent.js';
 import { assertSysDraftFormalizable } from '../sysFormalSpecDraft.js';
@@ -21,8 +23,25 @@ function record(kind: string | undefined, approvedContent?: string): SysStructur
 const CAPABILITY: Record<string, SysFormalizationCapability> = {
 	ready: { kind: 'OPERATION_RULE', status: 'SUPPORTED', requiredContext: 'OPERATION', outcome: 'FORMAL_SPEC_SUPPORTED' },
 	gap: { kind: 'DATA_MODEL', status: 'UNSUPPORTED', requiredContext: 'ENTITY_MODEL', outcome: 'PLATFORM_FORMAL_SPEC_GAP' },
-	unknown: { kind: 'UNKNOWN', status: 'UNSUPPORTED', requiredContext: 'NONE', outcome: 'NOT_FORMALIZABLE' }
+	unknown: { kind: 'UNKNOWN', status: 'UNSUPPORTED', requiredContext: 'NONE', outcome: 'NOT_FORMALIZABLE' },
+	unstated: { kind: 'OPERATION_RULE', status: 'SUPPORTED', requiredContext: 'OPERATION', outcome: 'OPERATION_UNSPECIFIED' }
 };
+
+test('an operation rule is offered generation even when its intent states no operation', () => {
+	// The Operation: declaration is semantic and the generator derives it from the intent statement.
+	// Gating on the operation field would block exactly the case generation exists to serve.
+	assert.equal(parseFormalizationCapability(CAPABILITY.ready).outcome, 'FORMAL_SPEC_SUPPORTED');
+	assert.doesNotThrow(() => assertSysDraftFormalizable(CAPABILITY.ready));
+});
+
+test('an unspecified-operation outcome reports a semantic gap, never a source binding', () => {
+	// sys-core reports this when generation itself could not ground an operation. It asks for the
+	// requirement to be clarified, never for a Class.method.
+	assert.throws(() => assertSysDraftFormalizable(CAPABILITY.unstated), /states no operation/);
+	const note = formalizationNote(CAPABILITY.unstated)!;
+	assert.match(note, /operation/i);
+	assert.doesNotMatch(note, /bind|binding|Class\.method/i);
+});
 
 test('parses each semantic kind and rejects an unknown kind value', () => {
 	for (const kind of ['OPERATION_RULE', 'DATA_MODEL', 'RELATIONSHIP', 'INVARIANT', 'WORKFLOW', 'UNKNOWN']) {
@@ -102,4 +121,78 @@ test('the review page never claims a capability it could not read from core', ()
 	const text = renderStructuredIntentReview(record('DATA_MODEL'), undefined);
 	assert.ok(text.includes('could not be read from sys-core'));
 	assert.ok(!text.includes('A Formal Spec can be generated'));
+});
+
+const dataModelRecord = (): SysStructuredIntentRecord => ({
+	sourceRequirement: 'This requirement designs the data model.',
+	state: 'DRAFT',
+	draft: parseStructuredIntent({
+		version: 1, requirementId: 'REQ-001', kind: 'DATA_MODEL',
+		intentStatement: { value: 'Two entities', provenance: 'SPECIFIED' },
+		scope: { value: 'Category and Book', provenance: 'SPECIFIED' },
+		operation: null,
+		entities: [
+			{ name: 'Category', fields: [{ name: 'id', type: 'INT', provenance: 'SPECIFIED' }, { name: 'description', type: 'string', provenance: 'SPECIFIED' }] },
+			{ name: 'Book', fields: [{ name: 'title', type: 'string', provenance: 'SPECIFIED' }] }
+		],
+		relationships: [{ value: 'Each Book belongs to exactly one Category', provenance: 'SPECIFIED' }],
+		inputs: [], constraints: [], effects: [], failureBehavior: [], unknowns: ['Whether id is auto-generated']
+	}, 'REQ-001')
+});
+
+test('a data model review shows entities and relationships, and no operation section', () => {
+	const page = renderStructuredIntentReview(dataModelRecord(), CAPABILITY.gap);
+	assert.ok(page.includes('## Entities'), 'entities section missing');
+	assert.ok(page.includes('### Category'), 'entity heading missing');
+	assert.ok(page.includes('- id: INT'), 'field not rendered as name: type');
+	assert.ok(page.includes('### Book'));
+	assert.ok(page.includes('## Relationships'));
+	assert.ok(page.includes('Each Book belongs to exactly one Category'));
+	// A data model has no operation, no inputs, no effects and no failure behaviour to state.
+	for (const absent of ['## Operation', '## Inputs', '## Effects', '## Failure behavior', 'Not bound yet']) {
+		assert.ok(!page.includes(absent), `${absent} must not appear for a data model`);
+	}
+	assert.ok(page.includes('## Open questions'));
+	assert.ok(page.includes('PLATFORM_FORMAL_SPEC_GAP'));
+});
+
+test('an operation rule review keeps the operation layout', () => {
+	const page = renderStructuredIntentReview(record('OPERATION_RULE'), CAPABILITY.ready);
+	assert.ok(page.includes('## Operation'));
+	assert.ok(page.includes('## Inputs'));
+	assert.ok(page.includes('## Effects'));
+	assert.ok(!page.includes('## Entities'), 'an operation rule states no entities');
+});
+
+test('no review page ever says an operation is "not bound"', () => {
+	for (const page of [renderStructuredIntentReview(dataModelRecord(), CAPABILITY.gap), renderStructuredIntentReview(record('OPERATION_RULE'), CAPABILITY.ready)]) {
+		assert.doesNotMatch(page, /not bound/i);
+	}
+});
+
+const gapWithConstructs: SysFormalizationCapability = {
+	kind: 'DATA_MODEL', status: 'UNSUPPORTED', requiredContext: 'ENTITY_MODEL', outcome: 'PLATFORM_FORMAL_SPEC_GAP',
+	requiredConstructs: ['DECLARED_TYPE', 'FIELD', 'RELATIONSHIP', 'CARDINALITY'],
+	unsupportedConstructs: ['DECLARED_TYPE', 'FIELD', 'RELATIONSHIP', 'CARDINALITY']
+};
+
+test('the capability reply carries the construct sets through to the editor', () => {
+	const parsed = parseFormalizationCapability(JSON.parse(JSON.stringify(gapWithConstructs)));
+	assert.deepEqual(parsed.unsupportedConstructs, ['DECLARED_TYPE', 'FIELD', 'RELATIONSHIP', 'CARDINALITY']);
+	// A reply from an older sys-core carries neither set and must still parse.
+	assert.deepEqual(parseFormalizationCapability(CAPABILITY.gap).unsupportedConstructs, undefined);
+});
+
+test('a gap names the constructs the platform cannot represent', () => {
+	// "this kind is unsupported" tells a reader nothing they can act on. The missing constructs do.
+	const note = formalizationNote(gapWithConstructs)!;
+	for (const construct of ['DECLARED_TYPE', 'FIELD', 'RELATIONSHIP', 'CARDINALITY']) {
+		assert.ok(note.includes(construct), `note does not name ${construct}`);
+	}
+});
+
+test('Add spec is offered only when the platform can formalize the intent', () => {
+	const source = readFileSync(join(process.cwd(), 'src/vs/workbench/contrib/sys/browser/sysSemanticWorkbenchView.ts'), 'utf8');
+	const addSpec = source.slice(source.indexOf("row.hasSpec ? 'Edit spec' : 'Add spec'") - 400, source.indexOf("row.hasSpec ? 'Edit spec' : 'Add spec'"));
+	assert.match(addSpec, /FORMAL_SPEC_SUPPORTED/, 'Add spec is not gated on the capability');
 });

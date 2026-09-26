@@ -20,6 +20,18 @@ export interface SysIntentFact {
 	readonly provenance: SysIntentProvenance;
 }
 
+/** One field of an entity: its own name and type, not a generic input fact. */
+export interface SysIntentField {
+	readonly name: string;
+	readonly type: string;
+	readonly provenance: SysIntentProvenance;
+}
+
+export interface SysIntentEntity {
+	readonly name: string;
+	readonly fields: readonly SysIntentField[];
+}
+
 export interface SysStructuredIntent {
 	readonly version: 1;
 	readonly requirementId: string;
@@ -27,7 +39,12 @@ export interface SysStructuredIntent {
 	readonly kind?: SysIntentKind;
 	readonly intentStatement: SysIntentFact;
 	readonly scope: SysIntentFact;
-	readonly operation: SysIntentFact;
+	/** null when the kind has no operation (a data model, a relationship); absent in older records. */
+	readonly operation: SysIntentFact | null;
+	/** Stated by a data model; absent for kinds that describe no entities. */
+	readonly entities?: readonly SysIntentEntity[];
+	/** How entities relate; absent for kinds that describe no relationships. */
+	readonly relationships?: readonly SysIntentFact[];
 	readonly inputs: readonly SysIntentFact[];
 	readonly constraints: readonly SysIntentFact[];
 	readonly effects: readonly SysIntentFact[];
@@ -52,6 +69,26 @@ function fact(value: unknown, label: string): SysIntentFact {
 	return value as SysIntentFact;
 }
 
+function entities(value: unknown): readonly SysIntentEntity[] {
+	if (!Array.isArray(value)) { throw new Error('Structured Intent has invalid entities'); }
+	return value.map(entity => {
+		const raw = entity as { name?: unknown; fields?: unknown };
+		if (!raw || typeof raw !== 'object' || typeof raw.name !== 'string' || !raw.name.trim() || !Array.isArray(raw.fields)) {
+			throw new Error('Structured Intent has invalid entities');
+		}
+		return {
+			name: raw.name,
+			fields: raw.fields.map(field => {
+				const f = field as { name?: unknown; type?: unknown; provenance?: unknown };
+				if (!f || typeof f !== 'object' || typeof f.name !== 'string' || !f.name.trim() || typeof f.type !== 'string' || !provenance.has(f.provenance as SysIntentProvenance)) {
+					throw new Error('Structured Intent has invalid entities');
+				}
+				return { name: f.name, type: f.type, provenance: f.provenance as SysIntentProvenance };
+			})
+		};
+	});
+}
+
 function facts(value: unknown, label: string): readonly SysIntentFact[] {
 	if (!Array.isArray(value)) { throw new Error(`Structured Intent has an invalid ${label}`); }
 	return value.map((item, index) => fact(item, `${label}[${index}]`));
@@ -74,7 +111,9 @@ export function parseStructuredIntent(value: unknown, requirementId: string, opt
 		...(raw.kind !== undefined ? { kind: raw.kind as SysIntentKind } : {}),
 		intentStatement: fact(raw.intentStatement, 'intentStatement'),
 		scope: fact(raw.scope, 'scope'),
-		operation: fact(raw.operation, 'operation'),
+		operation: raw.operation === null ? null : fact(raw.operation, 'operation'),
+		...(raw.entities === undefined ? {} : { entities: entities(raw.entities) }),
+		...(raw.relationships === undefined ? {} : { relationships: facts(raw.relationships, 'relationships') }),
 		inputs: facts(raw.inputs, 'inputs'),
 		constraints: facts(raw.constraints, 'constraints'),
 		effects: facts(raw.effects, 'effects'),
@@ -89,18 +128,22 @@ export function serializeStructuredIntent(intent: SysStructuredIntent): string {
 
 export type SysFormalizationStatus = 'SUPPORTED' | 'UNSUPPORTED' | 'PARTIALLY_SUPPORTED';
 export type SysRequiredContext = 'OPERATION' | 'ENTITY_MODEL' | 'WORKFLOW' | 'NONE';
-export type SysFormalizationOutcome = 'FORMAL_SPEC_SUPPORTED' | 'PLATFORM_FORMAL_SPEC_GAP' | 'NOT_FORMALIZABLE';
+export type SysFormalizationOutcome = 'FORMAL_SPEC_SUPPORTED' | 'OPERATION_UNSPECIFIED' | 'PLATFORM_FORMAL_SPEC_GAP' | 'NOT_FORMALIZABLE';
 
 export interface SysFormalizationCapability {
 	readonly kind: SysIntentKind;
 	readonly status: SysFormalizationStatus;
 	readonly requiredContext: SysRequiredContext;
 	readonly outcome: SysFormalizationOutcome;
+	/** Governed constructs this intent's facts require; absent from an older sys-core. */
+	readonly requiredConstructs?: readonly string[];
+	/** The subset the platform cannot represent yet, named so a reader knows what is missing. */
+	readonly unsupportedConstructs?: readonly string[];
 }
 
 const STATUSES: readonly SysFormalizationStatus[] = ['SUPPORTED', 'UNSUPPORTED', 'PARTIALLY_SUPPORTED'];
 const CONTEXTS: readonly SysRequiredContext[] = ['OPERATION', 'ENTITY_MODEL', 'WORKFLOW', 'NONE'];
-const OUTCOMES: readonly SysFormalizationOutcome[] = ['FORMAL_SPEC_SUPPORTED', 'PLATFORM_FORMAL_SPEC_GAP', 'NOT_FORMALIZABLE'];
+const OUTCOMES: readonly SysFormalizationOutcome[] = ['FORMAL_SPEC_SUPPORTED', 'OPERATION_UNSPECIFIED', 'PLATFORM_FORMAL_SPEC_GAP', 'NOT_FORMALIZABLE'];
 
 /**
  * The capability is decided by sys-core (`sys-core intent capability`), never here. The editor only
@@ -124,8 +167,19 @@ export function parseFormalizationCapability(value: unknown): SysFormalizationCa
 		kind: raw.kind as SysIntentKind,
 		status: raw.status as SysFormalizationStatus,
 		requiredContext: raw.requiredContext as SysRequiredContext,
-		outcome: outcome as SysFormalizationOutcome
+		outcome: outcome as SysFormalizationOutcome,
+		...constructs(raw.requiredConstructs, 'requiredConstructs'),
+		...constructs(raw.unsupportedConstructs, 'unsupportedConstructs')
 	};
+}
+
+/** Additive: an older sys-core sends neither set, and the editor must still read the reply. */
+function constructs(value: unknown, key: 'requiredConstructs' | 'unsupportedConstructs'): Record<string, readonly string[]> {
+	if (value === undefined) { return {}; }
+	if (!Array.isArray(value) || value.some(item => typeof item !== 'string')) {
+		throw new Error('sys-core returned an invalid formalization capability');
+	}
+	return { [key]: value as readonly string[] };
 }
 
 /** One human sentence for a capability that is not ready; undefined when a Formal Spec can be generated. */
@@ -133,7 +187,14 @@ export function formalizationNote(capability: SysFormalizationCapability): strin
 	const label = SYS_INTENT_KIND_LABEL[capability.kind];
 	switch (capability.outcome) {
 		case 'FORMAL_SPEC_SUPPORTED': return undefined;
-		case 'PLATFORM_FORMAL_SPEC_GAP': return `${label}: PLATFORM_FORMAL_SPEC_GAP — the current Sys Platform grammar does not represent this intent kind yet. Its confirmed Structured Intent remains the governed record.`;
+		case 'OPERATION_UNSPECIFIED': return `${label}: this Structured Intent states no operation, and a Formal Spec must declare one. Clarify which operation the requirement governs and normalize again.`;
+		case 'PLATFORM_FORMAL_SPEC_GAP': {
+			// Naming the constructs tells the reader what is missing; "this kind is unsupported" does not.
+			const missing = capability.unsupportedConstructs?.length
+				? ` Not representable yet: ${capability.unsupportedConstructs.join(', ')}.`
+				: '';
+			return `${label}: PLATFORM_FORMAL_SPEC_GAP — the current Sys Platform grammar cannot represent everything this requirement states.${missing} Its confirmed Structured Intent remains the governed record.`;
+		}
 		case 'NOT_FORMALIZABLE': return `${label} kind: nothing to formalize yet. Clarify the requirement and normalize again.`;
 	}
 }
