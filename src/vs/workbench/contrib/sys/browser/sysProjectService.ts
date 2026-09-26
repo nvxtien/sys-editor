@@ -27,8 +27,12 @@ export interface ISysProjectService {
 	createRequirement(): Promise<URI>;
 	resourceOf(id: string): URI;
 	resourceOfSpec(id: string): URI;
-	/** Regenerates the plain-language review page from the Structured Intent JSON and returns its resource. */
-	writeStructuredIntentReview(id: string): Promise<URI>;
+	/**
+	 * Regenerates the plain-language review page from the Structured Intent JSON and returns its
+	 * resource. `scenarios` is an optional Gherkin projection shown alongside; it is rendered, never
+	 * persisted into the intent, so reviewing never changes what was confirmed.
+	 */
+	writeStructuredIntentReview(id: string, scenarios?: string): Promise<URI>;
 	/** Creates an empty .spec file (if absent) and returns it, ready to be opened in the editor. */
 	createSpec(id: string): Promise<URI>;
 	/** Approves the exact current requirement text in sys-core. */
@@ -130,13 +134,13 @@ class SysProjectService extends Disposable implements ISysProjectService {
 		return URI.joinPath(this.folders()[0], specFile(id));
 	}
 
-	async writeStructuredIntentReview(id: string): Promise<URI> {
+	async writeStructuredIntentReview(id: string, scenarios?: string): Promise<URI> {
 		const record = await this.readStructuredIntent(id);
 		if (!record) { throw new Error('Structured Intent has not been normalized yet.'); }
 		const folder = URI.joinPath(this.folders()[0], '.sys', 'intents');
 		const resource = URI.joinPath(folder, `${id}.intent.review.md`);
 		await this.files.createFolder(folder);
-		await this.files.writeFile(resource, VSBuffer.fromString(renderStructuredIntentReview(record, await this.formalizationCapability(id))));
+		await this.files.writeFile(resource, VSBuffer.fromString(renderStructuredIntentReview(record, await this.formalizationCapability(id), scenarios)));
 		return resource;
 	}
 
@@ -162,14 +166,22 @@ class SysProjectService extends Disposable implements ISysProjectService {
 		this._onDidChange.fire();
 	}
 
+	/**
+	 * Every call here is a round trip to a server that may never answer. A hung call never settles,
+	 * and because a running action disables its button, the whole row goes silent: later clicks are
+	 * swallowed and the app looks dead. The deadline covers resolving the endpoint too, which is
+	 * where a missing server actually stalls.
+	 */
 	private async coreResponse(args: readonly string[], input?: string): Promise<string> {
 		const configured = this.configuration.getValue<string>('sidex.chat.serverUrl');
-		if (configured?.trim()) { await resolveServerEndpoint(); } else { await waitForServerEndpoint(); }
-		const response = await fetchServer(configured, '/v1/sys/core', {
+		const deadline = new Promise<never>((_, reject) =>
+			setTimeout(() => reject(new Error('sys-core did not answer in time')), 15000));
+		await Promise.race([configured?.trim() ? resolveServerEndpoint() : waitForServerEndpoint(), deadline]);
+		const response = await Promise.race([fetchServer(configured, '/v1/sys/core', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ workspace: this.folders()[0].fsPath, args, ...(input === undefined ? {} : { input }) })
-		});
+		}), deadline]);
 		if (!response.ok) { throw new Error(`sys-core failed (${response.status}): ${await response.text()}`); }
 		return response.text();
 	}
@@ -260,6 +272,10 @@ class SysProjectService extends Disposable implements ISysProjectService {
 		await this.files.del(this.resourceOf(id)).catch(ignoreMissing);
 		await this.files.del(this.resourceOfSpec(id)).catch(ignoreMissing);
 		await this.files.del(URI.joinPath(this.folders()[0], '.sys', 'intents', `${id}.intent.review.md`)).catch(ignoreMissing);
+		// sys-core owns the record, intent and spec. Without this they outlive the requirement, and
+		// because ids are reused the next one created inherits them — approval it never earned.
+		// Asked before the project file forgets the id, so a failure here leaves nothing orphaned.
+		await this.core(['requirement', 'forget', id]);
 		await this.save(removeRequirement(project, id));
 	}
 }

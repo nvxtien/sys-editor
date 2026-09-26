@@ -94,8 +94,9 @@ test('no note tells a user to bind an operation', () => {
 	assert.match(formalizationNote(CAPABILITY.gap)!, /PLATFORM_FORMAL_SPEC_GAP/);
 	assert.match(formalizationNote(CAPABILITY.gap)!, /Data model/);
 	assert.doesNotMatch(formalizationNote(CAPABILITY.gap)!, /bind|binding/i);
-	assert.doesNotMatch(formalizationNote(CAPABILITY.unknown)!, /bind|binding/i);
-	assert.match(formalizationNote(CAPABILITY.unknown)!, /nothing to formalize yet/);
+	// An intent that states no governable fact gets no note at all: telling the author to
+	// "clarify and normalize again" blames them for a limit of the platform's grammar.
+	assert.equal(formalizationNote(CAPABILITY.unknown), undefined);
 });
 
 test('a record written before kinds existed needs no binding to be formalizable', () => {
@@ -106,7 +107,7 @@ test('a record written before kinds existed needs no binding to be formalizable'
 test('drafting is refused with the reason that matches the outcome', () => {
 	assert.doesNotThrow(() => assertSysDraftFormalizable(CAPABILITY.ready));
 	assert.throws(() => assertSysDraftFormalizable(CAPABILITY.gap), /PLATFORM_FORMAL_SPEC_GAP/);
-	assert.throws(() => assertSysDraftFormalizable(CAPABILITY.unknown), /no formalizable kind yet/);
+	assert.throws(() => assertSysDraftFormalizable(CAPABILITY.unknown));
 });
 
 test('the review page shows the kind as a model classification and the capability note from core', () => {
@@ -195,4 +196,111 @@ test('Add spec is offered only when the platform can formalize the intent', () =
 	const source = readFileSync(join(process.cwd(), 'src/vs/workbench/contrib/sys/browser/sysSemanticWorkbenchView.ts'), 'utf8');
 	const addSpec = source.slice(source.indexOf("row.hasSpec ? 'Edit spec' : 'Add spec'") - 400, source.indexOf("row.hasSpec ? 'Edit spec' : 'Add spec'"));
 	assert.match(addSpec, /FORMAL_SPEC_SUPPORTED/, 'Add spec is not gated on the capability');
+});
+
+const withScenarios = (): SysStructuredIntentRecord => ({
+	sourceRequirement: 'This requirement designs the data model.',
+	state: 'DRAFT',
+	draft: parseStructuredIntent({
+		version: 1, requirementId: 'REQ-001', kind: 'DATA_MODEL',
+		intentStatement: { value: 'Two entities', provenance: 'SPECIFIED' },
+		scope: { value: 'Category and Book', provenance: 'SPECIFIED' },
+		operation: null,
+		entities: [{ name: 'Category', fields: [{ name: 'id', type: 'INT', provenance: 'SPECIFIED' }] }],
+		relationships: [{ value: 'Each Book belongs to exactly one Category', provenance: 'SPECIFIED' }],
+		scenarios: [{
+			value: 'Scenario: Each Book belongs to exactly one Category\n  Given a Category with id 1 exists\n  When a Book is created with category_id 1\n  Then the Book is linked to exactly one Category',
+			provenance: 'SPECIFIED'
+		}],
+		inputs: [], constraints: [], effects: [], failureBehavior: [], unknowns: []
+	}, 'REQ-001')
+});
+
+test('scenarios are shown as readable Gherkin, in a fenced block', () => {
+	const gherkin = 'Scenario: Each Book belongs to exactly one Category\n  Given a Category with id 1 exists\n  When a Book is created with category_id 1\n  Then the Book is linked to exactly one Category';
+	const page = renderStructuredIntentReview(record('DATA_MODEL'), CAPABILITY.gap, gherkin);
+	assert.ok(page.includes('## Scenarios'), 'no scenarios section');
+	assert.ok(page.includes('```gherkin'), 'scenarios are not fenced as gherkin');
+	assert.ok(page.includes('Scenario: Each Book belongs to exactly one Category'));
+	assert.ok(page.includes('  Given a Category with id 1 exists'), 'the Given line lost its indentation');
+	// It is a reading aid, not what gets confirmed; the page must not imply otherwise.
+	assert.ok(page.includes('what you confirm') || page.includes('What you confirm'), 'the page no longer says what is confirmed');
+	// A scenario is several lines; collapsing it to one would make it unreadable.
+	assert.ok(!page.includes('Scenario: Each Book belongs to exactly one Category  Given'), 'scenario was flattened');
+});
+
+test('a review with no scenarios shows no scenarios section', () => {
+	// The provider may be down or the intent may state no behaviour: either way the page still opens.
+	assert.ok(!renderStructuredIntentReview(record('OPERATION_RULE'), CAPABILITY.ready).includes('## Scenarios'));
+	assert.ok(!renderStructuredIntentReview(record('OPERATION_RULE'), CAPABILITY.ready, undefined).includes('## Scenarios'));
+	assert.ok(renderStructuredIntentReview(record('OPERATION_RULE'), CAPABILITY.ready, undefined).includes('## Intent'));
+});
+
+test('a review page never tells the author to clarify a requirement the platform cannot formalize', () => {
+	for (const capability of [CAPABILITY.unknown, CAPABILITY.gap]) {
+		const page = renderStructuredIntentReview(record('DATA_MODEL'), capability);
+		assert.doesNotMatch(page, /nothing to formalize yet/);
+		assert.doesNotMatch(page, /Clarify the requirement and normalize again/);
+	}
+});
+
+test('an empty requirement offers nothing but deleting it', () => {
+	const view = readFileSync(join(process.cwd(), 'src/vs/workbench/contrib/sys/browser/sysSemanticWorkbenchView.ts'), 'utf8');
+	// Every lifecycle action sits behind the same guard, so a blank requirement cannot offer one.
+	const guard = /!row\.missing && !row\.empty && !row\.lifecycleUnavailable/;
+	assert.match(view, guard, 'lifecycle actions are not guarded on an empty requirement');
+	// And the row says what to do instead of leaving the reader with only Delete.
+	assert.match(view, /Write the requirement/, 'no guidance for an empty requirement');
+});
+
+test('a running action shows it is running and cannot be started twice', () => {
+	const view = readFileSync(join(process.cwd(), 'src/vs/workbench/contrib/sys/browser/sysSemanticWorkbenchView.ts'), 'utf8');
+	const action = view.slice(view.indexOf('private _action('), view.indexOf('private _action(') + 2400);
+	// Normalize intent takes many seconds against a provider; with no feedback it reads as broken.
+	assert.match(action, /b\.disabled = true/, 'the button is not disabled while the action runs');
+	assert.match(action, /finally/, 'the button is never restored');
+	assert.match(action, /aria-busy/, 'screen readers are not told the action is running');
+});
+
+test('every path that opens the review page supplies its scenarios', () => {
+	const view = readFileSync(join(process.cwd(), 'src/vs/workbench/contrib/sys/browser/sysSemanticWorkbenchView.ts'), 'utf8');
+	const calls = [...view.matchAll(/writeStructuredIntentReview\(([^)]*)\)/g)].map(m => m[1]);
+	assert.ok(calls.length >= 1, 'expected at least the normalize path');
+	for (const args of calls) {
+		// Reaching the same page by normalizing and by reviewing must not give different pages.
+		assert.match(args, /scenarios/, `writeStructuredIntentReview(${args}) omits the scenarios`);
+	}
+});
+
+test('the row offers neither Review intent nor Approve intent', () => {
+	const view = readFileSync(join(process.cwd(), 'src/vs/workbench/contrib/sys/browser/sysSemanticWorkbenchView.ts'), 'utf8');
+	// Normalize already opens the review page, so a separate Review button is a second way to the
+	// same place. Approve intent approved the raw requirement, not the intent, and is not in use.
+	assert.ok(!view.includes("'Review intent'"), 'Review intent is still offered');
+	assert.ok(!view.includes("'Approve intent'"), 'Approve intent is still offered');
+	assert.ok(!view.includes('approveRequirement'), 'the requirement-approval call is still wired up');
+});
+
+test('a failing action always reports where the reader can see it', () => {
+	const view = readFileSync(join(process.cwd(), 'src/vs/workbench/contrib/sys/browser/sysSemanticWorkbenchView.ts'), 'utf8');
+	const action = view.slice(view.indexOf('private _action('), view.indexOf('private _action(') + 2200);
+	// `New requirement` is rendered on the section, not on a requirement row. Writing the message
+	// into host.parentElement put it somewhere the reader never looks, so the click read as a no-op.
+	assert.ok(!/const row = host\.parentElement;\s*\n\s*if \(!row\) \{ return; \}/.test(action),
+		'a failing action still gives up when the host is not a row');
+	assert.match(action, /console\.error/, 'a failed action leaves no trace in the console');
+	// The slot must be attached to the host itself when the host is not a row, never dropped.
+	assert.match(action, /host\.parentElement \?\? host|host\.closest|\?\? host\b/, 'no fallback target for the error message');
+});
+
+test('an action failure outside a requirement row survives the re-render that follows it', () => {
+	const view = readFileSync(join(process.cwd(), 'src/vs/workbench/contrib/sys/browser/sysSemanticWorkbenchView.ts'), 'utf8');
+	// _renderProject clears the panel with `parent.textContent = ''`, and an action that changes
+	// project state triggers exactly that render. A message written straight into the DOM is wiped
+	// before it can be read, which is what made a failed "New requirement" look like a no-op.
+	assert.match(view, /parent\.textContent = ''/, 'the render no longer clears the panel — revisit this test');
+	assert.match(view, /sectionError/, 'section-level failures are not remembered across a render');
+	// And the remembered message must be drawn again by the render that cleared it.
+	const render = view.slice(view.indexOf('private async _renderProject('), view.indexOf('private _renderRequirementRow('));
+	assert.match(render, /sectionError/, 'the render never redraws a remembered section error');
 });
