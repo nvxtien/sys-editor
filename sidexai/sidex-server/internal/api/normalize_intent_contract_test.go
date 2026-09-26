@@ -151,22 +151,3 @@ func TestNormalizeIntentIgnoresAnUnsafeCorrelationID(t *testing.T) {
 	}
 }
 
-// Reproduced with a real provider: a draft with no blank lines fails "missing Operation:", and
-// multi-word values ("present in the system") fail "a multi-word value is ambiguous". The grammar
-// (docs/architecture/CONTROLLED_NATURAL_LANGUAGE_FORMAL_SPEC.md) makes every declaration and rule its
-// own blank-line-separated paragraph and allows only a one-token literal or "the <receiver> <property>".
-func TestDraftSpecPromptTeachesTheParagraphAndSingleTokenValueRules(t *testing.T) {
-	for _, want := range []string{
-		`each in its own paragraph, separated by a blank line`,
-		`a <value> is either ONE upper-case symbol`,
-		`never a lower-case word such as true`,
-		`category state is MISSING`,
-		`the <receiver> <property>`,
-		`never a multi-word phrase`,
-		"Requirement: Transfer funds\n\nOperation: transfer funds\n\nIf source balance is 0, the operation must fail with InsufficientFunds.",
-	} {
-		if !strings.Contains(draftSpecSystemPrompt, want) {
-			t.Errorf("draft-spec prompt is missing %q", want)
-		}
-	}
-}

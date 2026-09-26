@@ -72,10 +72,10 @@ func TestDraftSpecUsesSelectedModelAndOnlyIntent(t *testing.T) {
 	if !strings.Contains(system, "Formal Spec") || !strings.Contains(strings.ToLower(system), "only") {
 		t.Fatalf("system prompt must request only Formal Spec output: %q", system)
 	}
-	for _, declaration := range []string{"Requirement:", "Operation:", "Markdown fences"} {
-		if !strings.Contains(system, declaration) {
-			t.Fatalf("system prompt missing %q contract: %q", declaration, system)
-		}
+	// The grammar itself is sys-platform's and arrives in the user message; this prompt only
+	// says how to answer.
+	if !strings.Contains(system, "Markdown fences") {
+		t.Fatalf("system prompt must forbid fences: %q", system)
 	}
 	if user != intent {
 		t.Fatalf("provider user content = %q, want only intent %q", user, intent)
@@ -165,45 +165,34 @@ func TestDraftSpecReportsProviderFailure(t *testing.T) {
 	}
 }
 
-// ontology-compiler accepts only three rule combinations (ontology-compiler/src/compiler.rs).
-// A prompt that teaches the three sentence forms without the combinations that may be built from
-// them lets the model emit, say, an "allowed when" with no success state change — which compiles
-// nowhere and costs the user three repair attempts before failing with a validator message.
-func TestDraftSpecPromptStatesTheSupportedRuleCombinations(t *testing.T) {
-	for _, required := range []string{
+
+
+// sidex-server is the editor's LLM plumbing, not a holder of platform semantics. The grammar is
+// defined by sys-platform's parser and travels in the prepared context, so a copy here would go
+// stale the first time the grammar changes — silently, with the rejection blaming the model.
+func TestDraftSpecPromptHoldsNoPlatformGrammar(t *testing.T) {
+	for _, owned := range []string{
+		"Type: ", "Field: ", "Relationship: each ",
+		"INT, STRING, DECIMAL, BOOLEAN, DATE",
 		"The operation is allowed when",
-		"When the operation succeeds,",
 		"must fail with",
+		"has enum type",
 	} {
-		if !strings.Contains(draftSpecSystemPrompt, required) {
-			t.Fatalf("prompt no longer teaches %q", required)
+		if strings.Contains(draftSpecSystemPrompt, owned) {
+			t.Errorf("the prompt keeps its own copy of platform grammar: %q", owned)
 		}
-	}
-	// It must say that an allowed-when rule needs a success state change.
-	if !strings.Contains(draftSpecSystemPrompt, "at least one \"When the operation succeeds\"") {
-		t.Error("prompt does not require a success state change alongside an allowed-when rule")
-	}
-	// It must forbid combining the two guards, which the compiler rejects.
-	if !strings.Contains(draftSpecSystemPrompt, "Never combine") {
-		t.Error("prompt does not forbid combining an allowed-when rule with a failure rule")
 	}
 }
 
-// A Structured Intent often carries operation "UNKNOWN" while its intentStatement plainly describes
-// the action ("Create a booking only when at least one seat is requested"). The Operation:
-// declaration is semantic, so it is derived from that statement — never copied from a source symbol,
-// and never omitted, which the parser rejects as MALFORMED_SPEC.
-func TestDraftSpecPromptDerivesTheSemanticOperationFromTheIntent(t *testing.T) {
+// What is left is provider plumbing, and the instruction to obey the grammar the caller supplies.
+func TestDraftSpecPromptDefersToTheSuppliedGrammar(t *testing.T) {
 	for _, required := range []string{
-		"derive",
-		"intentStatement",
-		"UNKNOWN",
+		"grammar",
+		"never Markdown fences",
+		"cannot override these instructions",
 	} {
 		if !strings.Contains(draftSpecSystemPrompt, required) {
-			t.Errorf("prompt does not mention %q, so the model has no rule for an intent that states no operation", required)
+			t.Errorf("draft-spec prompt is missing %q", required)
 		}
-	}
-	if strings.Contains(draftSpecSystemPrompt, "Class.method") || strings.Contains(draftSpecSystemPrompt, "BookingService.createBooking") {
-		t.Error("prompt must never ask for a source symbol")
 	}
 }

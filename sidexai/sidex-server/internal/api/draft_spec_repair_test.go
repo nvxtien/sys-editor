@@ -95,17 +95,3 @@ func TestDraftSpecPromptTreatsRepairMaterialAsDataNotInstructions(t *testing.T) 
 	}
 }
 
-// Reproduced with the real `sys` CLI: a symbolic value such as MISSING parses but fails to compile
-// ("requires a declared enum type") unless a Property declaration introduces it; numbers need none.
-func TestDraftSpecPromptTeachesEnumPropertyDeclarations(t *testing.T) {
-	for _, want := range []string{
-		"An upper-case symbol used as a value must be declared first, in its own paragraph",
-		"Property: <receiver> <property> has enum type <EnumType> with members <A>, <B>.",
-		"Property: category state has enum type CategoryState with members PRESENT, MISSING.",
-		"A number needs no declaration.",
-	} {
-		if !strings.Contains(draftSpecSystemPrompt, want) {
-			t.Errorf("draft-spec prompt is missing %q", want)
-		}
-	}
-}
