@@ -425,7 +425,7 @@ export class SysSemanticWorkbenchView extends ViewPane {
 	private async _confirmIntent(id: string): Promise<void> {
 		const record = await this.projectService.readStructuredIntent(id);
 		if (!record) { throw new Error('Normalize this requirement before confirming its Structured Intent.'); }
-		const { confirmed } = await this.dialogService.confirm({ message: 'Confirm this Structured Intent?', detail: 'Confirming records this exact Structured Intent as approved, then generates code from it in this project’s language.', primaryButton: 'Confirm intent' });
+		const { confirmed } = await this.dialogService.confirm({ message: 'Confirm this Structured Intent?', detail: 'Confirming records this exact Structured Intent as approved, then generates code from it into this project’s source tree. No file that already exists is overwritten.', primaryButton: 'Confirm intent' });
 		if (!confirmed) { return; }
 		// Approval is the governed record and is recorded first, on its own. Code generation runs
 		// after and can fail without unmaking it: the provider does not get a vote on what the user
@@ -435,9 +435,9 @@ export class SysSemanticWorkbenchView extends ViewPane {
 	}
 
 	/**
-	 * Code for a confirmed Structured Intent, in the language the open project is written in, opened
-	 * beside the intent it came from. It is a reading aid: sys-core does not know it exists, and
-	 * nothing ties it to a Formal Spec generated later.
+	 * Code for a confirmed Structured Intent, written into the project's own source tree in the
+	 * language it is already written in, and opened beside the intent it came from. It is ordinary
+	 * source: sys-core does not know it exists, and nothing ties it to a Formal Spec generated later.
 	 */
 	private async _generateCode(id: string): Promise<void> {
 		const record = await this.projectService.readStructuredIntent(id);
@@ -449,9 +449,10 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		const configuredServerUrl = this.configurationService.getValue<string>('sidex.chat.serverUrl');
 		const endpoint = configuredServerUrl?.trim() ? await resolveServerEndpoint() : await waitForServerEndpoint();
 		assertSysDraftServerAvailable(endpoint.running, configuredServerUrl, endpoint.error);
-		const code = await requestGeneratedCode(serverHttpUrl(configuredServerUrl), model, serializeStructuredIntent(record.draft), language.name);
-		const resource = await this.projectService.writeGeneratedCode(id, language, code);
-		await this.editorService.openEditor({ resource }, SIDE_GROUP);
+		const sourceFiles = await this.projectService.sourceFiles(language);
+		const files = await requestGeneratedCode(serverHttpUrl(configuredServerUrl), model, serializeStructuredIntent(record.draft), language.name, sourceFiles);
+		const written = await this.projectService.writeGeneratedCode(files);
+		for (const resource of written) { await this.editorService.openEditor({ resource }, SIDE_GROUP); }
 	}
 
 	private async _approveFormalSpec(id: string): Promise<void> {

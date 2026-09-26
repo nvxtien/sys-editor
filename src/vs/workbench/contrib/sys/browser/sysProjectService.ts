@@ -11,7 +11,7 @@ import { EMPTY_PROJECT, SYS_PROJECT_FILE, SysProject, SysProjectState, addRequir
 import { isSysArtifactState, parseLifecycle, SysLifecycle } from '../common/sysLifecycle.js';
 import { parseFormalizationCapability, parseStructuredIntent, serializeStructuredIntent, SysFormalizationCapability, SysStructuredIntent, SysStructuredIntentRecord } from '../common/sysStructuredIntent.js';
 import { Verification01Manifest } from '../common/sysManifest.js';
-import { projectLanguage, SysProjectLanguage } from '../common/sysGeneratedCode.js';
+import { projectLanguage, refuseToOverwrite, SysGeneratedFile, SysProjectLanguage } from '../common/sysGeneratedCode.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { fetchServer, resolveServerEndpoint, waitForServerEndpoint } from '../../sidexChat/browser/localServer.js';
 
@@ -52,8 +52,14 @@ export interface ISysProjectService {
 	getPlatformRoot(): Promise<string | undefined>;
 	/** The language the open project is written in, read from the build file at its root; undefined when no marker is there. */
 	projectLanguage(): Promise<SysProjectLanguage | undefined>;
-	/** Writes code generated from a confirmed Structured Intent beside it, at .sys/intents/<id>.code.<ext>. */
-	writeGeneratedCode(id: string, language: SysProjectLanguage, code: string): Promise<URI>;
+	/** The project's existing source file paths, relative to the workspace root, for the model to place its own files by. */
+	sourceFiles(language: SysProjectLanguage): Promise<readonly string[]>;
+	/**
+	 * Writes generated code into the project's source tree and returns the files written, in order.
+	 * Writes nothing at all if any of them already exists: overwriting a file the user wrote is not
+	 * something a generation step gets to do silently.
+	 */
+	writeGeneratedCode(files: readonly SysGeneratedFile[]): Promise<readonly URI[]>;
 	/** Writes a one-rule manifest for a single requirement's Verify run to .sys/verification/<id>.manifest.json. */
 	writeManifest(id: string, manifest: Verification01Manifest): Promise<URI>;
 }
@@ -156,12 +162,37 @@ class SysProjectService extends Disposable implements ISysProjectService {
 		return projectLanguage(root.children?.map(child => child.name) ?? []);
 	}
 
-	async writeGeneratedCode(id: string, language: SysProjectLanguage, code: string): Promise<URI> {
-		const folder = URI.joinPath(this.folders()[0], '.sys', 'intents');
-		const resource = URI.joinPath(folder, `${id}.code.${language.extension}`);
-		await this.files.createFolder(folder);
-		await this.files.writeFile(resource, VSBuffer.fromString(code.endsWith('\n') ? code : code + '\n'));
-		return resource;
+	async sourceFiles(language: SysProjectLanguage): Promise<readonly string[]> {
+		const root = this.folders()[0];
+		const base = language.sourceDir === '.' ? root : URI.joinPath(root, language.sourceDir);
+		const walk = async (folder: URI): Promise<string[]> => {
+			const entries = await this.files.resolve(folder).catch(() => undefined);
+			const paths: string[] = [];
+			for (const child of entries?.children ?? []) {
+				// .sys holds the governed record, not the project's source; showing it to the model
+				// would invite it to write its answer back into the lifecycle's own folder.
+				if (child.name.startsWith('.')) { continue; }
+				paths.push(...child.isDirectory ? await walk(child.resource) : [child.resource.path.slice(root.path.length + 1)]);
+			}
+			return paths;
+		};
+		return (await walk(base)).sort();
+	}
+
+	async writeGeneratedCode(files: readonly SysGeneratedFile[]): Promise<readonly URI[]> {
+		const root = this.folders()[0];
+		const targets = files.map(file => ({ file, resource: URI.joinPath(root, file.path) }));
+		// Every one is checked before any is written: a half-written generation leaves the project
+		// in a state neither the user nor the next generation can reason about.
+		const clashes: string[] = [];
+		for (const { file, resource } of targets) {
+			if (await this.files.exists(resource)) { clashes.push(file.path); }
+		}
+		refuseToOverwrite(clashes);
+		for (const { file, resource } of targets) {
+			await this.files.writeFile(resource, VSBuffer.fromString(file.code.endsWith('\n') ? file.code : file.code + '\n'));
+		}
+		return targets.map(target => target.resource);
 	}
 
 	async createSpec(id: string): Promise<URI> {
@@ -291,13 +322,9 @@ class SysProjectService extends Disposable implements ISysProjectService {
 		const ignoreMissing = (e: unknown) => { if (!(e instanceof FileOperationError && e.fileOperationResult === FileOperationResult.FILE_NOT_FOUND)) { throw e; } };
 		await this.files.del(this.resourceOf(id)).catch(ignoreMissing);
 		await this.files.del(this.resourceOfSpec(id)).catch(ignoreMissing);
-		const intents = URI.joinPath(this.folders()[0], '.sys', 'intents');
-		await this.files.del(URI.joinPath(intents, `${id}.intent.review.md`)).catch(ignoreMissing);
-		// The generated code's extension is whatever the project's language was when it was written,
-		// which nothing records. Matched by name so a later language change cannot orphan it.
-		for (const child of (await this.files.resolve(intents).catch(() => undefined))?.children ?? []) {
-			if (child.name.startsWith(`${id}.code.`)) { await this.files.del(child.resource).catch(ignoreMissing); }
-		}
+		await this.files.del(URI.joinPath(this.folders()[0], '.sys', 'intents', `${id}.intent.review.md`)).catch(ignoreMissing);
+		// Generated code is ordinary project source, not a lifecycle artifact: deleting a
+		// requirement does not delete source files the user may since have built on.
 		// sys-core owns the record, intent and spec. Without this they outlive the requirement, and
 		// because ids are reused the next one created inherits them — approval it never earned.
 		// Asked before the project file forgets the id, so a failure here leaves nothing orphaned.

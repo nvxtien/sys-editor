@@ -230,54 +230,95 @@ const POM = `<project xmlns="http://maven.apache.org/POM/4.0.0">
 </project>
 `;
 
-/**
- * Confirming an intent records it as approved and then generates code from it in the language the
- * open project is written in. The code is a reading aid, so the assertions are the ones a reader
- * would notice: it is in their language, it is about their entities, and it is a file their
- * compiler accepts — not a fenced answer pasted into a .java file.
- */
-test('Confirm intent generates code in the project’s own language and opens it', async ({ page }) => {
-	test.setTimeout(300_000);
+const APP_JAVA = 'package com.example;\n\npublic class App {\n\tpublic static void main(String[] args) {}\n}\n';
+
+function javaWorkspace() {
 	const root = emptyWorkspace();
 	fs.writeFileSync(path.join(root, 'pom.xml'), POM);
+	fs.mkdirSync(path.join(root, 'src', 'main', 'java', 'com', 'example'), { recursive: true });
+	fs.writeFileSync(path.join(root, 'src', 'main', 'java', 'com', 'example', 'App.java'), APP_JAVA);
 	fs.writeFileSync(path.join(root, '.sys', 'project.json'), JSON.stringify({ version: 1, requirements: [{ id: 'REQ-001' }] }));
 	fs.writeFileSync(path.join(root, '.sys', 'requirements', 'REQ-001.md'), DATA_MODEL);
-	const workbench = await openWorkbench(page, root);
+	return root;
+}
 
-	await workbench.getByRole('button', { name: 'Normalize intent' }).click();
+const javaFiles = root => {
+	const dir = path.join(root, 'src', 'main', 'java', 'com', 'example');
+	return fs.existsSync(dir) ? fs.readdirSync(dir).sort() : [];
+};
+
+async function confirmIntent(page, workbench) {
 	const confirm = workbench.getByRole('button', { name: 'Confirm intent' });
 	await expect(confirm).toHaveCount(1, { timeout: 180_000 });
 	await confirm.click();
-
 	const dialog = page.locator('.monaco-dialog-box');
 	await expect(dialog).toBeVisible({ timeout: 10_000 });
 	await dialog.getByRole('button', { name: 'Confirm intent' }).click();
+}
 
-	// Java, because pom.xml is at the workspace root — the model never picks the language.
-	const generated = path.join(root, '.sys', 'intents', 'REQ-001.code.java');
-	await expect.poll(() => fs.existsSync(generated), { timeout: 180_000 }).toBe(true);
-	const code = fs.readFileSync(generated, 'utf8');
+/**
+ * Confirming an intent records it as approved and then writes code for it into the project's own
+ * source tree. The assertions are what a Java developer would check: the files landed beside the
+ * code they already had, in their package, and their compiler accepts them.
+ */
+test('Confirm intent writes code into the project’s source tree and opens it', async ({ page }) => {
+	test.setTimeout(300_000);
+	const root = javaWorkspace();
+	const workbench = await openWorkbench(page, root);
 
-	// A fence saved into a .java file is a syntax error, and an answer in several blocks used to
-	// leave its inner fences behind in the middle of the file.
-	expect(code).not.toContain('```');
-	expect(code).toContain('Category');
-	expect(code).toContain('Book');
+	await workbench.getByRole('button', { name: 'Normalize intent' }).click();
+	await confirmIntent(page, workbench);
 
-	// The file is named after the requirement, so a public type in it would not compile under that
-	// name. javac is the only witness that actually settles this.
-	expect(code).not.toMatch(/\bpublic\s+(class|interface|record|enum)\b/);
+	// Beside App.java, in src/main/java/com/example — not in .sys, and not at the project root.
+	await expect.poll(() => javaFiles(root).length, { timeout: 180_000 }).toBeGreaterThan(1);
+	const written = javaFiles(root).filter(name => name !== 'App.java');
+	expect(written).toContain('Category.java');
+	expect(written).toContain('Book.java');
+
+	const src = path.join(root, 'src', 'main', 'java', 'com', 'example');
+	for (const name of written) {
+		const code = fs.readFileSync(path.join(src, name), 'utf8');
+		// A fence saved into a .java file is a syntax error, and the package has to be the one the
+		// directory already implies or the file does not belong to the project it was added to.
+		expect(code).not.toContain('```');
+		expect(code).toContain('package com.example;');
+	}
+
+	// javac is the only witness that settles whether this is source or a plausible-looking answer.
 	try {
-		execFileSync('javac', ['-d', fs.mkdtempSync(path.join(os.tmpdir(), 'sys-javac-')), generated], { encoding: 'utf8', stdio: 'pipe' });
+		execFileSync('javac', ['-d', fs.mkdtempSync(path.join(os.tmpdir(), 'sys-javac-')), ...fs.readdirSync(src).map(name => path.join(src, name))], { encoding: 'utf8', stdio: 'pipe' });
 	} catch (error) {
 		if (error.code !== 'ENOENT') { throw new Error(`the generated Java does not compile:\n${error.stderr}`); }
 	}
 
+	// The file the user already had is untouched.
+	expect(fs.readFileSync(path.join(src, 'App.java'), 'utf8')).toBe(APP_JAVA);
+
 	// Approval is the governed record and is made before any code is asked for.
 	expect(JSON.parse(core(root, ['intent', 'show', 'REQ-001'])).state).toBe('APPROVED');
+	await expect(page.locator('.tabs-container').getByText(written[0])).toBeVisible({ timeout: 20_000 });
+});
 
-	// Opened beside the intent, not written and left for the user to find.
-	await expect(page.locator('.tabs-container').getByText('REQ-001.code.java')).toBeVisible({ timeout: 20_000 });
+// Generating over files the user already has would destroy work no undo can bring back, so the
+// whole write is refused rather than partly applied.
+test('a generation never replaces a source file the user already wrote', async ({ page }) => {
+	test.setTimeout(300_000);
+	const root = javaWorkspace();
+	const src = path.join(root, 'src', 'main', 'java', 'com', 'example');
+	// Whatever else the model names, it cannot avoid the entities the requirement is about.
+	const mine = 'package com.example;\n\n// mine, not the model’s\npublic class Category {}\n';
+	fs.writeFileSync(path.join(src, 'Category.java'), mine);
+	const workbench = await openWorkbench(page, root);
+
+	await workbench.getByRole('button', { name: 'Normalize intent' }).click();
+	await confirmIntent(page, workbench);
+
+	// Shown the project's files, the model usually leaves Category.java out rather than clashing,
+	// so the refusal itself is pinned by a unit test. What is asserted here is the invariant no
+	// model behaviour may break: the file the user wrote is still theirs, byte for byte.
+	await expect.poll(() => javaFiles(root).length > 2 || fs.existsSync(path.join(root, '.sys', 'intents', 'REQ-001.intent.review.md')), { timeout: 180_000 }).toBe(true);
+	expect(fs.readFileSync(path.join(src, 'Category.java'), 'utf8')).toBe(mine);
+	expect(JSON.parse(core(root, ['intent', 'show', 'REQ-001'])).state).toBe('APPROVED');
 });
 
 // A project whose language the editor cannot name gets no guessed code, and the approval still
@@ -290,14 +331,8 @@ test('a project with no build file it recognizes is told so, and stays confirmed
 	const workbench = await openWorkbench(page, root);
 
 	await workbench.getByRole('button', { name: 'Normalize intent' }).click();
-	const confirm = workbench.getByRole('button', { name: 'Confirm intent' });
-	await expect(confirm).toHaveCount(1, { timeout: 180_000 });
-	await confirm.click();
-	const dialog = page.locator('.monaco-dialog-box');
-	await expect(dialog).toBeVisible({ timeout: 10_000 });
-	await dialog.getByRole('button', { name: 'Confirm intent' }).click();
+	await confirmIntent(page, workbench);
 
 	await expect(workbench.getByText(/Could not tell what language this project is written in/)).toBeVisible({ timeout: 60_000 });
 	expect(JSON.parse(core(root, ['intent', 'show', 'REQ-001'])).state).toBe('APPROVED');
-	expect((fs.existsSync(path.join(root, '.sys', 'intents')) ? fs.readdirSync(path.join(root, '.sys', 'intents')) : []).filter(f => f.includes('.code.'))).toEqual([]);
 });
