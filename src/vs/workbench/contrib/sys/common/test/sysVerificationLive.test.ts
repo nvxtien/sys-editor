@@ -2,14 +2,16 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { pickStableSelection } from '../sysVerification.js';
 import { decodeVerificationV01, isNoVerificationRun, VerificationTransportError } from '../sysVerificationWire.js';
 import { loadLiveVerification, VerificationTransport } from '../sysVerificationLive.js';
 
-const here = dirname(fileURLToPath(import.meta.url));
-const golden = readFileSync(join(here, 'verification-v0.1.cinema.json'), 'utf8');
+// Resolved from the repo root, as the other source-reading tests do. Resolving relative to the
+// compiled file makes the test pass or fail on where it was built rather than on what it asserts.
+const SYS = 'src/vs/workbench/contrib/sys';
+const fromRepo = (relative: string) => readFileSync(join(process.cwd(), relative), 'utf8');
+const golden = fromRepo(`${SYS}/common/test/verification-v0.1.cinema.json`);
 const project = decodeVerificationV01(golden);
 const rule = (id: string) => project.rules.find(r => r.id === id)!;
 const ob = (ruleId: string, kind: string) => rule(ruleId).obligations.find(o => o.kind === kind)!;
@@ -196,8 +198,8 @@ test('refresh keeps rule and obligation selection by stable id, and drops vanish
 });
 
 test('live adapter sources contain no domain-specific branch or prose inference', () => {
-	for (const f of ['../sysVerificationWire.ts', '../sysVerificationLive.ts', '../../browser/sysVerificationProviderService.ts']) {
-		const src = readFileSync(join(here, f), 'utf8')
+	for (const f of [`${SYS}/common/sysVerificationWire.ts`, `${SYS}/common/sysVerificationLive.ts`, `${SYS}/browser/sysVerificationProviderService.ts`]) {
+		const src = fromRepo(f)
 			.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '')
 			.replace(/^.*CINEMA_BOOKING_VERIFICATION_PROJECT.*$/gm, ''); // explicit fixture mode is the only allowed reference
 		assert.doesNotMatch(src, /Booking|Cinema|Seat|['"]B[0-9]+['"]/i, f);

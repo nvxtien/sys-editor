@@ -137,3 +137,4 @@ test-results/
 # Go caches kept inside the repo so builds do not need a writable GOPATH
 .tmp-go-cache/
 .tmp-go-modcache/
+out-test/

@@ -899,7 +899,7 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		DOM.append(formSection, $('h3.sys-intent-section-title')).textContent = 'Your clarification:';
 
 		const inputContainer = DOM.append(formSection, $('div.sys-intent-input-container'));
-		const textarea = DOM.append(inputContainer, $('textarea.sys-intent-textarea'));
+		const textarea = DOM.append(inputContainer, $<HTMLTextAreaElement>('textarea.sys-intent-textarea'));
 		textarea.placeholder = 'Enter your clarification here...';
 		textarea.value = item.candidateMeaning ?? '';
 		textarea.setAttribute('aria-label', 'Enter clarification for intent item');
@@ -1003,7 +1003,7 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		const newMeaningSection = DOM.append(replaceSection, $('div.sys-intent-replacement-part'));
 		DOM.append(newMeaningSection, $('h4.sys-intent-replacement-label')).textContent = 'Proposed replacement:';
 		const inputContainer = DOM.append(newMeaningSection, $('div.sys-intent-input-container'));
-		const textarea = DOM.append(inputContainer, $('textarea.sys-intent-textarea'));
+		const textarea = DOM.append(inputContainer, $<HTMLTextAreaElement>('textarea.sys-intent-textarea'));
 		textarea.value = details.replacementNewMeaning ?? '';
 		textarea.placeholder = 'Enter replacement clarification...';
 		textarea.setAttribute('aria-label', 'Enter replacement clarification');
