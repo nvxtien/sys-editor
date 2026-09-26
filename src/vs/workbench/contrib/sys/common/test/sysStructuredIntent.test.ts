@@ -96,3 +96,41 @@ test('a record written before entities existed still parses unchanged', () => {
 // Scenarios are a plain-language projection for the reviewer, in the same FACT shape as every other
 // fact so nothing new has to be validated. The JSON stays the governed record.
 
+
+// The prompt tells a data model to emit no inputs, effects or failureBehavior. Requiring them here
+// rejected the very answer the prompt asked for: "Structured Intent has an invalid inputs".
+test('a kind that states no inputs, effects or failures parses with empty lists', () => {
+	const intent = parseStructuredIntent({
+		version: 1, requirementId: 'REQ-001', kind: 'DATA_MODEL',
+		intentStatement: { value: 'Two entities', provenance: 'SPECIFIED' },
+		scope: { value: 'Category and Book', provenance: 'SPECIFIED' },
+		operation: null,
+		entities: [{ name: 'Category', fields: [{ name: 'id', type: 'INT', provenance: 'SPECIFIED' }] }],
+		relationships: [{ value: 'Each Book belongs to one Category', provenance: 'SPECIFIED' }],
+		unknowns: []
+	}, 'REQ-001');
+	assert.deepEqual(intent.inputs, []);
+	assert.deepEqual(intent.effects, []);
+	assert.deepEqual(intent.failureBehavior, []);
+	assert.deepEqual(intent.constraints, []);
+	assert.equal(intent.entities?.length, 1);
+});
+
+test('a malformed list is still rejected, absent is not the same as wrong', () => {
+	const base = {
+		version: 1, requirementId: 'REQ-001', kind: 'OPERATION_RULE',
+		intentStatement: { value: 'x', provenance: 'SPECIFIED' }, scope: { value: 'x', provenance: 'SPECIFIED' },
+		operation: { value: 'create booking', provenance: 'SPECIFIED' }, unknowns: []
+	};
+	assert.throws(() => parseStructuredIntent({ ...base, inputs: 'not a list' }, 'REQ-001'), /invalid inputs/);
+	assert.throws(() => parseStructuredIntent({ ...base, inputs: [{ value: 'x' }] }, 'REQ-001'), /invalid inputs/);
+});
+
+test('unknowns may be absent too', () => {
+	const intent = parseStructuredIntent({
+		version: 1, requirementId: 'REQ-001', kind: 'DATA_MODEL',
+		intentStatement: { value: 'x', provenance: 'SPECIFIED' }, scope: { value: 'x', provenance: 'SPECIFIED' },
+		operation: null
+	}, 'REQ-001');
+	assert.deepEqual(intent.unknowns, []);
+});

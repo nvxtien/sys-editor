@@ -91,9 +91,6 @@ test('a capability with no operationBinding at all parses', () => {
 
 test('no note tells a user to bind an operation', () => {
 	assert.equal(formalizationNote(CAPABILITY.ready), undefined);
-	assert.match(formalizationNote(CAPABILITY.gap)!, /PLATFORM_FORMAL_SPEC_GAP/);
-	assert.match(formalizationNote(CAPABILITY.gap)!, /Data model/);
-	assert.doesNotMatch(formalizationNote(CAPABILITY.gap)!, /bind|binding/i);
 	// An intent that states no governable fact gets no note at all: telling the author to
 	// "clarify and normalize again" blames them for a limit of the platform's grammar.
 	assert.equal(formalizationNote(CAPABILITY.unknown), undefined);
@@ -114,7 +111,7 @@ test('the review page shows the kind as a model classification and the capabilit
 	const gap = renderStructuredIntentReview(record('DATA_MODEL', 'x'), CAPABILITY.gap);
 	assert.ok(gap.includes('## Kind'));
 	assert.ok(gap.includes('Data model — ⚠ model’s classification, please check'));
-	assert.ok(gap.includes('PLATFORM_FORMAL_SPEC_GAP'));
+	assert.ok(!gap.includes('PLATFORM_FORMAL_SPEC_GAP'), 'platform vocabulary leaked into the review page');
 	assert.ok(renderStructuredIntentReview(record('OPERATION_RULE'), CAPABILITY.ready).includes('A Formal Spec can be generated'));
 });
 
@@ -154,7 +151,7 @@ test('a data model review shows entities and relationships, and no operation sec
 		assert.ok(!page.includes(absent), `${absent} must not appear for a data model`);
 	}
 	assert.ok(page.includes('## Open questions'));
-	assert.ok(page.includes('PLATFORM_FORMAL_SPEC_GAP'));
+	assert.ok(!page.includes('PLATFORM_FORMAL_SPEC_GAP'), 'platform vocabulary leaked into the review page');
 });
 
 test('an operation rule review keeps the operation layout', () => {
@@ -184,12 +181,11 @@ test('the capability reply carries the construct sets through to the editor', ()
 	assert.deepEqual(parseFormalizationCapability(CAPABILITY.gap).unsupportedConstructs, undefined);
 });
 
-test('a gap names the constructs the platform cannot represent', () => {
-	// "this kind is unsupported" tells a reader nothing they can act on. The missing constructs do.
-	const note = formalizationNote(gapWithConstructs)!;
-	for (const construct of ['DECLARED_TYPE', 'FIELD', 'RELATIONSHIP', 'CARDINALITY']) {
-		assert.ok(note.includes(construct), `note does not name ${construct}`);
-	}
+test('a platform gap is not narrated on the review page', () => {
+	// The page already shows the kind and what the intent states. A paragraph of platform vocabulary
+	// on top of that is noise for the person reading their own requirement back.
+	assert.equal(formalizationNote(gapWithConstructs), undefined);
+	assert.equal(formalizationNote(CAPABILITY.gap), undefined);
 });
 
 test('Add spec is offered only when the platform can formalize the intent', () => {
@@ -303,4 +299,12 @@ test('an action failure outside a requirement row survives the re-render that fo
 	// And the remembered message must be drawn again by the render that cleared it.
 	const render = view.slice(view.indexOf('private async _renderProject('), view.indexOf('private _renderRequirementRow('));
 	assert.match(render, /sectionError/, 'the render never redraws a remembered section error');
+});
+
+test('a running action is visibly running, not just relabelled', () => {
+	const css = readFileSync(join(process.cwd(), 'src/vs/workbench/contrib/sys/browser/media/sysSemanticWorkbench.css'), 'utf8');
+	// Normalize waits on a provider for tens of seconds. Three dots appended to the label is easy to
+	// miss; a moving indicator is what tells the reader the click landed.
+	assert.match(css, /\[aria-busy="true"\]/, 'no style for a running action');
+	assert.match(css, /@keyframes/, 'the running indicator does not move');
 });

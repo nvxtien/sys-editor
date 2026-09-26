@@ -160,3 +160,64 @@ test('a deleted requirement leaves nothing behind for the next one to inherit', 
 	// A fresh REQ-001 has no intent, so it is offered normalization, never confirmation.
 	await expect(workbench.getByRole('button', { name: 'Confirm intent' })).toHaveCount(0);
 });
+
+const DATA_MODEL = `This requirement designs the data model.
+It has two classes Category and Book.
+Each book belongs to exactly one category.
+One category can contain multiple books.
+
+Category class has attributes:
+  - id: INT
+  - category_name: string
+  - description: string
+
+Book classes has attributes;
+  - id: INT
+  - title: string
+  - author: string
+  - publication_year: INT
+  - category_id: INT
+`;
+
+// The whole normalize path, end to end, against a real provider: click the button, wait for the
+// review page, and read what a reviewer would read. Source-text tests cannot see any of this.
+test('Normalize intent classifies a data model and writes a review a person can read', async ({ page }) => {
+	test.setTimeout(180_000);
+	const root = emptyWorkspace();
+	fs.writeFileSync(path.join(root, '.sys', 'project.json'), JSON.stringify({ version: 1, requirements: [{ id: 'REQ-001' }] }));
+	fs.writeFileSync(path.join(root, '.sys', 'requirements', 'REQ-001.md'), DATA_MODEL);
+	const workbench = await openWorkbench(page, root);
+
+	await workbench.getByRole('button', { name: 'Normalize intent' }).click();
+	// The button must say it is working; without that the click reads as a no-op.
+	await expect(workbench.getByRole('button', { name: 'Normalize intent…' })).toHaveCount(1, { timeout: 5_000 });
+
+	const review = path.join(root, '.sys', 'intents', 'REQ-001.intent.review.md');
+	await expect.poll(() => fs.existsSync(review), { timeout: 150_000 }).toBe(true);
+	const page_ = fs.readFileSync(review, 'utf8');
+
+	// Classified from the facts, not from the word "data model" in the text.
+	expect(page_).toContain('## Kind');
+	expect(page_).toMatch(/Data model|Relationship/);
+
+	// A data model states entities and relationships, not inputs and constraints.
+	expect(page_).toContain('## Entities');
+	expect(page_).toContain('Category');
+	expect(page_).toContain('Book');
+	expect(page_).not.toContain('## Inputs');
+	expect(page_).not.toContain('## Operation');
+
+	// Platform vocabulary does not belong in a page a person reads their requirement back from.
+	expect(page_).not.toContain('PLATFORM_FORMAL_SPEC_GAP');
+	expect(page_).not.toContain('nothing to formalize yet');
+	expect(page_).not.toMatch(/not bound/i);
+
+	// sys-core holds the intent, and the editor keeps no copy of its own.
+	const shown = JSON.parse(core(root, ['intent', 'show', 'REQ-001']));
+	expect(shown.draft.requirementId).toBe('REQ-001');
+	expect(fs.existsSync(path.join(root, '.sys', 'intents', 'REQ-001.intent.json'))).toBe(false);
+
+	// A data model cannot be formalized yet, so it is not offered generation.
+	await expect(workbench.getByRole('button', { name: 'Confirm intent' })).toHaveCount(1, { timeout: 20_000 });
+	await expect(workbench.getByRole('button', { name: 'Generate Formal Spec' })).toHaveCount(0);
+});

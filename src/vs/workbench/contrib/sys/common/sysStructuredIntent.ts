@@ -89,7 +89,13 @@ function entities(value: unknown): readonly SysIntentEntity[] {
 	});
 }
 
+/**
+ * Absent is not the same as wrong. A kind that states no inputs, effects or failures omits them —
+ * the normalize prompt asks a data model to do exactly that — so a missing list is an empty one.
+ * A list that is present but malformed is still rejected.
+ */
 function facts(value: unknown, label: string): readonly SysIntentFact[] {
+	if (value === undefined || value === null) { return []; }
 	if (!Array.isArray(value)) { throw new Error(`Structured Intent has an invalid ${label}`); }
 	return value.map((item, index) => fact(item, `${label}[${index}]`));
 }
@@ -102,7 +108,8 @@ export function parseStructuredIntent(value: unknown, requirementId: string, opt
 	if ((raw.kind !== undefined || options.requireKind) && !SYS_INTENT_KINDS.includes(raw.kind as SysIntentKind)) {
 		throw new Error('Structured Intent has an invalid kind');
 	}
-	if (!Array.isArray(raw.unknowns) || raw.unknowns.some(item => typeof item !== 'string')) {
+	if (raw.unknowns !== undefined && raw.unknowns !== null
+		&& (!Array.isArray(raw.unknowns) || raw.unknowns.some(item => typeof item !== 'string'))) {
 		throw new Error('Structured Intent has invalid unknowns');
 	}
 	return {
@@ -118,7 +125,7 @@ export function parseStructuredIntent(value: unknown, requirementId: string, opt
 		constraints: facts(raw.constraints, 'constraints'),
 		effects: facts(raw.effects, 'effects'),
 		failureBehavior: facts(raw.failureBehavior, 'failureBehavior'),
-		unknowns: raw.unknowns,
+		unknowns: (raw.unknowns as readonly string[] | undefined) ?? [],
 	};
 }
 
@@ -188,15 +195,10 @@ export function formalizationNote(capability: SysFormalizationCapability): strin
 	switch (capability.outcome) {
 		case 'FORMAL_SPEC_SUPPORTED': return undefined;
 		case 'OPERATION_UNSPECIFIED': return `${label}: this Structured Intent states no operation, and a Formal Spec must declare one. Clarify which operation the requirement governs and normalize again.`;
-		case 'PLATFORM_FORMAL_SPEC_GAP': {
-			// Naming the constructs tells the reader what is missing; "this kind is unsupported" does not.
-			const missing = capability.unsupportedConstructs?.length
-				? ` Not representable yet: ${capability.unsupportedConstructs.join(', ')}.`
-				: '';
-			return `${label}: PLATFORM_FORMAL_SPEC_GAP — the current Sys Platform grammar cannot represent everything this requirement states.${missing} Its confirmed Structured Intent remains the governed record.`;
-		}
-		// No note: an intent stating no governable fact is not the author's mistake to fix, and
-		// "clarify and normalize again" blames them for what the platform's grammar cannot represent.
+		// No note: the page already shows the kind and everything the intent states. Narrating the
+		// platform's own limits on top of that is vocabulary the reader did not ask for, in the
+		// middle of reading their own requirement back.
+		case 'PLATFORM_FORMAL_SPEC_GAP': return undefined;
 		case 'NOT_FORMALIZABLE': return undefined;
 	}
 }
