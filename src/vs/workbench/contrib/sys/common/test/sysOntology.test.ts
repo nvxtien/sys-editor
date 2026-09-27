@@ -57,3 +57,19 @@ test('nothing claims a verdict the platform did not give', async () => {
 	if (result.kind !== 'READ') { throw new Error('expected READ'); }
 	assert.ok(result.governed.statements.every(s => s.state === 'GOVERNED_NOT_CHECKED'));
 });
+
+// Which concepts are over budget, and by how much, is the platform's answer -- the editor
+// renders this list, it computes nothing about what "too crowded" means.
+test('a crowded concept from the platform is carried home unchanged', async () => {
+	const report = JSON.stringify({ ...JSON.parse(REPORT), crowded: [{ concept: 'Book', count: 13 }] });
+	const result = await readGoverned(transport({ exitCode: 0, stdout: report, stderr: '' }), '/p', '/w');
+	if (result.kind !== 'READ') { throw new Error('expected READ'); }
+	assert.deepEqual(result.governed.crowded, [{ concept: 'Book', count: 13 }]);
+});
+
+// An older system-ontology sends no crowded field at all; the editor must still read the reply.
+test('a reply from a core that predates the budget field still parses', async () => {
+	const result = await readGoverned(transport({ exitCode: 0, stdout: REPORT, stderr: '' }), '/p', '/w');
+	if (result.kind !== 'READ') { throw new Error('expected READ'); }
+	assert.equal(result.governed.crowded, undefined);
+});

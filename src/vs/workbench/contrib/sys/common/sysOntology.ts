@@ -21,6 +21,13 @@ export interface SysStatement {
 	readonly state: string;
 }
 
+/** A concept carrying more statements than a person can hold in one sitting. The bound and the
+ *  count are both the platform's: the editor renders this row, it does not decide it. */
+export interface SysCrowdedConcept {
+	readonly concept: string;
+	readonly count: number;
+}
+
 export interface SysGoverned {
 	readonly statements: readonly SysStatement[];
 	readonly concepts: readonly string[];
@@ -29,6 +36,8 @@ export interface SysGoverned {
 	readonly unreadable: readonly { readonly requirement: string; readonly reason: string }[];
 	/** Present when there was nothing to read, so the caller can say so instead of showing empty. */
 	readonly note?: string;
+	/** Absent from an older system-ontology; treated the same as empty. */
+	readonly crowded?: readonly SysCrowdedConcept[];
 }
 
 export function systemOntologyBinary(platformRoot: string): string {

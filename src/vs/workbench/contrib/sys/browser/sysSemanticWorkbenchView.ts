@@ -24,13 +24,8 @@ import { IQuickInputService } from '../../../../platform/quickinput/common/quick
 import { IEditorService, SIDE_GROUP } from '../../../services/editor/common/editorService.js';
 import { requestGeneratedCode } from '../common/sysGeneratedCode.js';
 // PROTOTYPE — remove with sysPrototype.ts and sysPrototypeFixture.ts.
-import { readGoverned, SysStatement } from '../common/sysOntology.js';
+import { readGoverned } from '../common/sysOntology.js';
 
-/**
- * How many statements about one concept a person can read in one sitting and still hold. Exceeding
- * it is a design signal — the concept is doing too much — not a performance one.
- */
-const CONCEPT_BUDGET = 10;
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { isSysWorkspaceMissing, validateDraftCandidate } from '../common/sysPlatformFlow.js';
@@ -167,7 +162,7 @@ export class SysSemanticWorkbenchView extends ViewPane {
 			return;
 		}
 
-		const { statements, concepts, unreadable, note: platformNote } = result.governed;
+		const { statements, concepts, unreadable, note: platformNote, crowded } = result.governed;
 		if (platformNote) { note.textContent = platformNote; return; }
 
 		const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
@@ -175,13 +170,9 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		// any code. "Not checked" is a different thing from a green tick.
 		note.textContent = `${plural(statements.length, 'statement')} across ${plural(concepts.length, 'concept')}, none checked against code yet.`;
 
-		// The bound is cognitive, not performance: over budget means the concept is doing too
-		// much, and the answer is to split the model rather than to buy anything.
-		const crowded = concepts
-			.map(concept => ({ concept, count: statements.filter((statement: SysStatement) => statement.concepts.includes(concept)).length }))
-			.filter(({ count }) => count > CONCEPT_BUDGET)
-			.sort((a, b) => b.count - a.count);
-		for (const { concept, count } of crowded) {
+		// Over budget, and how much, is the platform's answer — computed there so every client
+		// renders the same one instead of each deciding for itself what "too crowded" means.
+		for (const { concept, count } of crowded ?? []) {
 			const row = DOM.append(section, $('div.sys-req-row'));
 			DOM.append(DOM.append(row, $('div.sys-req-main')), $('span.sys-req-title')).textContent = concept;
 			DOM.append(row, $('div.sys-req-status')).textContent =
