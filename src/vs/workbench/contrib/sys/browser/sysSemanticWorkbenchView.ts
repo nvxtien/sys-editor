@@ -37,8 +37,7 @@ import { IWorkspaceContextService } from '../../../../platform/workspace/common/
 import { isSysWorkspaceMissing, validateDraftCandidate } from '../common/sysPlatformFlow.js';
 import { ISidexChatService } from '../../sidexChat/browser/sidexChatService.js';
 import { resolveServerEndpoint, serverHttpUrl, waitForServerEndpoint } from '../../sidexChat/browser/localServer.js';
-import { assertSysDraftFormalizable, assertSysDraftServerAvailable, requestSysFormalSpecDraft } from '../common/sysFormalSpecDraft.js';
-import { draftFormalSpecWithRepair } from '../common/sysFormalSpecRepair.js';
+import { assertSysDraftServerAvailable } from '../common/sysServerAvailability.js';
 import { newSysRequestId, requestStructuredIntent, sysTrace } from '../common/sysStructuredIntentDraft.js';
 import { formalizationNote, serializeStructuredIntent } from '../common/sysStructuredIntent.js';
 import { requestIntentScenarios } from '../common/sysIntentScenarios.js';

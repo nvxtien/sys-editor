@@ -35,22 +35,22 @@ Never restate a fact whose provenance is UNKNOWN, and never turn an open questio
 If the intent states no behaviour to show, return nothing at all.`
 
 func (h *Handler) IntentScenarios(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, draftSpecMaxRequestBytes)
+	r.Body = http.MaxBytesReader(w, r.Body, sysMaxRequestBytes)
 	var req intentScenariosRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Model) == "" || strings.TrimSpace(req.Intent) == "" {
-		writeDraftSpecError(w, http.StatusBadRequest, "model and intent are required")
+		writeSysError(w, http.StatusBadRequest, "model and intent are required")
 		return
 	}
 
 	var out strings.Builder
 	tooLarge := false
-	err := h.clientFor(req.Model, auth.UserIDFromContext(r.Context())).WithTimeout(draftSpecTimeout).StreamChat(
+	err := h.clientFor(req.Model, auth.UserIDFromContext(r.Context())).WithTimeout(sysProviderTimeout).StreamChat(
 		[]ai.Message{{Role: ai.RoleUser, Content: req.Intent}}, nil, intentScenariosSystemPrompt,
 		func(chunk ai.StreamChunk) {
 			if chunk.Type != "text" || tooLarge {
 				return
 			}
-			if out.Len()+len(chunk.Content) > draftSpecMaxOutputBytes {
+			if out.Len()+len(chunk.Content) > sysMaxOutputBytes {
 				tooLarge = true
 				return
 			}
@@ -58,11 +58,11 @@ func (h *Handler) IntentScenarios(w http.ResponseWriter, r *http.Request) {
 		},
 	)
 	if err != nil {
-		writeDraftSpecError(w, http.StatusBadGateway, ai.SanitizeErrorForDisplay(err))
+		writeSysError(w, http.StatusBadGateway, ai.SanitizeErrorForDisplay(err))
 		return
 	}
 	if tooLarge {
-		writeDraftSpecError(w, http.StatusBadGateway, "provider output exceeds 32 KiB")
+		writeSysError(w, http.StatusBadGateway, "provider output exceeds 32 KiB")
 		return
 	}
 

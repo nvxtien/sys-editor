@@ -61,10 +61,10 @@ State only facts explicit in the raw requirement; do not invent entities, fields
 Do not emit Formal Spec declarations or rules.`
 
 func (h *Handler) NormalizeIntent(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, draftSpecMaxRequestBytes)
+	r.Body = http.MaxBytesReader(w, r.Body, sysMaxRequestBytes)
 	var req normalizeIntentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Model) == "" || strings.TrimSpace(req.Intent) == "" {
-		writeDraftSpecError(w, http.StatusBadRequest, "model and intent are required")
+		writeSysError(w, http.StatusBadRequest, "model and intent are required")
 		return
 	}
 	id := sysRequestID(r, req.RequestID)
@@ -75,22 +75,22 @@ func (h *Handler) NormalizeIntent(w http.ResponseWriter, r *http.Request) {
 	var output strings.Builder
 	tooLarge := false
 	normalizeStage(id, "provider_start", "model="+req.Model)
-	err := h.clientFor(req.Model, auth.UserIDFromContext(r.Context())).WithTimeout(draftSpecTimeout).StreamChat(
+	err := h.clientFor(req.Model, auth.UserIDFromContext(r.Context())).WithTimeout(sysProviderTimeout).StreamChat(
 		[]ai.Message{{Role: ai.RoleUser, Content: user}}, nil, normalizeIntentSystemPrompt,
 		func(chunk ai.StreamChunk) {
 			if chunk.Type != "text" || tooLarge { return }
-			if output.Len()+len(chunk.Content) > draftSpecMaxOutputBytes { tooLarge = true; return }
+			if output.Len()+len(chunk.Content) > sysMaxOutputBytes { tooLarge = true; return }
 			output.WriteString(chunk.Content)
 		},
 	)
 	if err != nil {
 		normalizeStage(id, "provider_error", ai.SanitizeErrorForDisplay(err))
-		writeDraftSpecError(w, http.StatusBadGateway, ai.SanitizeErrorForDisplay(err))
+		writeSysError(w, http.StatusBadGateway, ai.SanitizeErrorForDisplay(err))
 		return
 	}
 	if tooLarge {
 		normalizeStage(id, "too_large", "")
-		writeDraftSpecError(w, http.StatusBadGateway, "provider output exceeds 32 KiB")
+		writeSysError(w, http.StatusBadGateway, "provider output exceeds 32 KiB")
 		return
 	}
 	// Models wrap JSON in a fence unprompted however firmly the prompt forbids it; refusing the
@@ -101,7 +101,7 @@ func (h *Handler) NormalizeIntent(w http.ResponseWriter, r *http.Request) {
 	if structuredIntent == "" || json.Unmarshal([]byte(structuredIntent), &value) != nil || value == nil {
 		// The raw answer is what a diagnosis needs; without it the failure is unexplainable.
 		normalizeStage(id, "invalid_json", fmt.Sprintf("raw=%q", truncate(structuredIntent, 2000)))
-		writeDraftSpecError(w, http.StatusBadGateway, "provider returned invalid Structured Intent JSON")
+		writeSysError(w, http.StatusBadGateway, "provider returned invalid Structured Intent JSON")
 		return
 	}
 	normalizeStage(id, "parsed", "")

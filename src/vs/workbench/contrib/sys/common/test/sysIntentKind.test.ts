@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import { formalizationNote, parseFormalizationCapability, parseStructuredIntent, serializeStructuredIntent, SysFormalizationCapability, SysStructuredIntentRecord } from '../sysStructuredIntent.js';
-import { assertSysDraftFormalizable } from '../sysFormalSpecDraft.js';
 import { renderStructuredIntentReview } from '../sysStructuredIntentReview.js';
 
 // Capability rules (which kind needs which context, what the platform can formalize) are owned by
@@ -31,13 +30,11 @@ test('an operation rule is offered generation even when its intent states no ope
 	// The Operation: declaration is semantic and the generator derives it from the intent statement.
 	// Gating on the operation field would block exactly the case generation exists to serve.
 	assert.equal(parseFormalizationCapability(CAPABILITY.ready).outcome, 'FORMAL_SPEC_SUPPORTED');
-	assert.doesNotThrow(() => assertSysDraftFormalizable(CAPABILITY.ready));
 });
 
 test('an unspecified-operation outcome reports a semantic gap, never a source binding', () => {
 	// sys-core reports this when generation itself could not ground an operation. It asks for the
 	// requirement to be clarified, never for a Class.method.
-	assert.throws(() => assertSysDraftFormalizable(CAPABILITY.unstated), /states no operation/);
 	const note = formalizationNote(CAPABILITY.unstated)!;
 	assert.match(note, /operation/i);
 	assert.doesNotMatch(note, /bind|binding|Class\.method/i);
@@ -96,16 +93,13 @@ test('no note tells a user to bind an operation', () => {
 	assert.equal(formalizationNote(CAPABILITY.unknown), undefined);
 });
 
-test('a record written before kinds existed needs no binding to be formalizable', () => {
+test('a record written before kinds existed still parses', () => {
 	assert.equal(parseStructuredIntent(raw(undefined), 'REQ-001').kind, undefined);
-	assert.doesNotThrow(() => assertSysDraftFormalizable(parseFormalizationCapability(CAPABILITY.ready)));
 });
 
-test('drafting is refused with the reason that matches the outcome', () => {
-	assert.doesNotThrow(() => assertSysDraftFormalizable(CAPABILITY.ready));
-	assert.throws(() => assertSysDraftFormalizable(CAPABILITY.gap), /PLATFORM_FORMAL_SPEC_GAP/);
-	assert.throws(() => assertSysDraftFormalizable(CAPABILITY.unknown));
-});
+// The gate that refused drafting per outcome went with the controlled grammar it guarded: there is
+// no second artifact to draft. What the outcome still means -- whether the platform can govern
+// these facts -- reaches the reader through formalizationNote, covered above.
 
 test('the review page shows the kind as a model classification and the capability note from core', () => {
 	const gap = renderStructuredIntentReview(record('DATA_MODEL', 'x'), CAPABILITY.gap);

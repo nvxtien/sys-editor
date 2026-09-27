@@ -151,7 +151,6 @@ func main() {
 	protected.HandleFunc("/completions", handler.Completions).Methods("POST", "OPTIONS")
 	protected.HandleFunc("/complete", handler.Complete).Methods("POST", "OPTIONS")
 	protected.HandleFunc("/inline-edit", handler.InlineEdit).Methods("POST", "OPTIONS")
-	protected.HandleFunc("/sys/draft-spec", handler.DraftSpec).Methods("POST", "OPTIONS")
 	protected.HandleFunc("/sys/normalize-intent", handler.NormalizeIntent).Methods("POST", "OPTIONS")
 	protected.HandleFunc("/sys/intent-scenarios", handler.IntentScenarios).Methods("POST", "OPTIONS")
 	protected.HandleFunc("/sys/generate-code", handler.GenerateCode).Methods("POST", "OPTIONS")

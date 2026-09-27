@@ -26,22 +26,22 @@ The user message states the language to write in, the project's existing layout,
 Return only what that format asks for, never Markdown fences, never commentary, never a summary of what you wrote.`
 
 func (h *Handler) GenerateCode(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, draftSpecMaxRequestBytes)
+	r.Body = http.MaxBytesReader(w, r.Body, sysMaxRequestBytes)
 	var req generateCodeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Model) == "" || strings.TrimSpace(req.Intent) == "" {
-		writeDraftSpecError(w, http.StatusBadRequest, "model and intent are required")
+		writeSysError(w, http.StatusBadRequest, "model and intent are required")
 		return
 	}
 
 	var out strings.Builder
 	tooLarge := false
-	err := h.clientFor(req.Model, auth.UserIDFromContext(r.Context())).WithTimeout(draftSpecTimeout).StreamChat(
+	err := h.clientFor(req.Model, auth.UserIDFromContext(r.Context())).WithTimeout(sysProviderTimeout).StreamChat(
 		[]ai.Message{{Role: ai.RoleUser, Content: req.Intent}}, nil, generateCodeSystemPrompt,
 		func(chunk ai.StreamChunk) {
 			if chunk.Type != "text" || tooLarge {
 				return
 			}
-			if out.Len()+len(chunk.Content) > draftSpecMaxOutputBytes {
+			if out.Len()+len(chunk.Content) > sysMaxOutputBytes {
 				tooLarge = true
 				return
 			}
@@ -49,16 +49,16 @@ func (h *Handler) GenerateCode(w http.ResponseWriter, r *http.Request) {
 		},
 	)
 	if err != nil {
-		writeDraftSpecError(w, http.StatusBadGateway, ai.SanitizeErrorForDisplay(err))
+		writeSysError(w, http.StatusBadGateway, ai.SanitizeErrorForDisplay(err))
 		return
 	}
 	if tooLarge {
-		writeDraftSpecError(w, http.StatusBadGateway, "provider output exceeds 32 KiB")
+		writeSysError(w, http.StatusBadGateway, "provider output exceeds 32 KiB")
 		return
 	}
 	candidate := strings.TrimSpace(out.String())
 	if candidate == "" {
-		writeDraftSpecError(w, http.StatusBadGateway, "provider returned an empty answer")
+		writeSysError(w, http.StatusBadGateway, "provider returned an empty answer")
 		return
 	}
 
