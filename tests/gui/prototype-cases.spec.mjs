@@ -418,3 +418,31 @@ test('Case 09 — hovering a type name answers about the concept', async ({ page
 	await expect(hover.getByRole('link', { name: /Open REQ/ })).toBeVisible();
 	await expect(hover.getByRole('link', { name: /Category\.java/ })).toHaveCount(0);
 });
+
+/**
+ * CASE 10 — A link lands on the line, not the file.
+ *
+ * Do:   follow the links in both directions
+ * See:  from the code, the intent opens at the concept's heading; from the intent, the code opens
+ *       at the witness line
+ * Why:  a link without a position leaves the reader at the top of a file, searching for what they
+ *       just clicked — which is most of the cost of following a reference in the first place. A
+ *       reference that costs a search is one people stop following.
+ */
+test('Case 10 — links carry the line, in both directions', async ({ page }) => {
+	const { root } = javaWorkspace();
+	fs.mkdirSync(path.join(root, '.sys', 'intents'), { recursive: true });
+	fs.writeFileSync(path.join(root, '.sys', 'intents', 'REQ-002.intent.review.md'),
+		['# REQ-002', '', 'padding', 'padding', 'padding', '', '### Category', '', '- id', '', '### Book', '', '- title', ''].join('\n'));
+
+	const editor = await open(page, root, 'Book.java');
+	await expect(editor.locator('.squiggly-error').first()).toBeVisible({ timeout: 30_000 });
+
+	await editor.getByText('public Book()').first().hover();
+	const hover = page.locator('.monaco-hover').filter({ hasText: 'Sys ·' }).first();
+	const link = hover.getByRole('link', { name: /Open REQ-002/ });
+	await expect(link).toBeVisible({ timeout: 15_000 });
+	// "### Book" is the eleventh line of that page, and the link says so rather than opening at
+	// the top and leaving the reader to find it.
+	await expect(link).toHaveAttribute('data-href', /#L11$/);
+});

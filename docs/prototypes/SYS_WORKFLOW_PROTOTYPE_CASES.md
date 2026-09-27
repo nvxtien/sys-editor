@@ -332,6 +332,23 @@ The three questions and where each is asked:
 
 ---
 
+## Case 10 — A link lands on the line, not the file
+
+**Do** — follow the links in both directions.
+
+**See** — from the code, the intent opens at the concept's heading. From the intent, the code
+opens at the witness line.
+
+**Why it matters** — a link without a position leaves the reader at the top of a file, searching
+for the thing they just clicked. That search is most of the cost of following a reference, and a
+reference that costs a search is one people stop following. The pair of links in Cases 07 and 08
+is only worth having if landing is free.
+
+Nothing is guessed: the line is found by matching the page for the concept's heading, or the file
+for the witness. With no match the link still opens the file, just without a position.
+
+---
+
 ## What the prototype has already changed
 
 Two findings, both from using it rather than reading it:
@@ -349,7 +366,10 @@ Two findings, both from using it rather than reading it:
    and stacked two blocks, the second telling the reader they were "also in Book.java" while they
    stood in the intent, and offering `Open REQ-002` to someone reading REQ-002. The rule the
    prototype had just adopted, broken by the prototype itself one file over.
-5. **A `ServicesAccessor` is only valid while a command runs synchronously.** Every one of these
+5. **Two hovers, two links, and only one was fixed.** The line hover and the concept hover each
+   build their own link, so carrying the line number in one left the other landing at the top of
+   the file — the same defect, one function over, invisible until both were followed.
+6. **A `ServicesAccessor` is only valid while a command runs synchronously.** Every one of these
    actions awaits a dialog, and reaching for a service afterwards throws. From the user's side the
    action simply did nothing — no error, no dialog. Services are now taken before the first await.
 

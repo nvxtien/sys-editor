@@ -60,6 +60,23 @@ async function report(dialogs: IDialogService, message: string, detail?: string)
  */
 let discoveredRequirement: string | undefined;
 
+/**
+ * A link without a line lands the reader at the top of a file and leaves them to search for what
+ * they clicked — which is most of the cost of following a reference in the first place.
+ *
+ * `find` is applied to each line; the first match wins. Nothing is guessed: with no match the
+ * link still opens the file, just without a position.
+ */
+async function lineIn(files: IFileService, target: URI, find: (line: string) => boolean): Promise<string> {
+	try {
+		const text = (await files.readFile(target)).value.toString();
+		const index = text.split('\n').findIndex(find);
+		return index >= 0 ? `#L${index + 1}` : '';
+	} catch {
+		return '';
+	}
+}
+
 /** The requirement to show for an obligation: this workspace's, if it has one. */
 export function prototypeRequirement(obligation: SysObligation): string {
 	return discoveredRequirement ?? obligation.requirement;
@@ -212,14 +229,14 @@ export class SysPrototypeContribution extends Disposable implements IWorkbenchCo
 		@IMarkerService private readonly markers: IMarkerService,
 		@IModelService private readonly models: IModelService,
 		@ILanguageFeaturesService languageFeatures: ILanguageFeaturesService,
-		@IFileService files: IFileService,
+		@IFileService private readonly files: IFileService,
 		@IWorkspaceContextService workspace: IWorkspaceContextService,
 	) {
 		super();
 
 		const root = workspace.getWorkspace().folders[0]?.uri;
 		if (root) {
-			void files.resolve(URI.joinPath(root, '.sys', 'intents')).then(
+			void this.files.resolve(URI.joinPath(root, '.sys', 'intents')).then(
 				folder => {
 					const page = folder.children?.find(child => child.name.endsWith('.intent.review.md'));
 					if (page) { discoveredRequirement = page.name.replace('.intent.review.md', ''); }
@@ -257,10 +274,10 @@ export class SysPrototypeContribution extends Disposable implements IWorkbenchCo
 				const word = model.getWordAtPosition(position);
 				const about = word ? SYS_PROTOTYPE_OBLIGATIONS.filter(o => o.concept === word.word) : [];
 				if (word && about.length) {
-					return {
+					return realisedIn(this.files, word.word, about, model.uri, 'code').then(value => ({
 						range: new Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn),
-						contents: [{ value: realisedIn(word.word, about, model.uri, 'code'), isTrusted: true }]
-					};
+						contents: [{ value, isTrusted: true }]
+					}));
 				}
 
 				const here = obligationsFor(model)
@@ -272,7 +289,8 @@ export class SysPrototypeContribution extends Disposable implements IWorkbenchCo
 				// ontology, and text from a store is data: trusting it would make a `command:`
 				// link in a requirement's wording executable. Escape it there, or keep it untrusted
 				// and link some other way.
-				return { range: here[0].range, contents: here.map(l => ({ value: hoverFor(l, model.uri), isTrusted: true })) };
+				return Promise.all(here.map(l => hoverFor(this.files, l, model.uri)))
+					.then(values => ({ range: here[0].range, contents: values.map(value => ({ value, isTrusted: true })) }));
 			}
 		}));
 
@@ -285,10 +303,10 @@ export class SysPrototypeContribution extends Disposable implements IWorkbenchCo
 				if (!word) { return undefined; }
 				const about = SYS_PROTOTYPE_OBLIGATIONS.filter(o => o.concept === word.word);
 				if (!about.length) { return undefined; }
-				return {
+				return realisedIn(this.files, word.word, about, model.uri, 'intent').then(value => ({
 					range: new Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn),
-					contents: [{ value: realisedIn(word.word, about, model.uri, 'intent'), isTrusted: true, supportHtml: false }]
-				};
+					contents: [{ value, isTrusted: true, supportHtml: false }]
+				}));
 			}
 		}));
 
@@ -352,7 +370,7 @@ export class SysPrototypeContribution extends Disposable implements IWorkbenchCo
  * One concept can be realised by several files. Listing them is how the reader sees the map is
  * not one to one, rather than being told so.
  */
-function realisedIn(concept: string, about: readonly SysObligation[], from: URI, standingIn: 'intent' | 'code'): string {
+async function realisedIn(files: IFileService, concept: string, about: readonly SysObligation[], from: URI, standingIn: 'intent' | 'code'): Promise<string> {
 	const root = from.path.split('/.sys/')[0].split('/src/')[0];
 	const mark = (verdict: string) => verdict === 'SATISFIED' ? '✓' : verdict === 'CONTRADICTED' ? '✗' : '—';
 	const here = from.path.split('/').pop();
@@ -364,7 +382,15 @@ function realisedIn(concept: string, about: readonly SysObligation[], from: URI,
 			// common one on real code.
 			where = 'nothing in the code says this yet';
 		} else if (standingIn === 'intent') {
-			where = obligation.files.map(file => `[${file}](${URI.file(`${root}/src/main/java/com/example/${file}`).toString()})`).join(', ');
+			const links: string[] = [];
+			for (const file of obligation.files) {
+				const target = URI.file(`${root}/src/main/java/com/example/${file}`);
+				// The witness line, so the reader lands on the code the verdict is about rather
+				// than on line 1 of a file they then have to read.
+				const at = await lineIn(files, target, line => obligation.witnesses.some(w => w.pattern.test(line)));
+				links.push(`[${file}](${target.toString()}${at})`);
+			}
+			where = links.join(', ');
 		} else {
 			// Naming the file you are already in tells the reader nothing; naming the others is
 			// the only part that does.
@@ -376,7 +402,9 @@ function realisedIn(concept: string, about: readonly SysObligation[], from: URI,
 	if (standingIn === 'code') {
 		const requirement = discoveredRequirement ?? about[0]?.requirement;
 		if (requirement) {
-			lines.push('', `[Open ${requirement}](${URI.file(`${root}/.sys/intents/${requirement}.intent.review.md`).toString()})`);
+			const target = URI.file(`${root}/.sys/intents/${requirement}.intent.review.md`);
+			const at = await lineIn(files, target, line => line.trim().replace(/^#+\s*/, '') === concept);
+			lines.push('', `[Open ${requirement}](${target.toString()}${at})`);
 		}
 	}
 	return lines.join('\n\n');
@@ -395,7 +423,7 @@ function intentPage(source: URI, requirement: string): URI {
 	return URI.file(`${root}/.sys/intents/${requirement}.intent.review.md`);
 }
 
-function hoverFor({ obligation, note }: Located, source: URI): string {
+async function hoverFor(files: IFileService, { obligation, note }: Located, source: URI): Promise<string> {
 	const verdict = obligation.verdict === 'CONTRADICTED' ? '✗ broken' : '✓ held';
 	// The requirement is a link, so the mirror of Case 07 holds: from code you reach the intent
 	// exactly as from the intent you reach the code. A reference you cannot follow is a citation
@@ -405,7 +433,10 @@ function hoverFor({ obligation, note }: Located, source: URI): string {
 	const lines = [`**Sys · ${requirement}** — ${verdict}`, '', obligation.says];
 	if (note) { lines.push('', `Here: ${note}`); }
 	// On its own line, not nested in bold: a link inside emphasis is not rendered as one.
-	lines.push('', `[Open ${requirement}](${page.toString()})`);
+	// The concept's heading, so the reader lands on what they clicked rather than at the top of
+	// a page they then have to scan.
+	const at = await lineIn(files, page, line => line.trim().replace(/^#+\s*/, '') === obligation.concept);
+	lines.push('', `[Open ${requirement}](${page.toString()}${at})`);
 	if (obligation.decision) {
 		// The reason travels with the obligation, because it is what a person needs at the moment
 		// they are deciding whether to change the code or change the requirement.
