@@ -245,6 +245,12 @@ export class SysPrototypeContribution extends Disposable implements IWorkbenchCo
 
 		this._register(languageFeatures.hoverProvider.register(ANY_LANGUAGE, {
 			provideHover: (model, position) => {
+				// An intent page has its own provider, and `**/*` matches it too — so without this
+				// both fired, stacking two blocks and telling the reader they were "also in
+				// Book.java" while they stood in the intent. A selector that matches everything
+				// matches the pages that already have an answer.
+				if (model.uri.path.endsWith('.intent.review.md')) { return undefined; }
+
 				// A type name is the concept itself, and "what is governed about this?" is the
 				// question a reader has at the declaration. Answering only on witness lines left
 				// the most obvious place to ask as the one place with no answer.

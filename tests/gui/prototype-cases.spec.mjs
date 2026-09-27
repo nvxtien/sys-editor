@@ -328,6 +328,14 @@ test('Case 07 — hovering a concept in the intent points at the code', async ({
 	await expect(hover).toContainText('Book has a title');
 	await expect(hover).toContainText('Book.java');
 	await expect(hover).toContainText('A Book cannot exist without its Category');
+	// One answer, not two. `**/*` matches the intent page as well, and without excluding it both
+	// providers fired — stacking a second block that told the reader they were "also in
+	// Book.java" while they stood in the intent, and offering REQ-002 to someone reading REQ-002.
+	//
+	// Asserted on content, not on how many hover widgets exist: VS Code keeps spent ones in the
+	// DOM, so counting them tests the DOM rather than the claim.
+	await expect(page.getByText(/also in/)).toHaveCount(0);
+	await expect(page.getByText(/Open REQ/)).toHaveCount(0);
 });
 
 /**

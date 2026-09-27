@@ -344,7 +344,12 @@ Two findings, both from using it rather than reading it:
 3. **A markdown link nested inside `**bold**` does not render as a link**, and an untrusted
    hover does not render one at all. Both fail silently, leaving text that looks like a reference
    and cannot be followed.
-4. **A `ServicesAccessor` is only valid while a command runs synchronously.** Every one of these
+4. **A selector that matches everything matches the pages that already have an answer.** The
+   code hover was registered for `**/*`, which includes the intent page — so both providers fired
+   and stacked two blocks, the second telling the reader they were "also in Book.java" while they
+   stood in the intent, and offering `Open REQ-002` to someone reading REQ-002. The rule the
+   prototype had just adopted, broken by the prototype itself one file over.
+5. **A `ServicesAccessor` is only valid while a command runs synchronously.** Every one of these
    actions awaits a dialog, and reaching for a service afterwards throws. From the user's side the
    action simply did nothing — no error, no dialog. Services are now taken before the first await.
 
