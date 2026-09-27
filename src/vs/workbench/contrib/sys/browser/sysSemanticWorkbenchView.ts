@@ -25,6 +25,8 @@ import { ISideXTaskService } from '../../../../platform/sidex/common/sidexTaskSe
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IEditorService, SIDE_GROUP } from '../../../services/editor/common/editorService.js';
 import { requestGeneratedCode } from '../common/sysGeneratedCode.js';
+// PROTOTYPE — remove with sysPrototype.ts and sysPrototypeFixture.ts.
+import { renderSysNeedsMe } from './sysPrototypeNeedsMe.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { isSysWorkspaceMissing, validateDraftCandidate } from '../common/sysPlatformFlow.js';
@@ -180,6 +182,9 @@ export class SysSemanticWorkbenchView extends ViewPane {
 				return;
 			}
 			case 'READY': {
+				// PROTOTYPE — fake verdicts, first because it is the thing that needs an answer.
+				// Remove this line with the prototype files.
+				renderSysNeedsMe(parent, this._section('Needs you'), resource => void this.editorService.openEditor({ resource }), this.workspaceContextService.getWorkspace().folders[0]?.uri);
 				const section = DOM.append(parent, this._section('Requirements'));
 				DOM.append(section, $('p')).textContent = 'Save a plain-language requirement, generate a draft Formal Spec, review and approve it, then inspect the independently verified code proposal before applying.';
 				for (const row of state.rows) {

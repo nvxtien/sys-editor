@@ -20,6 +20,10 @@ import { ILanguageFeaturesService } from '../../../../editor/common/services/lan
 import { ITextModel } from '../../../../editor/common/model.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { IWorkbenchContribution } from '../../../common/contributions.js';
+import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
+import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
+import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { SysObligation, SYS_PROTOTYPE_OBLIGATIONS } from '../common/sysPrototypeFixture.js';
 
 const OWNER = 'sys.prototype';
@@ -29,6 +33,61 @@ const OWNER = 'sys.prototype';
 // squiggle visible with no reason behind it and no actions on it. Which file an obligation is
 // about is decided by the fixture, not by a language id.
 const ANY_LANGUAGE = { scheme: '*', pattern: '**/*' };
+
+const RETRACT = 'sys.prototype.retractObligation';
+const EXCEPT = 'sys.prototype.grantException';
+
+const byId = (id: string) => SYS_PROTOTYPE_OBLIGATIONS.find(o => o.id === id);
+
+/**
+ * You cannot retract an obligation without reading why it exists. That is the entire reason the
+ * decision layer is worth keeping: this is the one moment a person decides whether to change the
+ * code or change the requirement, and without the reason that decision is a coin flip.
+ */
+CommandsRegistry.registerCommand(RETRACT, async (accessor: ServicesAccessor, id: string) => {
+	const obligation = byId(id);
+	if (!obligation) { return; }
+	const decision = obligation.decision;
+	const { result } = await accessor.get(IDialogService).prompt<'retract' | 'narrow' | undefined>({
+		type: 'warning',
+		message: obligation.says,
+		detail: decision
+			? `Why — ${decision.because} (${decision.when}).\nChose: ${decision.chosen}.\nConsidered: ${decision.alternatives.join(' · ')}.`
+			: 'Nothing records why this was decided, so retracting it costs nothing anyone wrote down.',
+		buttons: [
+			{ label: 'Retract it', run: () => 'retract' as const },
+			...(obligation.narrowerForm ? [{ label: 'Narrow it instead', run: () => 'narrow' as const }] : [])
+		],
+		cancelButton: true
+	});
+	if (!result) { return; }
+	await accessor.get(IDialogService).info(
+		result === 'retract' ? 'Prototype: the obligation would be retracted.' : 'Prototype: the obligation would be narrowed.',
+		result === 'narrow' ? obligation.narrowerForm : undefined
+	);
+});
+
+/**
+ * An exception is a decision with a reason, or it is not granted. A free suppression is how every
+ * obligation in a system eventually becomes decoration, so there is no button that just silences.
+ */
+CommandsRegistry.registerCommand(EXCEPT, async (accessor: ServicesAccessor, id: string) => {
+	const obligation = byId(id);
+	if (!obligation) { return; }
+	const reason = await accessor.get(IQuickInputService).input({
+		title: `Exception — ${obligation.says}`,
+		prompt: 'Why is this location exempt? An exception without a reason is not granted.',
+		placeHolder: 'the framework constructs this by reflection, no business path does',
+		validateInput: async value => value.trim().length < 10 ? 'Say why, in a sentence someone can disagree with.' : undefined
+	});
+	if (!reason?.trim()) { return; }
+	await accessor.get(IDialogService).info(
+		'Prototype: the exception would be recorded as a decision.',
+		obligation.narrowerForm
+			? `Better still, the obligation can be narrowed to: “${obligation.narrowerForm}”`
+			: `Recorded against this location: “${reason.trim()}”`
+	);
+});
 
 interface Located { readonly obligation: SysObligation; readonly range: Range; readonly note?: string }
 
@@ -101,8 +160,8 @@ export class SysPrototypeContribution extends Disposable implements IWorkbenchCo
 				// Exactly three choices, and none of them is silent. A suppression here is how
 				// every obligation in the system eventually becomes decoration.
 				const actions = broken.flatMap(({ obligation }) => [
-					{ title: `Sys: this obligation is wrong — “${obligation.says}”…`, kind: 'quickfix' },
-					{ title: `Sys: this location is an exception — “${obligation.says}”…`, kind: 'quickfix' }
+					{ title: 'Sys: this obligation is wrong…', kind: 'quickfix', command: { id: RETRACT, title: 'Retract', arguments: [obligation.id] } },
+					{ title: 'Sys: this location is an exception…', kind: 'quickfix', command: { id: EXCEPT, title: 'Exception', arguments: [obligation.id] } }
 				]);
 				return { actions, dispose: () => { } };
 			}

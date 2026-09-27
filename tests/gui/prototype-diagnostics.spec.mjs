@@ -149,3 +149,48 @@ test('a held obligation does not decorate, but does answer when asked', async ({
 	// And it is an answer, not an alarm: nothing on this line is marked.
 	await expect(editor.locator('.squiggly-error').filter({ hasText: 'title' })).toHaveCount(0);
 });
+
+/**
+ * Retracting an obligation makes you read why it exists first. This is the one moment a person
+ * decides whether to change the code or change the requirement, and the reason is the only thing
+ * that makes the decision better than a coin flip.
+ */
+test('you cannot retract an obligation without reading why it exists', async ({ page }) => {
+	const { root } = javaWorkspace();
+	const editor = await open(page, root, 'Book.java');
+	await expect(editor.locator('.squiggly-error').first()).toBeVisible({ timeout: 30_000 });
+
+	await editor.getByText('public Book()').first().click();
+	await page.keyboard.press('Meta+Period');
+	const menu = page.locator('.action-widget, .context-view').filter({ hasText: 'Sys:' }).first();
+	await expect(menu).toContainText('this obligation is wrong', { timeout: 15_000 });
+	// There is no button that just silences it. A free suppression is how every obligation in a
+	// system eventually becomes decoration.
+	await expect(menu).not.toContainText('Ignore');
+	await expect(menu).not.toContainText('Suppress');
+
+	// The action list is keyboard-driven; a click lands on a row Playwright never sees settle.
+	await page.keyboard.press('Enter');
+	const dialog = page.locator('.monaco-dialog-box');
+	await expect(dialog).toContainText('orphaned books corrupted the catalogue', { timeout: 15_000 });
+	await expect(dialog).toContainText('Considered:');
+	await expect(dialog.getByRole('button', { name: 'Narrow it instead' })).toBeVisible();
+});
+
+/**
+ * NOT_OBSERVED has no line in the code to mark, so a list is the only place it can live. What is
+ * held is never listed: a list of things that are fine is the noise this design avoids.
+ */
+test('the Needs you list carries what has no line to stand on', async ({ page }) => {
+	const { root } = javaWorkspace();
+	await open(page, root, 'Book.java');
+
+	await page.getByRole('tab', { name: /^Sys/ }).click();
+	const needs = page.locator('.sys-semantic-workbench').first();
+	await expect(needs).toContainText('Needs you', { timeout: 30_000 });
+	await expect(needs).toContainText('A Category name is never empty');
+	await expect(needs).toContainText('nothing in the code says this yet');
+	await expect(needs).toContainText('A Book cannot exist without its Category');
+	// Held obligations are never listed.
+	await expect(needs).not.toContainText('Book has a title');
+});
