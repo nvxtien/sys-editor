@@ -27,6 +27,12 @@ import { IEditorService, SIDE_GROUP } from '../../../services/editor/common/edit
 import { requestGeneratedCode } from '../common/sysGeneratedCode.js';
 // PROTOTYPE — remove with sysPrototype.ts and sysPrototypeFixture.ts.
 import { readGoverned, SysStatement } from '../common/sysOntology.js';
+
+/**
+ * How many statements about one concept a person can read in one sitting and still hold. Exceeding
+ * it is a design signal — the concept is doing too much — not a performance one.
+ */
+const CONCEPT_BUDGET = 10;
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { isSysWorkspaceMissing, validateDraftCandidate } from '../common/sysPlatformFlow.js';
@@ -198,12 +204,15 @@ export class SysSemanticWorkbenchView extends ViewPane {
 	}
 
 	/**
-	 * What sys-platform says this workspace governs. The editor asks and shows; the statements,
-	 * the sentences and the state are all the platform's.
+	 * How much this workspace governs, and anything about it that needs a person.
 	 *
-	 * No verdict appears, because none has been earned: these statements have never met any code.
-	 * Showing `governed, not checked` is the honest answer, and it is a different thing from a
-	 * green tick.
+	 * Not an inventory. A panel this narrow cannot hold three hundred statements, and a list of
+	 * things that are fine is the noise this view exists to avoid — the inventory's home is the
+	 * hover on a concept, where a reader asks about the one they care about.
+	 *
+	 * What does belong here is what needs attention: a concept carrying more statements than a
+	 * person can hold in one sitting, and a spec the grammar rejected. Both are for a human to
+	 * act on; neither is something to browse.
 	 */
 	private async _renderGoverned(parent: HTMLElement, platformRoot: string | undefined): Promise<void> {
 		const section = DOM.append(parent, this._section('Governed'));
@@ -225,19 +234,23 @@ export class SysSemanticWorkbenchView extends ViewPane {
 
 		const { statements, concepts, unreadable, note: platformNote } = result.governed;
 		if (platformNote) { note.textContent = platformNote; return; }
-		note.textContent = `${statements.length} statement${statements.length === 1 ? '' : 's'} across ${concepts.length} concept${concepts.length === 1 ? '' : 's'}, none checked against code yet.`;
 
-		for (const concept of concepts) {
-			const about = statements.filter((statement: SysStatement) => statement.concepts.includes(concept));
+		const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+		// No verdict is claimed, because none has been earned: these statements have never met
+		// any code. "Not checked" is a different thing from a green tick.
+		note.textContent = `${plural(statements.length, 'statement')} across ${plural(concepts.length, 'concept')}, none checked against code yet.`;
+
+		// The bound is cognitive, not performance: over budget means the concept is doing too
+		// much, and the answer is to split the model rather than to buy anything.
+		const crowded = concepts
+			.map(concept => ({ concept, count: statements.filter((statement: SysStatement) => statement.concepts.includes(concept)).length }))
+			.filter(({ count }) => count > CONCEPT_BUDGET)
+			.sort((a, b) => b.count - a.count);
+		for (const { concept, count } of crowded) {
 			const row = DOM.append(section, $('div.sys-req-row'));
 			DOM.append(DOM.append(row, $('div.sys-req-main')), $('span.sys-req-title')).textContent = concept;
-			// The cognitive bound is a design signal: more than a person can hold in one sitting
-			// means the concept is doing too much, not that anything is slow.
 			DOM.append(row, $('div.sys-req-status')).textContent =
-				`${about.length} statement${about.length === 1 ? '' : 's'}${about.length > 10 ? ' — more than one sitting holds; consider splitting' : ''}`;
-			for (const statement of about) {
-				DOM.append(row, $('div.sys-req-binding')).textContent = statement.says;
-			}
+				`${plural(count, 'statement')} — more than one sitting holds. Consider splitting the concept.`;
 		}
 
 		for (const bad of unreadable) {
