@@ -10,7 +10,7 @@ test('turns a platform error code into a sentence, keeping its detail', () => {
 		sysCoreErrorMessage('{"error":"UNKNOWN_PROJECT_LANGUAGE","detail":"pom.xml, go.mod"}'),
 		'Could not tell what language this project is written in, so no code was generated. Looked for pom.xml, go.mod at the project root.'
 	);
-	assert.match(sysCoreErrorMessage('{"error":"INTENT_NOT_APPROVED"}'), /Confirm this Structured Intent first/);
+	assert.match(sysCoreErrorMessage('{"error":"FORMAL_SPEC_NOT_APPROVED"}'), /Confirm this Formal Spec first/);
 	assert.match(sysCoreErrorMessage('{"error":"NO_GENERATED_FILES"}'), /no files/i);
 	assert.match(sysCoreErrorMessage('{"error":"UNSAFE_GENERATED_PATH","detail":"../x.java"}'), /outside the project.*\.\.\/x\.java/);
 });

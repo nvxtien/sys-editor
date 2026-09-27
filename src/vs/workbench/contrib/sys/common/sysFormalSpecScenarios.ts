@@ -1,14 +1,14 @@
 /**
- * Gherkin scenarios for the review page: a plain-language projection of a Structured Intent,
+ * Gherkin scenarios for the review page: a plain-language projection of a Formal Spec,
  * regenerated for each review and never written back. The intent JSON stays the governed record,
  * so viewing a review never changes what was confirmed.
  *
  * Every failure yields undefined rather than throwing. A reviewer must always be able to open the
  * page that shows what they are confirming, whatever the provider is doing.
  */
-export async function requestIntentScenarios(httpUrl: string, model: string, intent: string): Promise<string | undefined> {
+export async function requestFormalSpecScenarios(httpUrl: string, model: string, intent: string): Promise<string | undefined> {
 	try {
-		const response = await fetch(`${httpUrl.replace(/\/+$/, '')}/v1/sys/intent-scenarios`, {
+		const response = await fetch(`${httpUrl.replace(/\/+$/, '')}/v1/sys/formal-spec-scenarios`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ model, intent }),

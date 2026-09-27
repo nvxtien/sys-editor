@@ -29,7 +29,7 @@ func providerReturns(content string) http.HandlerFunc {
 }
 
 // The browser-side parser requires arrays of facts for these fields; a shape left implicit makes
-// providers return keyed objects, which are then rejected ("Structured Intent has an invalid
+// providers return keyed objects, which are then rejected ("Formal Spec has an invalid
 // scope/inputs") after a 200 response. The shape itself is the platform's and now rides in the
 // context the caller supplies, so what this server owes is passing it through untouched and
 // telling the model to obey it. Dropping the context would produce that same 200-then-rejected
@@ -100,7 +100,7 @@ func TestNormalizeIntentGeneratesARequestIDWhenTheClientSendsNone(t *testing.T) 
 
 func TestNormalizeIntentRejectsInvalidJSONWithAClearErrorAndALoggedStage(t *testing.T) {
 	logs := captureLog(t)
-	h, server := draftHandler(t, providerReturns("Sure! Here is the Structured Intent: {oops"))
+	h, server := draftHandler(t, providerReturns("Sure! Here is the Formal Spec: {oops"))
 	defer server.Close()
 
 	req := normalizeRequest(`{"model":"openrouter/test-model","intent":"intent"}`)
@@ -108,7 +108,7 @@ func TestNormalizeIntentRejectsInvalidJSONWithAClearErrorAndALoggedStage(t *test
 	rr := httptest.NewRecorder()
 	h.NormalizeIntent(rr, req)
 
-	if rr.Code != http.StatusBadGateway || !strings.Contains(rr.Body.String(), "provider returned invalid Structured Intent JSON") {
+	if rr.Code != http.StatusBadGateway || !strings.Contains(rr.Body.String(), "provider returned invalid Formal Spec JSON") {
 		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
 	}
 	if !strings.Contains(logs.String(), "[SYS_NORMALIZE_INTENT] id=req-bad stage=invalid_json") {

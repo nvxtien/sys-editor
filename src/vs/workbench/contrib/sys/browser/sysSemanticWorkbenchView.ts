@@ -37,9 +37,9 @@ import { isSysWorkspaceMissing, validateDraftCandidate } from '../common/sysPlat
 import { ISidexChatService } from '../../sidexChat/browser/sidexChatService.js';
 import { resolveServerEndpoint, serverHttpUrl, waitForServerEndpoint } from '../../sidexChat/browser/localServer.js';
 import { assertSysDraftServerAvailable } from '../common/sysServerAvailability.js';
-import { newSysRequestId, requestStructuredIntent, sysTrace } from '../common/sysStructuredIntentDraft.js';
-import { formalizationNote, serializeStructuredIntent } from '../common/sysStructuredIntent.js';
-import { requestIntentScenarios } from '../common/sysIntentScenarios.js';
+import { newSysRequestId, requestFormalSpec, sysTrace } from '../common/sysFormalSpecDraft.js';
+import { formalizationNote, serializeFormalSpec } from '../common/sysFormalSpec.js';
+import { requestFormalSpecScenarios } from '../common/sysFormalSpecScenarios.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { ISysSemanticSnapshotService, SysProjectSnapshot } from '../common/sysSemanticSnapshot.js';
 import {
@@ -50,7 +50,7 @@ import {
 } from '../common/sysIntentAction.js';
 
 const $ = DOM.$;
-const intentStateOf = (row: SysRequirementRow) => row.structuredIntentState ?? 'NOT_CREATED';
+const intentStateOf = (row: SysRequirementRow) => row.formalSpecState ?? 'NOT_CREATED';
 
 export class SysSemanticWorkbenchView extends ViewPane {
 	private intentItems: readonly SysIntentItem[] = [];
@@ -390,15 +390,15 @@ export class SysSemanticWorkbenchView extends ViewPane {
 			const configuredServerUrl = this.configurationService.getValue<string>('sidex.chat.serverUrl');
 			const endpoint = configuredServerUrl?.trim() ? await resolveServerEndpoint() : await waitForServerEndpoint();
 			assertSysDraftServerAvailable(endpoint.running, configuredServerUrl, endpoint.error);
-			const proposalContext = await this.projectService.prepareStructuredIntentContext(id);
+			const proposalContext = await this.projectService.prepareFormalSpecContext(id);
 			sysTrace(requestId, 'prepared', `context_bytes=${proposalContext.length}`);
 			// Read the port after prepare: a stale cached port is re-resolved by the core call above.
 			const httpUrl = serverHttpUrl(configuredServerUrl);
-			const structuredIntent = await requestStructuredIntent(httpUrl, model, id, proposalContext, requestId);
-			await this.projectService.writeStructuredIntent(id, structuredIntent);
+			const formalSpec = await requestFormalSpec(httpUrl, model, id, proposalContext, requestId);
+			await this.projectService.writeFormalSpec(id, formalSpec);
 			sysTrace(requestId, 'saved', `requirement=${id}`);
 			const scenarios = await this._scenariosFor(id, httpUrl);
-			await this.editorService.openEditor({ resource: await this.projectService.writeStructuredIntentReview(id, scenarios) });
+			await this.editorService.openEditor({ resource: await this.projectService.writeFormalSpecReview(id, scenarios) });
 			sysTrace(requestId, 'ui_refresh', 'row re-renders from .sys/intents');
 		} catch (error) {
 			sysTrace(requestId, 'failed', `error=${error instanceof Error ? error.message : String(error)}`);
@@ -422,7 +422,7 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		const model = this.sidexChatService.serverModel;
 		if (!model) { return undefined; }
 		try {
-			const record = await this.projectService.readStructuredIntent(id);
+			const record = await this.projectService.readFormalSpec(id);
 			if (!record) { return undefined; }
 			if (httpUrl === undefined) {
 				const configuredServerUrl = this.configurationService.getValue<string>('sidex.chat.serverUrl');
@@ -430,7 +430,7 @@ export class SysSemanticWorkbenchView extends ViewPane {
 				if (!endpoint.running && !configuredServerUrl?.trim()) { return undefined; }
 				httpUrl = serverHttpUrl(configuredServerUrl);
 			}
-			return await requestIntentScenarios(httpUrl, model, serializeStructuredIntent(record.draft));
+			return await requestFormalSpecScenarios(httpUrl, model, serializeFormalSpec(record.draft));
 		} catch {
 			return undefined;
 		}
@@ -438,19 +438,19 @@ export class SysSemanticWorkbenchView extends ViewPane {
 
 
 	private async _confirmIntent(id: string): Promise<void> {
-		const record = await this.projectService.readStructuredIntent(id);
-		if (!record) { throw new Error('Normalize this requirement before confirming its Structured Intent.'); }
-		const { confirmed } = await this.dialogService.confirm({ message: 'Confirm this Structured Intent?', detail: 'Confirming records this exact Structured Intent as approved, then generates code from it into this project’s source tree. No file that already exists is overwritten.', primaryButton: 'Confirm intent' });
+		const record = await this.projectService.readFormalSpec(id);
+		if (!record) { throw new Error('Normalize this requirement before confirming its Formal Spec.'); }
+		const { confirmed } = await this.dialogService.confirm({ message: 'Confirm this Formal Spec?', detail: 'Confirming records this exact Formal Spec as approved, then generates code from it into this project’s source tree. No file that already exists is overwritten.', primaryButton: 'Confirm intent' });
 		if (!confirmed) { return; }
 		// Approval is the governed record and is recorded first, on its own. Code generation runs
 		// after and can fail without unmaking it: the provider does not get a vote on what the user
 		// confirmed, and a failed generation is retried by confirming again.
-		await this.projectService.approveStructuredIntent(id);
+		await this.projectService.approveFormalSpec(id);
 		await this._generateCode(id);
 	}
 
 	/**
-	 * Code for a confirmed Structured Intent, written into the project's own source tree in the
+	 * Code for a confirmed Formal Spec, written into the project's own source tree in the
 	 * language it is already written in, and opened beside the intent it came from. It is ordinary
 	 * source: sys-core does not know it exists, and nothing ties it to a Formal Spec generated later.
 	 */
@@ -488,7 +488,7 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		const actions = DOM.append(el, $('div.sys-req-actions'));
 		actions.dataset.sysRequirementId = row.id;
 		if (!row.missing && !row.empty && !row.lifecycleUnavailable) {
-			const intentState = row.structuredIntentState ?? 'NOT_CREATED';
+			const intentState = row.formalSpecState ?? 'NOT_CREATED';
 			if (intentState === 'NOT_CREATED' || intentState === 'STALE') {
 				this._action(actions, 'Normalize intent', 'sys-req-action', () => this._normalizeIntent(row.id));
 			} else {

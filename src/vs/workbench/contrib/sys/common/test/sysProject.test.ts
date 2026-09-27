@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as project from '../sysProject.js';
-import * as intent from '../sysStructuredIntent.js';
+import * as intent from '../sysFormalSpec.js';
 import { EMPTY_PROJECT, addRequirement, loadProjectState, parseProject, removeRequirement, serializeProject, setPlatformRoot, titleOf } from '../sysProject.js';
 import { SysLifecycle } from '../sysLifecycle.js';
 
@@ -11,9 +11,8 @@ const A = '/a/.sys/project.json';
 const lifecycle = (id: string, overrides: Partial<SysLifecycle> = {}): SysLifecycle => ({
 	requirementId: id,
 	requirement: { present: true, approved: false, identity: 'sha256:r' },
-	structuredIntent: { state: 'NOT_CREATED', identity: null },
 	formalSpec: { state: 'NOT_CREATED', identity: null },
-	status: 'INTENT_NOT_CREATED',
+	status: 'FORMAL_SPEC_NOT_CREATED',
 	...overrides
 });
 // Approval and staleness come from sys-core; these tests only prove the editor renders what core says.
@@ -39,7 +38,7 @@ test('ids are sequential, stable and independent of text; removal never renumber
 test('persist and reload: project.json + requirement file + core lifecycle give the same id, title and honest DRAFT status', async () => {
 	const p = addRequirement(EMPTY_PROJECT).project;
 	const state = await loadProjectState(['/a'], files({ [A]: serializeProject(p), '/a/.sys/requirements/REQ-001.md': '# A booking needs a seat\nmore' }), core());
-	assert.deepEqual(state, { kind: 'READY', project: p, rows: [{ id: 'REQ-001', title: 'A booking needs a seat', status: 'DRAFT_UNFORMALIZED', missing: false, empty: false, structuredIntentState: 'NOT_CREATED' }] });
+	assert.deepEqual(state, { kind: 'READY', project: p, rows: [{ id: 'REQ-001', title: 'A booking needs a seat', status: 'DRAFT_UNFORMALIZED', missing: false, empty: false, formalSpecState: 'NOT_CREATED' }] });
 });
 
 test('workspace A state never appears in workspace B', async () => {
@@ -50,11 +49,11 @@ test('workspace A state never appears in workspace B', async () => {
 
 test('every state on a row is exactly what sys-core reported', async () => {
 	const p = addRequirement(EMPTY_PROJECT).project;
-	const reported = lifecycle('REQ-001', { requirement: { present: true, approved: true, identity: 'sha256:r' }, structuredIntent: { state: 'APPROVED', identity: 'sha256:i' } });
+	const reported = lifecycle('REQ-001', { requirement: { present: true, approved: true, identity: 'sha256:r' }, formalSpec: { state: 'APPROVED', identity: 'sha256:i' } });
 	const state = await loadProjectState(['/a'], files({ [A]: serializeProject(p), '/a/.sys/requirements/REQ-001.md': 'x' }), core({ 'REQ-001': reported }));
 	const row = (state as { rows: Record<string, unknown>[] }).rows[0];
 	assert.equal(row.status, 'APPROVED_UNFORMALIZED');
-	assert.equal(row.structuredIntentState, 'APPROVED');
+	assert.equal(row.formalSpecState, 'APPROVED');
 });
 
 test('approval fields left in project.json by older editors are ignored and dropped, never trusted', async () => {
@@ -76,7 +75,7 @@ test('a requirement file deleted by hand is shown as missing, not hidden or appr
 	const p = addRequirement(EMPTY_PROJECT).project;
 	const gone = lifecycle('REQ-001', { requirement: { present: false, approved: false, identity: null } });
 	const state = await loadProjectState(['/a'], files({ [A]: serializeProject(p) }), core({ 'REQ-001': gone }));
-	assert.deepEqual((state as { rows: unknown }).rows, [{ id: 'REQ-001', title: '(file missing)', status: 'DRAFT_UNFORMALIZED', missing: true, empty: false, structuredIntentState: 'NOT_CREATED' }]);
+	assert.deepEqual((state as { rows: unknown }).rows, [{ id: 'REQ-001', title: '(file missing)', status: 'DRAFT_UNFORMALIZED', missing: true, empty: false, formalSpecState: 'NOT_CREATED' }]);
 });
 
 test('titleOf uses the first non-empty line without markdown heading marks', () => {
@@ -114,8 +113,8 @@ test('the editor keeps no lifecycle rules of its own: approval, staleness and ge
 	for (const gone of ['approveRequirement', 'statusOf', 'structuredIntentFile', 'SYS_INTENTS_DIR', 'specFile', 'SYS_SPECS_DIR']) {
 		assert.ok(!(gone in project), `sysProject still exports ${gone}`);
 	}
-	for (const gone of ['structuredIntentState', 'approveStructuredIntent', 'formalSpecState', 'canGenerateFormalSpec', 'formalizationCapability']) {
-		assert.ok(!(gone in intent), `sysStructuredIntent still exports ${gone}`);
+	for (const gone of ['formalSpecState', 'approveFormalSpec', 'formalSpecState', 'canGenerateFormalSpec', 'formalizationCapability']) {
+		assert.ok(!(gone in intent), `sysFormalSpec still exports ${gone}`);
 	}
 });
 

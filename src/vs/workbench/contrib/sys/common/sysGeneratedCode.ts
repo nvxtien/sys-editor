@@ -1,5 +1,5 @@
 /**
- * Code generated from a confirmed Structured Intent.
+ * Code generated from a confirmed Formal Spec.
  *
  * The editor decides nothing here. sys-core prepares the context — the approved intent, the
  * project's language and layout, and how to realise one as the other — and reads the provider's
@@ -35,7 +35,7 @@ export async function requestGeneratedCode(httpUrl: string, model: string, conte
 		throw new Error(`SideX could not generate code: ${detail}. Check SideX Settings → Models.`);
 	}
 	if (typeof body.candidate !== 'string' || !body.candidate.trim()) {
-		throw new Error('SideX returned no code for this Structured Intent.');
+		throw new Error('SideX returned no code for this Formal Spec.');
 	}
 	return body.candidate;
 }

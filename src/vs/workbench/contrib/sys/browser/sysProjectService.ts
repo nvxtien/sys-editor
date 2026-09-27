@@ -2,14 +2,14 @@ import { createDecorator } from '../../../../platform/instantiation/common/insta
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { IFileService, FileOperation, FileOperationError, FileOperationResult, FileSystemProviderErrorCode, toFileSystemProviderErrorCode } from '../../../../platform/files/common/files.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
-import { renderStructuredIntentReview } from '../common/sysStructuredIntentReview.js';
+import { renderFormalSpecReview } from '../common/sysFormalSpecReview.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { VSBuffer } from '../../../../base/common/buffer.js';
 import { URI } from '../../../../base/common/uri.js';
 import { EMPTY_PROJECT, SYS_PROJECT_FILE, SysProject, SysProjectState, addRequirement, loadProjectState, removeRequirement, requirementFile, serializeProject, setPlatformRoot } from '../common/sysProject.js';
 import { isSysArtifactState, parseLifecycle, SysLifecycle } from '../common/sysLifecycle.js';
-import { parseFormalizationCapability, parseStructuredIntent, serializeStructuredIntent, SysFormalizationCapability, SysStructuredIntent, SysStructuredIntentRecord } from '../common/sysStructuredIntent.js';
+import { parseFormalizationCapability, parseFormalSpec, serializeFormalSpec, SysFormalizationCapability, SysFormalSpec, SysFormalSpecRecord } from '../common/sysFormalSpec.js';
 import { Verification01Manifest } from '../common/sysManifest.js';
 import { refuseToOverwrite, SysGeneratedFile } from '../common/sysGeneratedCode.js';
 import { sysCoreErrorMessage } from '../common/sysCoreError.js';
@@ -23,26 +23,26 @@ export interface ISysProjectService {
 	readonly onDidChange: Event<void>;
 	/** State of the CURRENT workspace, read fresh each call. */
 	getState(): Promise<SysProjectState>;
-	/** Asks sys-core what can be formalized for this requirement's Structured Intent; undefined when core cannot answer (never assumed). */
+	/** Asks sys-core what can be formalized for this requirement's Formal Spec; undefined when core cannot answer (never assumed). */
 	formalizationCapability(id: string): Promise<SysFormalizationCapability | undefined>;
 	/** Creates an empty requirement file and returns it, ready to be opened in the editor. */
 	createRequirement(): Promise<URI>;
 	resourceOf(id: string): URI;
 	/**
-	 * Regenerates the plain-language review page from the Structured Intent JSON and returns its
+	 * Regenerates the plain-language review page from the Formal Spec JSON and returns its
 	 * resource. `scenarios` is an optional Gherkin projection shown alongside; it is rendered, never
 	 * persisted into the intent, so reviewing never changes what was confirmed.
 	 */
-	writeStructuredIntentReview(id: string, scenarios?: string): Promise<URI>;
+	writeFormalSpecReview(id: string, scenarios?: string): Promise<URI>;
 	/** Creates an empty .spec file (if absent) and returns it, ready to be opened in the editor. */
 	/** Approves the exact current requirement text in sys-core. */
 	approveRequirement(id: string): Promise<void>;
-	readStructuredIntent(id: string): Promise<SysStructuredIntentRecord | undefined>;
+	readFormalSpec(id: string): Promise<SysFormalSpecRecord | undefined>;
 	saveRequirement(id: string, raw: string): Promise<void>;
-	prepareStructuredIntentContext(id: string): Promise<string>;
+	prepareFormalSpecContext(id: string): Promise<string>;
 	/** Saves the requirement text and the model's candidate in sys-core as a new draft (any earlier approval is revoked there). */
-	writeStructuredIntent(id: string, draft: SysStructuredIntent): Promise<void>;
-	approveStructuredIntent(id: string): Promise<void>;
+	writeFormalSpec(id: string, draft: SysFormalSpec): Promise<void>;
+	approveFormalSpec(id: string): Promise<void>;
 	deleteRequirement(id: string): Promise<void>;
 	setPlatformRoot(path: string | undefined): Promise<void>;
 	/** '' from getState() when not configured; the READY/NO_SYS_PROJECT_YET project's platformRoot. */
@@ -100,7 +100,7 @@ class SysProjectService extends Disposable implements ISysProjectService {
 	async getState(): Promise<SysProjectState> {
 		const state = await loadProjectState(this.folders().map(f => f.toString()), p => this.read(p), id => this.lifecycleOf(id));
 		if (state.kind !== 'READY') { return state; }
-		const rows = await Promise.all(state.rows.map(async row => row.lifecycleUnavailable || row.structuredIntentState === 'NOT_CREATED' ? row : { ...row, formalization: await this.formalizationCapability(row.id) }));
+		const rows = await Promise.all(state.rows.map(async row => row.lifecycleUnavailable || row.formalSpecState === 'NOT_CREATED' ? row : { ...row, formalization: await this.formalizationCapability(row.id) }));
 		return { ...state, rows };
 	}
 
@@ -127,7 +127,7 @@ class SysProjectService extends Disposable implements ISysProjectService {
 
 	async formalizationCapability(id: string): Promise<SysFormalizationCapability | undefined> {
 		try {
-			return parseFormalizationCapability(JSON.parse(await this.coreAnswer(['intent', 'capability', id])));
+			return parseFormalizationCapability(JSON.parse(await this.coreAnswer(['formal-spec', 'capability', id])));
 		} catch (error) {
 			console.warn(`[SYS_CAPABILITY] ${id}: ${error instanceof Error ? error.message : String(error)}`);
 			return undefined;
@@ -138,13 +138,13 @@ class SysProjectService extends Disposable implements ISysProjectService {
 		return URI.joinPath(this.folders()[0], requirementFile(id));
 	}
 
-	async writeStructuredIntentReview(id: string, scenarios?: string): Promise<URI> {
-		const record = await this.readStructuredIntent(id);
-		if (!record) { throw new Error('Structured Intent has not been normalized yet.'); }
+	async writeFormalSpecReview(id: string, scenarios?: string): Promise<URI> {
+		const record = await this.readFormalSpec(id);
+		if (!record) { throw new Error('Formal Spec has not been normalized yet.'); }
 		const folder = URI.joinPath(this.folders()[0], '.sys', 'intents');
 		const resource = URI.joinPath(folder, `${id}.intent.review.md`);
 		await this.files.createFolder(folder);
-		await this.files.writeFile(resource, VSBuffer.fromString(renderStructuredIntentReview(record, await this.formalizationCapability(id), scenarios)));
+		await this.files.writeFile(resource, VSBuffer.fromString(renderFormalSpecReview(record, await this.formalizationCapability(id), scenarios)));
 		return resource;
 	}
 
@@ -227,37 +227,37 @@ class SysProjectService extends Disposable implements ISysProjectService {
 		this._onDidChange.fire();
 	}
 
-	async readStructuredIntent(id: string): Promise<SysStructuredIntentRecord | undefined> {
+	async readFormalSpec(id: string): Promise<SysFormalSpecRecord | undefined> {
 		let reply: string;
 		try {
-			reply = await this.coreResponse(['intent', 'show', id]);
+			reply = await this.coreResponse(['formal-spec', 'show', id]);
 		} catch (error) {
 			if (error instanceof Error && error.message.includes('MissingIntent')) { return undefined; }
 			throw error;
 		}
 		const shown = JSON.parse(reply) as { draft?: unknown; identity?: unknown; state?: unknown };
-		if (!isSysArtifactState(shown.state) || typeof shown.identity !== 'string') { throw new Error('sys-core returned an invalid Structured Intent view'); }
-		return { sourceRequirement: await this.read(this.resourceOf(id).toString()) ?? '', draft: parseStructuredIntent(shown.draft, id), state: shown.state, identity: shown.identity };
+		if (!isSysArtifactState(shown.state) || typeof shown.identity !== 'string') { throw new Error('sys-core returned an invalid Formal Spec view'); }
+		return { sourceRequirement: await this.read(this.resourceOf(id).toString()) ?? '', draft: parseFormalSpec(shown.draft, id), state: shown.state, identity: shown.identity };
 	}
 
 	async saveRequirement(id: string, raw: string): Promise<void> {
 		await this.core(['requirement', 'save', id], raw);
 	}
 
-	async writeStructuredIntent(id: string, draft: SysStructuredIntent): Promise<void> {
+	async writeFormalSpec(id: string, draft: SysFormalSpec): Promise<void> {
 		const requirement = await this.read(this.resourceOf(id).toString());
 		if (requirement === undefined) { throw new Error(`Requirement file for ${id} is missing.`); }
 		await this.core(['requirement', 'save', id], requirement);
-		await this.core(['intent', 'accept', id], serializeStructuredIntent(draft));
+		await this.core(['formal-spec', 'accept', id], serializeFormalSpec(draft));
 		this._onDidChange.fire();
 	}
 
-	async prepareStructuredIntentContext(id: string): Promise<string> {
-		return this.coreResponse(['intent', 'prepare', id]);
+	async prepareFormalSpecContext(id: string): Promise<string> {
+		return this.coreResponse(['formal-spec', 'prepare', id]);
 	}
 
-	async approveStructuredIntent(id: string): Promise<void> {
-		await this.core(['intent', 'approve-current', id]);
+	async approveFormalSpec(id: string): Promise<void> {
+		await this.core(['formal-spec', 'approve-current', id]);
 		this._onDidChange.fire();
 	}
 

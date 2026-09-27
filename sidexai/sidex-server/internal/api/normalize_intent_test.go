@@ -18,7 +18,7 @@ func normalizeRequest(body string) *http.Request {
 	return req
 }
 
-func TestNormalizeIntentReturnsTheStructuredIntentAndSendsNoSourceBinding(t *testing.T) {
+func TestNormalizeIntentReturnsTheFormalSpecAndSendsNoSourceBinding(t *testing.T) {
 	var providerBody map[string]any
 	h, server := draftHandler(t, func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&providerBody)

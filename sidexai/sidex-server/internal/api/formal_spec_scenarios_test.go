@@ -10,20 +10,20 @@ import (
 )
 
 func scenariosRequest(body string) *http.Request {
-	req := httptestRequestForUser(http.MethodPost, "/v1/sys/intent-scenarios", "local")
+	req := httptestRequestForUser(http.MethodPost, "/v1/sys/formal-spec-scenarios", "local")
 	req.Body = io.NopCloser(strings.NewReader(body))
 	return req
 }
 
 // Scenarios are a reading aid regenerated on every review, never part of the governed record, so
 // this endpoint returns text and never touches the intent JSON.
-func TestIntentScenariosReturnsTheModelsGherkin(t *testing.T) {
+func TestFormalSpecScenariosReturnsTheModelsGherkin(t *testing.T) {
 	gherkin := "Scenario: Each Book belongs to exactly one Category\n  Given a Category exists\n  When a Book is created for it\n  Then the Book belongs to exactly one Category"
 	h, server := draftHandler(t, providerReturns(gherkin))
 	defer server.Close()
 
 	rr := httptest.NewRecorder()
-	h.IntentScenarios(rr, scenariosRequest(`{"model":"openrouter/test-model","intent":"{\"kind\":\"DATA_MODEL\"}"}`))
+	h.FormalSpecScenarios(rr, scenariosRequest(`{"model":"openrouter/test-model","intent":"{\"kind\":\"DATA_MODEL\"}"}`))
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
@@ -37,13 +37,13 @@ func TestIntentScenariosReturnsTheModelsGherkin(t *testing.T) {
 	}
 }
 
-func TestIntentScenariosStripsMarkdownFences(t *testing.T) {
+func TestFormalSpecScenariosStripsMarkdownFences(t *testing.T) {
 	// Models wrap Gherkin in a fence unprompted; a fence in the review page is noise.
 	h, server := draftHandler(t, providerReturns("```gherkin\nScenario: A\n  Given b\n```"))
 	defer server.Close()
 
 	rr := httptest.NewRecorder()
-	h.IntentScenarios(rr, scenariosRequest(`{"model":"openrouter/test-model","intent":"{}"}`))
+	h.FormalSpecScenarios(rr, scenariosRequest(`{"model":"openrouter/test-model","intent":"{}"}`))
 
 	var body map[string]string
 	_ = json.Unmarshal(rr.Body.Bytes(), &body)
@@ -55,20 +55,20 @@ func TestIntentScenariosStripsMarkdownFences(t *testing.T) {
 	}
 }
 
-func TestIntentScenariosRequiresModelAndIntent(t *testing.T) {
+func TestFormalSpecScenariosRequiresModelAndIntent(t *testing.T) {
 	h, server := draftHandler(t, providerReturns("x"))
 	defer server.Close()
 
 	for _, body := range []string{`{"model":"m"}`, `{"intent":"i"}`, `{}`} {
 		rr := httptest.NewRecorder()
-		h.IntentScenarios(rr, scenariosRequest(body))
+		h.FormalSpecScenarios(rr, scenariosRequest(body))
 		if rr.Code != http.StatusBadRequest {
 			t.Errorf("%s → status %d, want 400", body, rr.Code)
 		}
 	}
 }
 
-func TestIntentScenariosPromptBoundsTheOutput(t *testing.T) {
+func TestFormalSpecScenariosPromptBoundsTheOutput(t *testing.T) {
 	for _, want := range []string{
 		"Scenario:",
 		"Given",
@@ -79,7 +79,7 @@ func TestIntentScenariosPromptBoundsTheOutput(t *testing.T) {
 		"Write in English",
 		"never a \"Feature:\" line",
 	} {
-		if !strings.Contains(intentScenariosSystemPrompt, want) {
+		if !strings.Contains(formalSpecScenariosSystemPrompt, want) {
 			t.Errorf("prompt is missing %q", want)
 		}
 	}

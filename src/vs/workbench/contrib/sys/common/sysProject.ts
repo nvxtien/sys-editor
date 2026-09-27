@@ -6,7 +6,7 @@
  * Approval and staleness are not stored or derived here: sys-core owns them (see sysLifecycle.ts).
  */
 import { SysLifecycle } from './sysLifecycle.js';
-import { SysFormalizationCapability, SysStructuredIntentState } from './sysStructuredIntent.js';
+import { SysFormalizationCapability, SysFormalSpecState } from './sysFormalSpec.js';
 
 export const SYS_PROJECT_FILE = '.sys/project.json';
 export const SYS_REQUIREMENTS_DIR = '.sys/requirements';
@@ -15,7 +15,7 @@ export const requirementFile = (id: string) => `${SYS_REQUIREMENTS_DIR}/${id}.md
 export type SysRequirementStatus = 'DRAFT_UNFORMALIZED' | 'APPROVED_UNFORMALIZED';
 export interface SysRequirementRef { readonly id: string }
 export interface SysProject { readonly version: 1; readonly requirements: readonly SysRequirementRef[]; readonly platformRoot?: string }
-export interface SysRequirementRow { readonly id: string; readonly title: string; readonly status: SysRequirementStatus; readonly missing: boolean; /** The file exists but holds no text yet: nothing to normalize or approve. */ readonly empty: boolean; readonly structuredIntentState?: SysStructuredIntentState; readonly formalization?: SysFormalizationCapability; readonly lifecycleUnavailable?: true }
+export interface SysRequirementRow { readonly id: string; readonly title: string; readonly status: SysRequirementStatus; readonly missing: boolean; /** The file exists but holds no text yet: nothing to normalize or approve. */ readonly empty: boolean; readonly formalSpecState?: SysFormalSpecState; readonly formalization?: SysFormalizationCapability; readonly lifecycleUnavailable?: true }
 
 export type SysProjectState =
 	| { readonly kind: 'NO_WORKSPACE' }
@@ -98,7 +98,7 @@ export async function loadProjectState(
 				status: lifecycle?.requirement.approved ? 'APPROVED_UNFORMALIZED' : 'DRAFT_UNFORMALIZED',
 				missing: body === undefined,
 				empty: body !== undefined && !body.trim(),
-				...(lifecycle ? { structuredIntentState: lifecycle.structuredIntent.state } : { lifecycleUnavailable: true as const })
+				...(lifecycle ? { formalSpecState: lifecycle.formalSpec.state } : { lifecycleUnavailable: true as const })
 			});
 		}
 		return { kind: 'READY', project, rows };

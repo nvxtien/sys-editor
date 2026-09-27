@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseStructuredIntent, serializeStructuredIntent } from '../sysStructuredIntent.js';
+import { parseFormalSpec, serializeFormalSpec } from '../sysFormalSpec.js';
 
 // Approval, exact-content binding and staleness are decided by sys-core
 // (sys-core/tests/lifecycle_state.rs). This file covers only the candidate schema.
 
-const draft = parseStructuredIntent({
+const draft = parseFormalSpec({
 	version: 1,
 	requirementId: 'REQ-001',
 	intentStatement: { value: 'A booking request must contain at least one seat.', provenance: 'SPECIFIED' },
@@ -25,14 +25,14 @@ test('preserves structured facts, provenance, and unknowns without guessing oper
 });
 
 test('serialized intent survives Unicode and newlines', () => {
-	assert.match(serializeStructuredIntent({ ...draft, intentStatement: { value: 'Dòng đầu\n日本語', provenance: 'SPECIFIED' } }), /日本語/);
+	assert.match(serializeFormalSpec({ ...draft, intentStatement: { value: 'Dòng đầu\n日本語', provenance: 'SPECIFIED' } }), /日本語/);
 });
 
 test('a candidate with the wrong shape or provenance is rejected, never coerced', () => {
-	assert.throws(() => parseStructuredIntent({ ...draft, requirementId: 'REQ-002' }, 'REQ-001'), /invalid header/);
-	assert.throws(() => parseStructuredIntent({ ...draft, scope: { value: 's', provenance: 'GUESSED' } }, 'REQ-001'), /invalid scope/);
-	assert.throws(() => parseStructuredIntent({ ...draft, inputs: { seats: { value: 's', provenance: 'SPECIFIED' } } }, 'REQ-001'), /invalid inputs/);
-	assert.throws(() => parseStructuredIntent({ ...draft, unknowns: [1] }, 'REQ-001'), /invalid unknowns/);
+	assert.throws(() => parseFormalSpec({ ...draft, requirementId: 'REQ-002' }, 'REQ-001'), /invalid header/);
+	assert.throws(() => parseFormalSpec({ ...draft, scope: { value: 's', provenance: 'GUESSED' } }, 'REQ-001'), /invalid scope/);
+	assert.throws(() => parseFormalSpec({ ...draft, inputs: { seats: { value: 's', provenance: 'SPECIFIED' } } }, 'REQ-001'), /invalid inputs/);
+	assert.throws(() => parseFormalSpec({ ...draft, unknowns: [1] }, 'REQ-001'), /invalid unknowns/);
 });
 
 // Kind-aware shape: a data model states entities and relationships, and has no operation. Keeping
@@ -54,7 +54,7 @@ const dataModelRaw = {
 };
 
 test('a data model intent parses entities, relationships and a null operation', () => {
-	const intent = parseStructuredIntent(dataModelRaw, 'REQ-001');
+	const intent = parseFormalSpec(dataModelRaw, 'REQ-001');
 	assert.equal(intent.operation, null);
 	assert.equal(intent.entities?.length, 2);
 	assert.equal(intent.entities?.[0].name, 'Category');
@@ -63,7 +63,7 @@ test('a data model intent parses entities, relationships and a null operation', 
 });
 
 test('an operation rule still parses its operation fact and needs no entities', () => {
-	const rule = parseStructuredIntent({
+	const rule = parseFormalSpec({
 		version: 1, requirementId: 'REQ-001', kind: 'OPERATION_RULE',
 		intentStatement: { value: 'x', provenance: 'SPECIFIED' }, scope: { value: 'x', provenance: 'SPECIFIED' },
 		operation: { value: 'create booking', provenance: 'SPECIFIED' },
@@ -74,14 +74,14 @@ test('an operation rule still parses its operation fact and needs no entities', 
 });
 
 test('a malformed entity or relationship is rejected, never half-read', () => {
-	assert.throws(() => parseStructuredIntent({ ...dataModelRaw, entities: [{ name: 'Category' }] }, 'REQ-001'), /invalid entities/);
-	assert.throws(() => parseStructuredIntent({ ...dataModelRaw, entities: [{ name: '', fields: [] }] }, 'REQ-001'), /invalid entities/);
-	assert.throws(() => parseStructuredIntent({ ...dataModelRaw, entities: [{ name: 'C', fields: [{ name: 'id' }] }] }, 'REQ-001'), /invalid entities/);
-	assert.throws(() => parseStructuredIntent({ ...dataModelRaw, relationships: ['plain string'] }, 'REQ-001'), /invalid relationships/);
+	assert.throws(() => parseFormalSpec({ ...dataModelRaw, entities: [{ name: 'Category' }] }, 'REQ-001'), /invalid entities/);
+	assert.throws(() => parseFormalSpec({ ...dataModelRaw, entities: [{ name: '', fields: [] }] }, 'REQ-001'), /invalid entities/);
+	assert.throws(() => parseFormalSpec({ ...dataModelRaw, entities: [{ name: 'C', fields: [{ name: 'id' }] }] }, 'REQ-001'), /invalid entities/);
+	assert.throws(() => parseFormalSpec({ ...dataModelRaw, relationships: ['plain string'] }, 'REQ-001'), /invalid relationships/);
 });
 
 test('a record written before entities existed still parses unchanged', () => {
-	const legacy = parseStructuredIntent({
+	const legacy = parseFormalSpec({
 		version: 1, requirementId: 'REQ-001', kind: 'DATA_MODEL',
 		intentStatement: { value: 'x', provenance: 'SPECIFIED' }, scope: { value: 'x', provenance: 'SPECIFIED' },
 		operation: { value: 'UNKNOWN', provenance: 'UNKNOWN' },
@@ -98,9 +98,9 @@ test('a record written before entities existed still parses unchanged', () => {
 
 
 // The prompt tells a data model to emit no inputs, effects or failureBehavior. Requiring them here
-// rejected the very answer the prompt asked for: "Structured Intent has an invalid inputs".
+// rejected the very answer the prompt asked for: "Formal Spec has an invalid inputs".
 test('a kind that states no inputs, effects or failures parses with empty lists', () => {
-	const intent = parseStructuredIntent({
+	const intent = parseFormalSpec({
 		version: 1, requirementId: 'REQ-001', kind: 'DATA_MODEL',
 		intentStatement: { value: 'Two entities', provenance: 'SPECIFIED' },
 		scope: { value: 'Category and Book', provenance: 'SPECIFIED' },
@@ -122,12 +122,12 @@ test('a malformed list is still rejected, absent is not the same as wrong', () =
 		intentStatement: { value: 'x', provenance: 'SPECIFIED' }, scope: { value: 'x', provenance: 'SPECIFIED' },
 		operation: { value: 'create booking', provenance: 'SPECIFIED' }, unknowns: []
 	};
-	assert.throws(() => parseStructuredIntent({ ...base, inputs: 'not a list' }, 'REQ-001'), /invalid inputs/);
-	assert.throws(() => parseStructuredIntent({ ...base, inputs: [{ value: 'x' }] }, 'REQ-001'), /invalid inputs/);
+	assert.throws(() => parseFormalSpec({ ...base, inputs: 'not a list' }, 'REQ-001'), /invalid inputs/);
+	assert.throws(() => parseFormalSpec({ ...base, inputs: [{ value: 'x' }] }, 'REQ-001'), /invalid inputs/);
 });
 
 test('unknowns may be absent too', () => {
-	const intent = parseStructuredIntent({
+	const intent = parseFormalSpec({
 		version: 1, requirementId: 'REQ-001', kind: 'DATA_MODEL',
 		intentStatement: { value: 'x', provenance: 'SPECIFIED' }, scope: { value: 'x', provenance: 'SPECIFIED' },
 		operation: null

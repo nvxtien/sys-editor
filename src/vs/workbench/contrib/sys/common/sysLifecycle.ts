@@ -8,7 +8,7 @@ export type SysArtifactState = 'NOT_CREATED' | 'DRAFT' | 'APPROVED' | 'STALE';
 export interface SysLifecycle {
 	readonly requirementId: string;
 	readonly requirement: { readonly present: boolean; readonly approved: boolean; readonly identity: string | null };
-	readonly structuredIntent: { readonly state: SysArtifactState; readonly identity: string | null };
+	readonly formalSpec: { readonly state: SysArtifactState; readonly identity: string | null };
 	readonly status: string;
 }
 
@@ -23,13 +23,13 @@ function artifact(value: unknown): { state: SysArtifactState; identity: string |
 }
 
 export function parseLifecycle(value: unknown): SysLifecycle {
-	const raw = value as { requirementId?: unknown; requirement?: unknown; structuredIntent?: unknown; status?: unknown } | null;
+	const raw = value as { requirementId?: unknown; requirement?: unknown; formalSpec?: unknown; status?: unknown } | null;
 	const requirement = raw?.requirement as { present?: unknown; approved?: unknown; identity?: unknown } | null | undefined;
-	const structuredIntent = artifact(raw?.structuredIntent);
+	const formalSpec = artifact(raw?.formalSpec);
 	if (!raw || typeof raw !== 'object' || typeof raw.requirementId !== 'string' || typeof raw.status !== 'string'
 		|| !requirement || typeof requirement !== 'object' || typeof requirement.present !== 'boolean' || typeof requirement.approved !== 'boolean' || (requirement.identity !== null && typeof requirement.identity !== 'string')
-		|| !structuredIntent) {
+		|| !formalSpec) {
 		throw new Error('sys-core returned an invalid lifecycle');
 	}
-	return { requirementId: raw.requirementId, requirement: { present: requirement.present, approved: requirement.approved, identity: requirement.identity as string | null }, structuredIntent, status: raw.status };
+	return { requirementId: raw.requirementId, requirement: { present: requirement.present, approved: requirement.approved, identity: requirement.identity as string | null }, formalSpec, status: raw.status };
 }
