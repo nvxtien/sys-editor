@@ -96,48 +96,59 @@ async function open(page, root, file) {
 }
 
 /**
- * A broken obligation is marked where the developer already looks, and the marker carries the
- * counterexample rather than a code. A reviewer passes `public Book() {}` nine times out of ten;
- * the words "leaves category unset" are what make them stop.
+ * CASE 01 — A broken obligation reads as a counterexample, not a code.
+ *
+ * Do:   open Book.java
+ * See:  `public Book() {}` and the non-final Category field are marked, and the message names
+ *       what broke rather than naming a rule
+ * Why:  a reviewer passes `public Book() {}` nine times out of ten. "leaves category unset" is
+ *       what makes them stop. One obligation, two witnesses — the map to code is not one to one.
  */
-test('a broken obligation is squiggled, and says what broke it', async ({ page }) => {
+test('Case 01 — a broken obligation is marked with what broke it', async ({ page }) => {
 	const { root } = javaWorkspace();
 	const editor = await open(page, root, 'Book.java');
 
 	await expect(editor.locator('.squiggly-error').first()).toBeVisible({ timeout: 30_000 });
 
-	// The hover is the whole "what am I touching" affordance: no navigation, no panel.
 	await editor.getByText('public Book()').first().hover();
-	const hover = page.locator('.monaco-hover').first();
+	const hover = page.locator('.monaco-hover').filter({ hasText: 'Sys ·' }).first();
 	await expect(hover).toContainText('A Book cannot exist without its Category', { timeout: 15_000 });
 	await expect(hover).toContainText('leaves category unset');
+	// The obligation is not a rule name and not a code; it is the sentence a person would say.
+	await expect(hover).not.toContainText('CANNOT_EXIST_WITHOUT');
+	await expect(hover).not.toContainText('st:');
 });
 
 /**
- * The reason travels with the obligation, because it is what a person needs at the moment they
- * are deciding whether to change the code or change the requirement. Without it that decision is
- * a coin flip, which is the whole argument for keeping a human at this gate.
+ * CASE 02 — The reason travels with the obligation.
+ *
+ * Do:   hover the marked constructor
+ * See:  why the obligation exists, what was chosen, and what was considered instead
+ * Why:  this is the one moment a person decides whether to change the code or change the
+ *       requirement. Without the reason that decision is a coin flip, which is the whole
+ *       argument for keeping a human at this gate at all.
  */
-test('the hover carries why the obligation exists', async ({ page }) => {
+test('Case 02 — the hover carries why the obligation exists', async ({ page }) => {
 	const { root } = javaWorkspace();
 	const editor = await open(page, root, 'Book.java');
 	await expect(editor.locator('.squiggly-error').first()).toBeVisible({ timeout: 30_000 });
 
 	await editor.getByText('public Book()').first().hover();
-	const hover = page.locator('.monaco-hover').first();
+	const hover = page.locator('.monaco-hover').filter({ hasText: 'Sys ·' }).first();
 	await expect(hover).toContainText('orphaned books corrupted the catalogue', { timeout: 15_000 });
 	await expect(hover).toContainText('Considered:');
 });
 
 /**
- * Silence applies to decoration, not to answers. A held obligation must not squiggle — decoration
- * is imposed, and imposing on code that is fine is how the signal drowns. But its hover does
- * answer, because a hover is only seen by someone who pointed at the line and waited: they asked.
+ * CASE 03 — Silence applies to decoration, not to answers.
  *
- * The design first said "SATISFIED shows nothing at all". Using it showed that conflated the two,
- * and that the answer on request is the whole "what am I touching" affordance.
+ * Do:   hover `private String title;`, which nothing is wrong with
+ * See:  no mark on the line, but a hover saying the obligation is held
+ * Why:  decoration is imposed — marking code that is fine is how the signal drowns. A hover is
+ *       only seen by someone who pointed and waited: they asked. The design first said a held
+ *       obligation "shows nothing at all"; using the prototype showed that conflated the two.
  */
-test('a held obligation does not decorate, but does answer when asked', async ({ page }) => {
+test('Case 03 — a held obligation does not decorate, but answers when asked', async ({ page }) => {
 	const { root } = javaWorkspace();
 	const editor = await open(page, root, 'Book.java');
 	await expect(editor.locator('.squiggly-error').first()).toBeVisible({ timeout: 30_000 });
@@ -146,16 +157,19 @@ test('a held obligation does not decorate, but does answer when asked', async ({
 	const hover = page.locator('.monaco-hover').filter({ hasText: 'Sys ·' }).first();
 	await expect(hover).toContainText('Book has a title', { timeout: 15_000 });
 	await expect(hover).toContainText('held');
-	// And it is an answer, not an alarm: nothing on this line is marked.
 	await expect(editor.locator('.squiggly-error').filter({ hasText: 'title' })).toHaveCount(0);
 });
 
 /**
- * Retracting an obligation makes you read why it exists first. This is the one moment a person
- * decides whether to change the code or change the requirement, and the reason is the only thing
- * that makes the decision better than a coin flip.
+ * CASE 04 — There is no free suppression.
+ *
+ * Do:   Quick Fix on the marked constructor, then choose "this obligation is wrong…"
+ * See:  two actions and no Ignore; the reason before any button that would remove the
+ *       obligation; and "Narrow it instead" as the alternative to waiving it
+ * Why:  a free `// noqa` is how every obligation in a system eventually becomes decoration.
+ *       Narrowing keeps the obligation checkable instead of hiding a carve-out beside it.
  */
-test('you cannot retract an obligation without reading why it exists', async ({ page }) => {
+test('Case 04 — retracting an obligation makes you read why it exists', async ({ page }) => {
 	const { root } = javaWorkspace();
 	const editor = await open(page, root, 'Book.java');
 	await expect(editor.locator('.squiggly-error').first()).toBeVisible({ timeout: 30_000 });
@@ -164,8 +178,7 @@ test('you cannot retract an obligation without reading why it exists', async ({ 
 	await page.keyboard.press('Meta+Period');
 	const menu = page.locator('.action-widget, .context-view').filter({ hasText: 'Sys:' }).first();
 	await expect(menu).toContainText('this obligation is wrong', { timeout: 15_000 });
-	// There is no button that just silences it. A free suppression is how every obligation in a
-	// system eventually becomes decoration.
+	await expect(menu).toContainText('this location is an exception');
 	await expect(menu).not.toContainText('Ignore');
 	await expect(menu).not.toContainText('Suppress');
 
@@ -178,19 +191,25 @@ test('you cannot retract an obligation without reading why it exists', async ({ 
 });
 
 /**
- * NOT_OBSERVED has no line in the code to mark, so a list is the only place it can live. What is
- * held is never listed: a list of things that are fine is the noise this design avoids.
+ * CASE 05 — What has no line to stand on.
+ *
+ * Do:   open the Sys view
+ * See:  "Needs you" — what is broken first, then what nothing in the code says anything about;
+ *       what is held is never listed
+ * Why:  NOT_OBSERVED is the common case on real code and has no line to mark, so a list is the
+ *       only place it can live — and a list nobody opens is the same as nowhere. Whether anyone
+ *       opens it is the question this case exists to answer.
  */
-test('the Needs you list carries what has no line to stand on', async ({ page }) => {
+test('Case 05 — the Needs you list carries what has no line to stand on', async ({ page }) => {
 	const { root } = javaWorkspace();
 	await open(page, root, 'Book.java');
 
 	await page.getByRole('tab', { name: /^Sys/ }).click();
-	const needs = page.locator('.sys-semantic-workbench').first();
-	await expect(needs).toContainText('Needs you', { timeout: 30_000 });
-	await expect(needs).toContainText('A Category name is never empty');
-	await expect(needs).toContainText('nothing in the code says this yet');
-	await expect(needs).toContainText('A Book cannot exist without its Category');
-	// Held obligations are never listed.
-	await expect(needs).not.toContainText('Book has a title');
+	const view = page.locator('.sys-semantic-workbench').first();
+	await expect(view).toContainText('Needs you', { timeout: 30_000 });
+	await expect(view).toContainText('A Book cannot exist without its Category');
+	await expect(view).toContainText('A Category name is never empty');
+	await expect(view).toContainText('nothing in the code says this yet');
+	// A list of things that are fine is the noise this whole design avoids.
+	await expect(view).not.toContainText('Book has a title');
 });

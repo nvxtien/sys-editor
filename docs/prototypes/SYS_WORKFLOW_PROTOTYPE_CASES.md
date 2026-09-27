@@ -1,0 +1,204 @@
+# Sys workflow prototype — the cases
+
+A throwaway prototype of the Sys developer workflow, wired to hand-written verdicts so the design
+can be judged by using it rather than by reading it. **Nothing here talks to sys-platform.**
+
+Branch: `prototype/sys-workflow`. Three files, deleted together when the real thing lands:
+
+```
+src/vs/workbench/contrib/sys/common/sysPrototypeFixture.ts   the fake verdicts
+src/vs/workbench/contrib/sys/browser/sysPrototype.ts         markers, hover, code actions
+src/vs/workbench/contrib/sys/browser/sysPrototypeNeedsMe.ts  the "Needs you" list
+tests/gui/prototype-cases.spec.mjs                           one harness test per case
+```
+
+## What it is testing
+
+The design it came from decides four things, and each case exists to find out whether one of them
+survives contact with use:
+
+- a developer is the only user, and they work in the IDE
+- diagnostics are continuous, so nothing may cost a separate trip to a panel
+- three verdicts, and the common one — `NOT_OBSERVED` — has no line in the code to stand on
+- developers do not do ceremony, so anything that feels like governance admin will be ignored
+
+## Running it
+
+```bash
+npm run tauri dev                       # from the prototype/sys-workflow branch
+SYS_LIVE_SERVER_PORT=<port> npx playwright test tests/gui/prototype-cases.spec.mjs
+```
+
+Switching to `main` turns the prototype off: the app runs from the working tree.
+
+To click through it by hand, open a Java project with `Book.java` and `Category.java` — for
+example `my-java21-app` — and work through the cases below.
+
+---
+
+## Case 01 — A broken obligation reads as a counterexample, not a code
+
+**Do** — open `Book.java`.
+
+**See** — `public Book() {}` and the non-final `Category` field are marked, and the message names
+what broke:
+
+```
+public Book() {          ← marked
+   A Book cannot exist without its Category — leaves category unset
+```
+
+**Why it matters** — a reviewer passes `public Book() {}` nine times out of ten. It looks
+harmless, and it breaks exactly the thing the requirement was about. "leaves category unset" is
+what makes them stop, and no diff gives you that.
+
+Note that one obligation produced two marks, on two different lines. The map from a governed
+statement to code is not one to one, and the UI never pretends it is.
+
+**What would disprove the design** — if the message reads as a rule being enforced rather than a
+consequence being pointed out, the counterexample has not actually arrived.
+
+---
+
+## Case 02 — The reason travels with the obligation
+
+**Do** — hover the marked constructor.
+
+**See** —
+
+```
+Sys · REQ-001 — ✗ broken
+A Book cannot exist without its Category
+Here: leaves category unset
+
+Why — orphaned books corrupted the catalogue in March 2024 (2024-03)
+Chose: Forbid orphaned books outright
+Considered: allow orphans and sweep them periodically · forbid outright
+```
+
+**Why it matters** — this is the one moment a person decides whether to change the code or change
+the requirement. A checker can decide whether an implementation satisfies a specification. It
+cannot decide whether the specification is the right one — there is no proposition to prove. The
+reason is what makes that human decision better than a coin flip, and it is the whole argument for
+keeping a person at this gate.
+
+With a reason like the one above, nobody retracts. With no reason recorded, retracting is cheap —
+and should be.
+
+**What would disprove the design** — if the reason is not the thing people actually use to decide,
+the decision layer is decoration and the gate can be automated or dropped.
+
+---
+
+## Case 03 — Silence applies to decoration, not to answers
+
+**Do** — hover `private String title;`, which nothing is wrong with.
+
+**See** — no mark on the line, but a hover:
+
+```
+Sys · REQ-001 — ✓ held
+Book has a title
+```
+
+**Why it matters** — decoration is imposed. Marking code that is fine is how the signal drowns,
+which is why a held obligation decorates nothing. But a hover is only ever seen by someone who
+pointed at the line and waited: they asked. Answering is not noise.
+
+**This case corrected the design.** It first said a held obligation "shows nothing at all", which
+conflated decoration with answers. Using the prototype showed the answer-on-request is the whole
+"what am I touching" affordance, and that it costs nothing to anyone who did not ask.
+
+---
+
+## Case 04 — There is no free suppression
+
+**Do** — Quick Fix on the marked constructor.
+
+**See** — two actions, and no third:
+
+```
+Sys: this obligation is wrong…
+Sys: this location is an exception…
+```
+
+Choosing the first shows the reason **before** any button that would remove the obligation:
+
+```
+A Book cannot exist without its Category
+
+Why — orphaned books corrupted the catalogue (2024-03).
+Chose: Forbid orphaned books outright.
+Considered: allow orphans and sweep them periodically · forbid outright.
+
+[ Retract it ]  [ Narrow it instead ]  [ Cancel ]
+```
+
+Choosing the second asks why, and refuses an answer shorter than a sentence:
+
+> Say why, in a sentence someone can disagree with.
+
+**Why it matters** — every governance system dies the same way: exceptions become free, and six
+months later every obligation carries one. But refusing exceptions outright is worse — a framework
+genuinely does need that no-arg constructor, and a tool that cannot say so gets switched off.
+
+The way out is that **an exception is not a suppression, it is a refinement**. "A Book cannot exist
+without its Category" was too strong; what is true is "no business operation constructs a Book
+without a Category". That is what "Narrow it instead" offers. The obligation stays checkable, and
+the next person reads a precise statement instead of a statement plus a hidden carve-out.
+
+Where the vocabulary cannot express the refinement, the exception is recorded as a decision with a
+reason and an author — visible and attributable, not a comment nobody will ever question.
+
+**What would disprove the design** — if the dialog feels like an obstacle rather than a reminder,
+or the reason box makes people give up, this is ceremony and developers will route around it. That
+is the thing to watch for while clicking.
+
+---
+
+## Case 05 — What has no line to stand on
+
+**Do** — open the Sys view.
+
+**See** — a "Needs you" section, broken things first, then things nothing in the code says anything
+about:
+
+```
+✗  A Book cannot exist without its Category   REQ-001 · broken in Book.java      ← opens the file
+—  A Category name is never empty             REQ-001 · nothing in the code says this yet
+                                              Why: blank category names made the catalogue unreadable
+```
+
+`Book has a title` is held, and is **not listed**.
+
+**Why it matters** — `NOT_OBSERVED` is the common case on real code, and it has no line to mark:
+you cannot underline the absence of code. So a list is the only place it can live. It is a to-do,
+not a failure, and rendering it as an error would make the product useless on day one.
+
+A list of things that are fine is the noise this whole design avoids, so held obligations never
+appear.
+
+**What would disprove the design** — a list nobody opens is the same as nowhere. If this section
+goes unread, then `NOT_OBSERVED` has no home at all, and that is worth knowing before building the
+ontology that produces it.
+
+---
+
+## What the prototype has already changed
+
+Two findings, both from using it rather than reading it:
+
+1. **Case 03** — "a held obligation shows nothing" conflated decoration with answers. Corrected:
+   it decorates nothing and answers when asked.
+2. **A marker needs no language; a hover and a code action do.** Registering for `language: 'java'`
+   in a fork with no Java language contribution left the mark visible with no reason behind it and
+   no actions on it — the worst kind of failure, because it looks like it is working.
+
+## Not built
+
+- The `why` is shown but never captured — writing it down still has no moment in the UI. The
+  design argues the best one is **as you write the code**, through a "Govern this" action, and
+  that is the load-bearing assumption still untested: if adding a reason there feels like a chore,
+  nothing ever becomes governed and the design has no starting point.
+- The actions report what they would do; nothing is retracted, narrowed or recorded.
+- Verdicts are fixtures. Real ones need the system ontology, which is on hold.
