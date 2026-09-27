@@ -8,6 +8,8 @@ import { Extensions as ViewExtensions, IViewContainersRegistry, IViewsRegistry, 
 import { Extensions as ConfigurationExtensions, IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { SysSemanticWorkbenchView } from './sysSemanticWorkbenchView.js';
 import { SysVerificationWorkbenchView } from './sysVerificationWorkbenchView.js';
+import { SysPrototypeContribution } from './sysPrototype.js';
+import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../common/contributions.js';
 import './sysSemanticSnapshotService.js';
 import './sysIntentActionService.js';
 import './sysVerificationProviderService.js';
@@ -15,6 +17,10 @@ import './sysProjectService.js';
 
 import { SYS_VIEW_CONTAINER_ID, SYS_VIEW_ID, SYS_VERIFICATION_VIEW_ID } from '../common/sysViewIds.js';
 export { SYS_VIEW_CONTAINER_ID, SYS_VIEW_ID, SYS_VERIFICATION_VIEW_ID };
+
+// PROTOTYPE — fake verdicts, so the workflow can be judged by using it. Remove this line with
+// sysPrototype.ts and sysPrototypeFixture.ts when the real thing lands.
+registerWorkbenchContribution2(SysPrototypeContribution.ID, SysPrototypeContribution, WorkbenchPhase.AfterRestored);
 
 const sysIcon = registerIcon('sys-icon', Codicon.symbolStructure, nls.localize('sysIcon', 'Sys semantic workbench icon'));
 
