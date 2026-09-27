@@ -146,7 +146,7 @@ export class SysVerificationWorkbenchView extends ViewPane {
 			return;
 		}
 		if (this.loadState === 'EMPTY') {
-			DOM.append(parent, $('p')).textContent = 'No verification run yet. Run Verify on a requirement in Semantic Workbench to see results here.';
+			DOM.append(parent, $('p')).textContent = 'No verification run yet. Verifying a requirement against source needs recovery, which Sys Platform does not do for these statements yet.';
 			return;
 		}
 		const project = this.project;

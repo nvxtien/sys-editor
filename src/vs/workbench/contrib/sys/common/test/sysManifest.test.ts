@@ -40,9 +40,15 @@ test('specOperation takes the first declaration when a spec repeats it', () => {
 	assert.equal(specOperation('Operation: create booking\nOperation: cancel booking\n'), 'create booking');
 });
 
-test('specOperation refuses a spec with no operation, without suggesting a binding', () => {
+// A spec that declares only types is complete, so "add an Operation:" is the wrong advice: it
+// asks the author to put a fact in the governed record that nobody stated. It must not suggest a
+// source binding either, which is what this milestone removed.
+test('specOperation refuses a spec with no operation, and suggests nothing false', () => {
 	for (const bad of ['Requirement: Cinema booking\n', 'Operation:\n', 'Operation:    \n', '']) {
-		assert.throws(() => specOperation(bad), (error: Error) => /Operation:/.test(error.message) && !/Class\.method|bind/i.test(error.message));
+		assert.throws(() => specOperation(bad), (error: Error) =>
+			/operation/i.test(error.message)
+			&& !/Class\.method|bind/i.test(error.message)
+			&& !/add (an? )?`?Operation/i.test(error.message));
 	}
 });
 

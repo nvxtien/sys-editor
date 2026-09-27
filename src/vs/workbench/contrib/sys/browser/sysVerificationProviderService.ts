@@ -121,7 +121,7 @@ class SysVerificationDataProvider extends Disposable implements ISysVerification
 			});
 		}
 		if (!this.workspaceRun) {
-			return Promise.reject(new VerificationTransportError('NO_VERIFICATION_RUN', 'Run Verify on a requirement in Semantic Workbench to see a result here.'));
+			return Promise.reject(new VerificationTransportError('NO_VERIFICATION_RUN', 'No verification has been run for this workspace.'));
 		}
 		return loadLiveVerification(this.transport, { ...this.workspaceRun, timeoutMs: this.config.getValue<number>('sys.verification.timeoutMs') ?? 60000 });
 	}

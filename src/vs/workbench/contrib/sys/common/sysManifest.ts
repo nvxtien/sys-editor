@@ -10,7 +10,10 @@ const OPERATION_LINE = /^Operation:[ \t]*(.*)$/m;
 export function specOperation(specText: string): string {
 	const operation = OPERATION_LINE.exec(specText)?.[1].trim();
 	if (!operation) {
-		throw new Error('This Formal Spec declares no `Operation:`. Add one to the spec before verifying.');
+		// Not "add one": a spec that declares only types is complete, and adding an operation to
+		// it would put a fact in the governed record that nobody stated. Verification of type
+		// semantics needs source recovery, which the platform does not do yet.
+		throw new Error('This requirement governs no operation, and only operations can be verified today. Verifying declared types needs source recovery, which Sys Platform does not do yet.');
 	}
 	return operation;
 }

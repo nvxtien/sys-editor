@@ -188,10 +188,16 @@ test('a platform gap is not narrated on the review page', () => {
 	assert.equal(formalizationNote(CAPABILITY.gap), undefined);
 });
 
-test('Add spec is offered only when the platform can formalize the intent', () => {
+/// The row offers nothing about the Formal Spec at all. Confirming an intent already generates
+/// code from it, so drafting a second artifact from the same facts asked a reader to review them
+/// twice in two vocabularies — and every one of those buttons was a dead end for an intent the
+/// grammar cannot represent. This replaces the older test that only required `Add spec` to be
+/// gated: the stronger fact is that there is no such button to gate.
+test('the requirement row offers no Formal Spec action at all', () => {
 	const source = readFileSync(join(process.cwd(), 'src/vs/workbench/contrib/sys/browser/sysSemanticWorkbenchView.ts'), 'utf8');
-	const addSpec = source.slice(source.indexOf("row.hasSpec ? 'Edit spec' : 'Add spec'") - 400, source.indexOf("row.hasSpec ? 'Edit spec' : 'Add spec'"));
-	assert.match(addSpec, /FORMAL_SPEC_SUPPORTED/, 'Add spec is not gated on the capability');
+	const offered = source.match(/this\._action\(actions, '[^']+'/g)?.map(call => call.replace(/.*'(.*)'/, '$1')) ?? [];
+	assert.deepEqual(offered.filter(label => /spec|verif/i.test(label)), [], `still offered: ${offered.join(', ')}`);
+	assert.ok(offered.includes('Delete') && offered.includes('Normalize intent'), `row lost its real actions: ${offered.join(', ')}`);
 });
 
 const withScenarios = (): SysStructuredIntentRecord => ({

@@ -15,7 +15,6 @@ import { IViewDescriptorService } from '../../../common/views.js';
 import { ViewPane, IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { ISysProjectService } from './sysProjectService.js';
 import { SysRequirementRow } from '../common/sysProject.js';
-import { SpecCheckResult, runSpecCheck } from '../common/sysSpecCheck.js';
 import { buildManifest, specOperation } from '../common/sysManifest.js';
 import { ISysVerificationDataProvider } from './sysVerificationProviderService.js';
 import { SYS_VERIFICATION_VIEW_ID } from '../common/sysViewIds.js';
@@ -56,7 +55,6 @@ const $ = DOM.$;
 const intentStateOf = (row: SysRequirementRow) => row.structuredIntentState ?? 'NOT_CREATED';
 
 export class SysSemanticWorkbenchView extends ViewPane {
-	private readonly specChecks = new Map<string, SpecCheckResult>();
 	private intentItems: readonly SysIntentItem[] = [];
 	private snapshot: SysProjectSnapshot | undefined;
 	private bodyContainer: HTMLElement | undefined;
@@ -192,7 +190,7 @@ export class SysSemanticWorkbenchView extends ViewPane {
 				// Remove this line with the prototype files.
 				void this._renderGoverned(parent, state.project.platformRoot);
 				const section = DOM.append(parent, this._section('Requirements'));
-				DOM.append(section, $('p')).textContent = 'Save a plain-language requirement, generate a draft Formal Spec, review and approve it, then inspect the independently verified code proposal before applying.';
+				DOM.append(section, $('p')).textContent = 'Write a requirement, normalize its intent, then confirm it — confirming records the intent and generates code from it.';
 				for (const row of state.rows) {
 					this._renderRequirementRow(section, row);
 				}
@@ -380,55 +378,6 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		}
 	}
 
-	private async _draftSpecFromRequirement(id: string): Promise<void> {
-		const requirement = this.projectService.resourceOf(id);
-		const intent = (await this.fileService.readFile(requirement)).value.toString();
-		if (!intent.trim()) { throw new Error(`Add and save the plain-language requirement in ${requirement.fsPath} first.`); }
-		const spec = this.projectService.resourceOfSpec(id);
-		if (await this.fileService.exists(spec) && (await this.fileService.readFile(spec)).value.toString().trim()) {
-			const { confirmed } = await this.dialogService.confirm({ message: 'Replace the current draft Formal Spec?', detail: 'The existing spec file will be replaced by a new Platform preview.', primaryButton: 'Replace draft' });
-			if (!confirmed) { return; }
-		}
-		const platformRoot = await this._platformRoot();
-		if (!platformRoot) { return; }
-		const projectRoot = this._projectRoot();
-		if (!await this._ensurePlatformWorkspace(platformRoot, projectRoot)) { return; }
-		const structuredIntent = await this.projectService.readStructuredIntent(id);
-		if (!structuredIntent || structuredIntent.state !== 'APPROVED') {
-			throw new Error('Confirm the Structured Intent before generating a Formal Spec.');
-		}
-		const capability = await this.projectService.formalizationCapability(id);
-		if (!capability) { throw new Error('Could not read what can be formalized from sys-core; check that the SideX server is running.'); }
-		assertSysDraftFormalizable(capability);
-		const model = this.sidexChatService.serverModel;
-		if (!model) { throw new Error('Select a model in SideX Settings → Models before drafting a Formal Spec.'); }
-		const configuredServerUrl = this.configurationService.getValue<string>('sidex.chat.serverUrl');
-		const endpoint = configuredServerUrl?.trim() ? await resolveServerEndpoint() : await waitForServerEndpoint();
-		assertSysDraftServerAvailable(endpoint.running, configuredServerUrl, endpoint.error);
-		const proposalContext = await this.projectService.prepareFormalSpecContext(id);
-		const proposals = URI.joinPath(URI.file(projectRoot), '.sys', 'proposals');
-		await this.fileService.createFolder(proposals);
-		const draftId = newSysRequestId();
-		// The model drafts, sys-platform judges; a rejection is sent back to the model a bounded number of times.
-		const { result: preview } = await draftFormalSpecWithRepair({
-			// Read the port on every request: a stale cached port is re-resolved by the core call above.
-			request: repair => requestSysFormalSpecDraft(serverHttpUrl(configuredServerUrl), model, proposalContext, repair),
-			validate: draft => validateDraftCandidate(
-				URI.joinPath(proposals, `draft-${generateUuid()}.spec`).fsPath,
-				draft,
-				async (path, text) => { await this.fileService.writeFile(URI.file(path), VSBuffer.fromString(text)); },
-				path => this._runSys(platformRoot, projectRoot, ['requirement', '--file', requirement.fsPath, '--draft-file', path, '--draft-only', '--json']),
-				async path => {
-					try { await this.fileService.del(URI.file(path), { useTrash: false }); }
-					catch (error) { if (!(error instanceof FileOperationError && error.fileOperationResult === FileOperationResult.FILE_NOT_FOUND)) { throw error; } }
-				}
-			),
-			onAttempt: attempt => console.info(`[SYS_DRAFT_SPEC] id=${draftId} attempt=${attempt.attempt} outcome=${attempt.outcome}${attempt.reason ? ` reason=${attempt.reason.split('\n').filter(line => line.trim()).slice(-1)[0]}` : ''}`)
-		});
-		await this.projectService.createSpec(id);
-		await this.fileService.writeFile(spec, VSBuffer.fromString(preview.draftSpec));
-		await this.editorService.openEditor({ resource: spec });
-	}
 
 	private async _normalizeIntent(id: string): Promise<void> {
 		const requestId = newSysRequestId();
@@ -521,64 +470,9 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		for (const resource of written) { await this.editorService.openEditor({ resource }, SIDE_GROUP); }
 	}
 
-	private async _approveFormalSpec(id: string): Promise<void> {
-		const { confirmed } = await this.dialogService.confirm({ message: 'Approve this Formal Spec?', detail: 'Only this exact reviewed Formal Spec will authorize downstream verification.', primaryButton: 'Approve Formal Spec' });
-		if (confirmed) { await this.projectService.approveSpec(id); }
-	}
 
-	private _specLabel(check: SpecCheckResult | undefined): string {
-		if (!check) { return 'syntax not checked'; }
-		switch (check.kind) {
-			case 'PARSE_OK': return 'parses';
-			case 'PARSE_ERROR': return `does not parse: ${check.reason}`;
-			case 'CHECK_ERROR': return `check failed: ${check.reason}`;
-		}
-	}
 
-	/** Syntax only, via the exact binary spec-code-sync's own pipeline uses to compile the expected side. Never a semantic verdict. */
-	private async _checkSpec(id: string): Promise<void> {
-		const platformRoot = await this.projectService.getPlatformRoot() ?? await (async () => {
-			const input = await this._promptPlatformRoot(undefined);
-			if (input !== undefined) { await this.projectService.setPlatformRoot(input); }
-			return input;
-		})();
-		if (!platformRoot) { return; }
-		const transport = new TaskProcessTransport(this.taskService, this.fileService);
-		const result = await runSpecCheck(transport, platformRoot, this.projectService.resourceOfSpec(id).fsPath);
-		this.specChecks.set(id, result);
-		void this._renderProject();
-	}
 
-	/**
-	 * Builds a one-rule manifest from the approved Formal Spec's own semantic operation and runs it via
-	 * spec-code-sync. Nothing here is asked of the user and nothing maps the operation to source: which code
-	 * that operation corresponds to is sys-platform's to recover, and its verdict is shown in the
-	 * Verification view, not reasoned about here.
-	 */
-	private async _verify(id: string, title: string): Promise<void> {
-		const specText = (await this.fileService.readFile(this.projectService.resourceOfSpec(id))).value.toString();
-		const operation = specOperation(specText);
-		let platformRoot = await this.projectService.getPlatformRoot();
-		if (!platformRoot) {
-			const input = await this._promptPlatformRoot(undefined);
-			if (input === undefined) { return; }
-			await this.projectService.setPlatformRoot(input);
-			platformRoot = input;
-		}
-		const folder = this.projectService.resourceOf(id).path.split('/.sys/')[0];
-		const projectId = folder.slice(folder.lastIndexOf('/') + 1);
-		const manifest = buildManifest({
-			projectId,
-			projectRoot: folder,
-			operation,
-			ruleId: id,
-			title,
-			specFile: this.projectService.resourceOfSpec(id).fsPath
-		});
-		const manifestUri = await this.projectService.writeManifest(id, manifest);
-		this.verificationDataProvider.setWorkspaceRun({ platformBinary: `${platformRoot}/spec-code-sync/target/debug/spec-code-sync`, manifestPath: manifestUri.fsPath });
-		await this.viewsService.openView(SYS_VERIFICATION_VIEW_ID, true);
-	}
 
 	private _renderRequirementRow(host: HTMLElement, row: SysRequirementRow): void {
 		const el = DOM.append(host, $('div.sys-req-row'));
@@ -604,12 +498,10 @@ export class SysSemanticWorkbenchView extends ViewPane {
 					this._action(actions, 'Confirm intent', 'sys-req-action', () => this._confirmIntent(row.id));
 				}
 			}
-			if (intentState === 'APPROVED' && row.formalization?.outcome === 'FORMAL_SPEC_SUPPORTED') {
-				this._action(actions, 'Generate Formal Spec', 'sys-req-action', () => this._draftSpecFromRequirement(row.id));
-			}
-			if (row.hasSpec && row.formalSpecState !== 'APPROVED') {
-				this._action(actions, 'Approve Formal Spec', 'sys-req-action', () => this._approveFormalSpec(row.id));
-			}
+			// No Formal Spec buttons. Confirming an intent already generates code from it, so
+			// drafting a second artifact from the same facts asked a reader to review them twice
+			// in two vocabularies. What a requirement governs comes from its intent; the Formal
+			// Spec is the compilable projection, not a step a person takes.
 		}
 		const kindNote = intentStateOf(row) === 'APPROVED' ? (row.formalization ? formalizationNote(row.formalization) : 'Formal Spec options unavailable: sys-core did not answer.') : undefined;
 		if (kindNote) { DOM.append(el, $('div.sys-req-binding.sys-req-kind-note')).textContent = kindNote; }
@@ -617,19 +509,6 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		// A blank requirement has nothing to normalize or approve, so it offers neither. Say what to
 		// do instead of leaving the row with only Delete and no explanation.
 		if (row.empty) { DOM.append(el, $('div.sys-req-binding.sys-req-kind-note')).textContent = 'Write the requirement in the editor and save it, then normalize its intent.'; }
-		const specCheck = row.hasSpec ? this.specChecks.get(row.id) : undefined;
-		DOM.append(el, $('div.sys-req-binding')).textContent = row.hasSpec ? `spec: ${this._specLabel(specCheck)}` : 'No .spec file yet';
-		// Authoring a spec by hand for a kind the platform cannot formalize is a dead end: the spec
-		// can be written but never approved, because approval requires the same capability.
-		if (row.hasSpec || row.formalization?.outcome === 'FORMAL_SPEC_SUPPORTED') {
-			this._action(actions, row.hasSpec ? 'Edit spec' : 'Add spec', 'sys-req-action', async () => {
-				await this.editorService.openEditor({ resource: await this.projectService.createSpec(row.id) });
-			});
-		}
-		if (row.hasSpec) {
-			this._action(actions, 'Check syntax', 'sys-req-action', () => this._checkSpec(row.id));
-			this._action(actions, 'Verify', 'sys-req-action', () => this._verify(row.id, row.title));
-		}
 		this._action(actions, 'Delete', 'sys-req-action', async () => {
 			const { confirmed } = await this.dialogService.confirm({ message: `Delete ${row.id}?`, detail: 'The requirement file is removed from .sys/requirements/.', primaryButton: 'Delete' });
 			if (confirmed) { await this.projectService.deleteRequirement(row.id); }
