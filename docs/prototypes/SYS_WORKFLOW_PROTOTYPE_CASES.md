@@ -184,6 +184,52 @@ ontology that produces it.
 
 ---
 
+## Case 06 — Governing something at the moment it is written
+
+**Do** — put the cursor on a line nothing governs, such as `private int id;`, and Quick Fix.
+
+**See** — the sentence is already written for you:
+
+```
+Sys: govern this — “Book has an id”…
+```
+
+Accepting it is one keystroke. Then one question:
+
+```
+Why does it matter?
+  Without a reason this stays an observation, not an obligation.
+```
+
+Give a reason and it becomes an obligation. Leave it blank (**Case 06c**) and it says so:
+
+> Prototype: this would be kept as an observation, not governed.
+> Nothing recorded why it matters, so nothing would enforce it.
+
+**Why it matters** — this is the load-bearing assumption of the whole design.
+
+Approving an intent and resolving a conflict are moments a person has already stopped to think.
+Writing the line is the only moment they still remember **why**. If capture does not work here, it
+works nowhere: nothing ever becomes governed, and the design has no starting point at all.
+
+Two things carry that bet:
+
+- **The sentence is derived from the line, so governing is editing, not composing.** A developer
+  will correct a proposal put in front of them and will not stop to compose one. A wrong guess
+  costs a correction, not a refusal — which is why the guess is offered in an editable box.
+- **No reason means no obligation.** A statement nobody can say why about will never drift in a way
+  anyone minds, so governing it spends review attention and buys nothing. This is the admission
+  test the design relies on to keep the governed set small enough to hold in one head, and it is
+  what keeps uplift tractable: recovery proposes thousands, and only the ones someone can attach a
+  reason to survive.
+
+**What would disprove the design** — if the proposed sentence is wrong often enough that people
+stop reading it, or if the reason box is the moment they give up, then governance never accretes
+and the "govern on contact" answer to the grey wall does not hold. That is the single most
+important thing to watch for while clicking.
+
+---
+
 ## What the prototype has already changed
 
 Two findings, both from using it rather than reading it:
@@ -193,12 +239,13 @@ Two findings, both from using it rather than reading it:
 2. **A marker needs no language; a hover and a code action do.** Registering for `language: 'java'`
    in a fork with no Java language contribution left the mark visible with no reason behind it and
    no actions on it — the worst kind of failure, because it looks like it is working.
+3. **A `ServicesAccessor` is only valid while a command runs synchronously.** Every one of these
+   actions awaits a dialog, and reaching for a service afterwards throws. From the user's side the
+   action simply did nothing — no error, no dialog. Services are now taken before the first await.
 
 ## Not built
 
-- The `why` is shown but never captured — writing it down still has no moment in the UI. The
-  design argues the best one is **as you write the code**, through a "Govern this" action, and
-  that is the load-bearing assumption still untested: if adding a reason there feels like a chore,
-  nothing ever becomes governed and the design has no starting point.
-- The actions report what they would do; nothing is retracted, narrowed or recorded.
+- The actions report what they would do; nothing is retracted, narrowed, governed or recorded.
+- Uplift does not exist: the prototype has no observed side, so "govern this" is offered on any
+  declaration rather than on the ones recovery would actually notice.
 - Verdicts are fixtures. Real ones need the system ontology, which is on hold.

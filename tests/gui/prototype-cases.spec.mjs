@@ -213,3 +213,86 @@ test('Case 05 — the Needs you list carries what has no line to stand on', asyn
 	// A list of things that are fine is the noise this whole design avoids.
 	await expect(view).not.toContainText('Book has a title');
 });
+
+/**
+ * CASE 06 — Governing something at the moment it is written.
+ *
+ * Do:   put the cursor on a line nothing governs — `private String author;` — and Quick Fix
+ * See:  "Sys: govern this — “Book has an author”…", the sentence already written for you; accept
+ *       or correct it, then say why it matters
+ * Why:  this is the load-bearing assumption of the whole design. Approving an intent and
+ *       resolving a conflict are moments a person has already stopped to think; writing the line
+ *       is the only moment they still remember why. If it does not work here, nothing ever
+ *       becomes governed and there is no starting point at all.
+ */
+test('Case 06 — a line nothing governs offers a sentence already written', async ({ page }) => {
+	const { root } = javaWorkspace();
+	const editor = await open(page, root, 'Book.java');
+	await expect(editor.locator('.squiggly-error').first()).toBeVisible({ timeout: 30_000 });
+
+	await editor.getByText('private int id').first().click();
+	await page.keyboard.press('Meta+Period');
+	const menu = page.locator('.action-widget, .context-view').filter({ hasText: 'Sys:' }).first();
+	// The proposal is derived from the line, so governing it is editing rather than composing.
+	await expect(menu).toContainText('govern this', { timeout: 15_000 });
+	await expect(menu).toContainText('Book has an id');
+
+	await page.keyboard.press('Enter');
+	const input = page.locator('.quick-input-widget');
+	await expect(input).toContainText('What does this say?', { timeout: 15_000 });
+	// Accepting the proposal is one keystroke. Composing a sentence would be the chore.
+	await page.keyboard.press('Enter');
+	await expect(input).toContainText('Why does it matter?', { timeout: 15_000 });
+});
+
+/**
+ * CASE 06b — Accepting the proposal costs two keystrokes.
+ *
+ * Enter accepts the sentence the line already said; the only typing is the reason. If governing
+ * something cost a composed sentence, nobody would do it and nothing would ever be governed.
+ */
+test('Case 06b — accepting the proposal and giving a reason governs it', async ({ page }) => {
+	const { root } = javaWorkspace();
+	const editor = await open(page, root, 'Book.java');
+	await expect(editor.locator('.squiggly-error').first()).toBeVisible({ timeout: 30_000 });
+
+	await editor.getByText('private int id').first().click();
+	await page.keyboard.press('Meta+Period');
+	await expect(page.locator('.action-widget, .context-view').filter({ hasText: 'Sys:' }).first())
+		.toContainText('govern this', { timeout: 15_000 });
+	await page.keyboard.press('Enter');
+	await expect(page.locator('.quick-input-widget')).toContainText('What does this say?', { timeout: 15_000 });
+	await page.keyboard.press('Enter');
+	await expect(page.locator('.quick-input-widget')).toContainText('Why does it matter?', { timeout: 15_000 });
+	await page.keyboard.type('orphaned books corrupted the catalogue');
+	await page.keyboard.press('Enter');
+	await expect(page.getByText(/governed obligation/)).toBeVisible({ timeout: 15_000 });
+});
+
+/**
+ * CASE 06c — Without a reason it stays an observation.
+ *
+ * A statement nobody can say why about will never drift in a way anyone minds, so governing it
+ * spends review attention and buys nothing. This is the admission test the design relies on to
+ * keep the governed set small enough to hold in a head — and it is what keeps uplift tractable,
+ * because recovery proposes thousands and only the ones with a reason survive.
+ */
+test('Case 06c — without a reason it stays an observation, not an obligation', async ({ page }) => {
+	const { root } = javaWorkspace();
+	const editor = await open(page, root, 'Book.java');
+	await expect(editor.locator('.squiggly-error').first()).toBeVisible({ timeout: 30_000 });
+
+	await editor.getByText('private int id').first().click();
+	await page.keyboard.press('Meta+Period');
+	await expect(page.locator('.action-widget, .context-view').filter({ hasText: 'Sys:' }).first())
+		.toContainText('govern this', { timeout: 15_000 });
+	await page.keyboard.press('Enter');
+	await expect(page.locator('.quick-input-widget')).toContainText('What does this say?', { timeout: 15_000 });
+	await page.keyboard.press('Enter');
+	await expect(page.locator('.quick-input-widget')).toContainText('Why does it matter?', { timeout: 15_000 });
+	// Left blank on purpose.
+	await page.keyboard.press('Enter');
+
+	await expect(page.getByText(/observation, not governed/)).toBeVisible({ timeout: 15_000 });
+	await expect(page.getByText(/nothing would enforce it/)).toBeVisible();
+});

@@ -34,10 +34,82 @@ const OWNER = 'sys.prototype';
 // about is decided by the fixture, not by a language id.
 const ANY_LANGUAGE = { scheme: '*', pattern: '**/*' };
 
+const GOVERN = 'sys.prototype.governThis';
 const RETRACT = 'sys.prototype.retractObligation';
 const EXCEPT = 'sys.prototype.grantException';
 
+/**
+ * One confirmation shape for every action. `IDialogService.info` did not surface anywhere a test
+ * could see it, and a confirmation nobody sees is the same as no confirmation.
+ */
+async function report(dialogs: IDialogService, message: string, detail?: string): Promise<void> {
+	await dialogs.prompt({
+		type: 'info', message, detail,
+		buttons: [{ label: 'OK', run: () => undefined }]
+	});
+}
+
 const byId = (id: string) => SYS_PROTOTYPE_OBLIGATIONS.find(o => o.id === id);
+
+/**
+ * Reads a line of code as the sentence it already says, so governing it is editing a proposal
+ * rather than composing one. This is the whole bet: a developer will accept or correct a sentence
+ * put in front of them, and will not stop to compose one. A wrong guess is fine — it is offered
+ * in an editable box, and being wrong costs a correction, not a refusal.
+ */
+export function proposedStatement(line: string, typeName: string): string | undefined {
+	const field = line.trim().match(/^(?:private|protected|public)?\s*(?:final\s+)?([\w<>\[\]]+)\s+(\w+)\s*[;=]/);
+	if (field) {
+		const [, type, name] = field;
+		const readable = name.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ').toLowerCase();
+		// A field holding another declared type is a relationship, not an attribute — the one
+		// distinction worth making here, because it is the one the grammar makes.
+		return /^[A-Z]/.test(type) && !['String', 'Integer', 'Long', 'Boolean', 'BigDecimal'].includes(type)
+			? `Each ${typeName} belongs to exactly one ${type}`
+			: `${typeName} has ${/^[aeiou]/.test(readable) ? 'an' : 'a'} ${readable}`;
+	}
+	const method = line.trim().match(/^(?:public|protected)\s+[\w<>\[\]]+\s+(\w+)\s*\(/);
+	if (method) {
+		const action = method[1].replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
+		return `${typeName} can ${action}`;
+	}
+	return undefined;
+}
+
+/**
+ * Governing something at the moment it is written. The design argues this is the only capture
+ * point that can work: approving and resolving a conflict are moments a person has already
+ * stopped to think, but writing the line is the only moment they still remember why.
+ *
+ * If this feels like a chore, nothing ever becomes governed and the design has no starting point.
+ * That is what this action exists to find out.
+ */
+CommandsRegistry.registerCommand(GOVERN, async (accessor: ServicesAccessor, proposal: string) => {
+	// Taken before the first await: a ServicesAccessor is only valid while the command is running
+	// synchronously, and reaching for one afterwards throws — silently, from the user's side,
+	// because the action simply does nothing.
+	const quickInput = accessor.get(IQuickInputService);
+	const dialogs = accessor.get(IDialogService);
+	const says = await quickInput.input({
+		title: 'Govern this',
+		prompt: 'What does this say? Correct it, or press Enter to accept.',
+		value: proposal,
+		validateInput: async value => value.trim().length < 5 ? 'Say what is true, in a sentence.' : undefined
+	});
+	if (!says?.trim()) { return; }
+	const because = await quickInput.input({
+		title: says.trim(),
+		prompt: 'Why does it matter? Without a reason this stays an observation, not an obligation.',
+		placeHolder: 'orphaned books corrupted the catalogue in March 2024',
+		validateInput: async value => value.trim() && value.trim().length < 10 ? 'A reason someone could disagree with, or leave it blank.' : undefined
+	});
+	// A statement with no reason behind it is not worth governing — it will never drift in a way
+	// anyone minds. Saying so is cheaper than letting it in and pruning later.
+	await report(dialogs,
+		because?.trim() ? 'Prototype: this would become a governed obligation.' : 'Prototype: this would be kept as an observation, not governed.',
+		because?.trim() ? `${says.trim()}\n\nWhy — ${because.trim()}` : `${says.trim()}\n\nNothing recorded why it matters, so nothing would enforce it.`
+	);
+});
 
 /**
  * You cannot retract an obligation without reading why it exists. That is the entire reason the
@@ -45,10 +117,11 @@ const byId = (id: string) => SYS_PROTOTYPE_OBLIGATIONS.find(o => o.id === id);
  * code or change the requirement, and without the reason that decision is a coin flip.
  */
 CommandsRegistry.registerCommand(RETRACT, async (accessor: ServicesAccessor, id: string) => {
+	const dialogs = accessor.get(IDialogService);
 	const obligation = byId(id);
 	if (!obligation) { return; }
 	const decision = obligation.decision;
-	const { result } = await accessor.get(IDialogService).prompt<'retract' | 'narrow' | undefined>({
+	const { result } = await dialogs.prompt<'retract' | 'narrow' | undefined>({
 		type: 'warning',
 		message: obligation.says,
 		detail: decision
@@ -61,7 +134,7 @@ CommandsRegistry.registerCommand(RETRACT, async (accessor: ServicesAccessor, id:
 		cancelButton: true
 	});
 	if (!result) { return; }
-	await accessor.get(IDialogService).info(
+	await report(dialogs,
 		result === 'retract' ? 'Prototype: the obligation would be retracted.' : 'Prototype: the obligation would be narrowed.',
 		result === 'narrow' ? obligation.narrowerForm : undefined
 	);
@@ -72,17 +145,18 @@ CommandsRegistry.registerCommand(RETRACT, async (accessor: ServicesAccessor, id:
  * obligation in a system eventually becomes decoration, so there is no button that just silences.
  */
 CommandsRegistry.registerCommand(EXCEPT, async (accessor: ServicesAccessor, id: string) => {
+	const quickInput = accessor.get(IQuickInputService);
+	const dialogs = accessor.get(IDialogService);
 	const obligation = byId(id);
 	if (!obligation) { return; }
-	const reason = await accessor.get(IQuickInputService).input({
+	const reason = await quickInput.input({
 		title: `Exception — ${obligation.says}`,
 		prompt: 'Why is this location exempt? An exception without a reason is not granted.',
 		placeHolder: 'the framework constructs this by reflection, no business path does',
 		validateInput: async value => value.trim().length < 10 ? 'Say why, in a sentence someone can disagree with.' : undefined
 	});
 	if (!reason?.trim()) { return; }
-	await accessor.get(IDialogService).info(
-		'Prototype: the exception would be recorded as a decision.',
+	await report(dialogs, 'Prototype: the exception would be recorded as a decision.',
 		obligation.narrowerForm
 			? `Better still, the obligation can be narrowed to: “${obligation.narrowerForm}”`
 			: `Recorded against this location: “${reason.trim()}”`
@@ -156,6 +230,18 @@ export class SysPrototypeContribution extends Disposable implements IWorkbenchCo
 					.filter(o => o.verdict === 'CONTRADICTED')
 					.flatMap(o => locate(model, o))
 					.filter(l => Range.areIntersectingOrTouching(l.range, range));
+
+				// Offered wherever a line says something nothing governs yet. This is the third
+				// capture moment, and the only one where the reason is still in the author's head.
+				const line = model.getLineContent(range.startLineNumber);
+				const typeName = model.uri.path.split('/').pop()?.replace(/\.\w+$/, '') ?? 'This';
+				const proposal = broken.length ? undefined : proposedStatement(line, typeName);
+				if (proposal) {
+					return {
+						actions: [{ title: `Sys: govern this — “${proposal}”…`, kind: 'quickfix', command: { id: GOVERN, title: 'Govern', arguments: [proposal] } }],
+						dispose: () => { }
+					};
+				}
 				if (!broken.length) { return undefined; }
 				// Exactly three choices, and none of them is silent. A suppression here is how
 				// every obligation in the system eventually becomes decoration.
