@@ -14,6 +14,7 @@
 import * as DOM from '../../../../base/browser/dom.js';
 import { URI } from '../../../../base/common/uri.js';
 import { SysObligation, SYS_PROTOTYPE_OBLIGATIONS } from '../common/sysPrototypeFixture.js';
+import { prototypeRequirement } from './sysPrototype.js';
 
 const $ = DOM.$;
 
@@ -32,7 +33,7 @@ export function renderSysNeedsMe(parent: HTMLElement, section: HTMLElement, open
 		main.tabIndex = 0;
 		DOM.append(main, $('span.sys-req-id')).textContent = '✗';
 		DOM.append(main, $('span.sys-req-title')).textContent = obligation.says;
-		DOM.append(row, $('div.sys-req-status')).textContent = `${obligation.requirement} · broken in ${obligation.files.join(', ')}`;
+		DOM.append(row, $('div.sys-req-status')).textContent = `${prototypeRequirement(obligation)} · broken in ${obligation.files.join(', ')}`;
 		// Broken has a place in the code, so the row's job is to get you there and then get out
 		// of the way. Everything else about it is already on the line itself.
 		// The fixture names a file, not a path, so this is a best guess at where it lives. A real
@@ -53,7 +54,7 @@ export function renderSysNeedsMe(parent: HTMLElement, section: HTMLElement, open
 		DOM.append(main, $('span.sys-req-id')).textContent = '—';
 		DOM.append(main, $('span.sys-req-title')).textContent = obligation.says;
 		// Not a failure, and it must not read as one: nothing in the code honours or breaks this.
-		DOM.append(row, $('div.sys-req-status')).textContent = `${obligation.requirement} · nothing in the code says this yet`;
+		DOM.append(row, $('div.sys-req-status')).textContent = `${prototypeRequirement(obligation)} · nothing in the code says this yet`;
 		if (obligation.decision) {
 			DOM.append(row, $('div.sys-req-binding')).textContent = `Why: ${obligation.decision.because}`;
 		}

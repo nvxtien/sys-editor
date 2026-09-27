@@ -17,6 +17,8 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IMarkerService, IMarkerData, MarkerSeverity } from '../../../../platform/markers/common/markers.js';
 import { IModelService } from '../../../../editor/common/services/model.js';
+import { IFileService } from '../../../../platform/files/common/files.js';
+import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import { ITextModel } from '../../../../editor/common/model.js';
 import { Range } from '../../../../editor/common/core/range.js';
@@ -49,6 +51,18 @@ async function report(dialogs: IDialogService, message: string, detail?: string)
 		type: 'info', message, detail,
 		buttons: [{ label: 'OK', run: () => undefined }]
 	});
+}
+
+/**
+ * Which requirement this workspace actually has. The fixture names REQ-001, but a real workspace
+ * has whatever it has — linking to a file that is not there is worse than not linking, because it
+ * looks like a reference.
+ */
+let discoveredRequirement: string | undefined;
+
+/** The requirement to show for an obligation: this workspace's, if it has one. */
+export function prototypeRequirement(obligation: SysObligation): string {
+	return discoveredRequirement ?? obligation.requirement;
 }
 
 const byId = (id: string) => SYS_PROTOTYPE_OBLIGATIONS.find(o => o.id === id);
@@ -198,8 +212,21 @@ export class SysPrototypeContribution extends Disposable implements IWorkbenchCo
 		@IMarkerService private readonly markers: IMarkerService,
 		@IModelService private readonly models: IModelService,
 		@ILanguageFeaturesService languageFeatures: ILanguageFeaturesService,
+		@IFileService files: IFileService,
+		@IWorkspaceContextService workspace: IWorkspaceContextService,
 	) {
 		super();
+
+		const root = workspace.getWorkspace().folders[0]?.uri;
+		if (root) {
+			void files.resolve(URI.joinPath(root, '.sys', 'intents')).then(
+				folder => {
+					const page = folder.children?.find(child => child.name.endsWith('.intent.review.md'));
+					if (page) { discoveredRequirement = page.name.replace('.intent.review.md', ''); }
+				},
+				() => { /* no intents folder: the fixture's own id stands */ }
+			);
+		}
 
 		for (const model of this.models.getModels()) { this._refresh(model); }
 		this._register(this.models.onModelAdded(model => this._refresh(model)));
@@ -287,7 +314,7 @@ export class SysPrototypeContribution extends Disposable implements IWorkbenchCo
 			// The counterexample, not a code. A reader passes `public Book() {}` nine times out of
 			// ten; "leaves category unset" is what makes them stop.
 			message: note ? `${obligation.says} — ${note}` : obligation.says,
-			source: `Sys · ${obligation.requirement}`,
+			source: `Sys · ${discoveredRequirement ?? obligation.requirement}`,
 			startLineNumber: range.startLineNumber,
 			startColumn: range.startColumn,
 			endLineNumber: range.endLineNumber,
@@ -335,11 +362,12 @@ function hoverFor({ obligation, note }: Located, source: URI): string {
 	// The requirement is a link, so the mirror of Case 07 holds: from code you reach the intent
 	// exactly as from the intent you reach the code. A reference you cannot follow is a citation
 	// nobody checks.
-	const page = intentPage(source, obligation.requirement);
-	const lines = [`**Sys · ${obligation.requirement}** — ${verdict}`, '', obligation.says];
+	const requirement = discoveredRequirement ?? obligation.requirement;
+	const page = intentPage(source, requirement);
+	const lines = [`**Sys · ${requirement}** — ${verdict}`, '', obligation.says];
 	if (note) { lines.push('', `Here: ${note}`); }
 	// On its own line, not nested in bold: a link inside emphasis is not rendered as one.
-	lines.push('', `[Open ${obligation.requirement}](${page.toString()})`);
+	lines.push('', `[Open ${requirement}](${page.toString()})`);
 	if (obligation.decision) {
 		// The reason travels with the obligation, because it is what a person needs at the moment
 		// they are deciding whether to change the code or change the requirement.

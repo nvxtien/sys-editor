@@ -283,6 +283,15 @@ ontology, and text from a store is **data**: trusting it would make a `command:`
 a requirement's wording executable. The real implementation must escape it, or keep the content
 untrusted and link some other way.
 
+### Case 08b — the requirement shown is the one this workspace has
+
+The fixture names `REQ-001`; a real workspace has whatever it has — `REQ-002`, say. The prototype
+reads `.sys/intents/` once and uses what it finds.
+
+Linking to a page that is not there is **worse than not linking**, because it still looks like a
+reference. The same silent failure as a link that does not render: the reader cannot tell the
+difference between "checked and fine" and "never wired up".
+
 ---
 
 ## What the prototype has already changed

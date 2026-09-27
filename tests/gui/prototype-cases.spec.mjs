@@ -353,3 +353,25 @@ test('Case 08 — the hover links back to the intent it came from', async ({ pag
 	// The hover also carries the editor's own "View Problem" link, so name the one we added.
 	await expect(hover.getByRole('link', { name: /Open REQ-001/ })).toBeVisible();
 });
+
+/**
+ * CASE 08b — The link names the requirement this workspace actually has.
+ *
+ * The fixture says REQ-001; a real workspace has whatever it has. Linking to a page that is not
+ * there is worse than not linking, because it still looks like a reference — the same silent
+ * failure as a link that does not render.
+ */
+test('Case 08b — the requirement shown is the one in this workspace', async ({ page }) => {
+	const { root } = javaWorkspace();
+	fs.mkdirSync(path.join(root, '.sys', 'intents'), { recursive: true });
+	fs.writeFileSync(path.join(root, '.sys', 'intents', 'REQ-002.intent.review.md'), '# REQ-002\n\n### Book\n');
+
+	const editor = await open(page, root, 'Book.java');
+	await expect(editor.locator('.squiggly-error').first()).toBeVisible({ timeout: 30_000 });
+
+	await editor.getByText('public Book()').first().hover();
+	const hover = page.locator('.monaco-hover').filter({ hasText: 'Sys ·' }).first();
+	await expect(hover).toContainText('REQ-002', { timeout: 15_000 });
+	await expect(hover.getByRole('link', { name: /Open REQ-002/ })).toBeVisible();
+	await expect(hover).not.toContainText('REQ-001');
+});
