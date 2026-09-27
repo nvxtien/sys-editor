@@ -37,8 +37,8 @@ test('ids are sequential, stable and independent of text; removal never renumber
 
 test('persist and reload: project.json + requirement file + core lifecycle give the same id, title and honest DRAFT status', async () => {
 	const p = addRequirement(EMPTY_PROJECT).project;
-	const state = await loadProjectState(['/a'], files({ [A]: serializeProject(p), '/a/.sys/requirements/REQ-001.md': '# A booking needs a seat\nmore' }), core());
-	assert.deepEqual(state, { kind: 'READY', project: p, rows: [{ id: 'REQ-001', title: 'A booking needs a seat', status: 'DRAFT_UNFORMALIZED', missing: false, empty: false, formalSpecState: 'NOT_CREATED' }] });
+	const state = await loadProjectState(['/a'], files({ [A]: serializeProject(p), '/a/.sys/requirements/REQ-001.md': '# An order needs an item\nmore' }), core());
+	assert.deepEqual(state, { kind: 'READY', project: p, rows: [{ id: 'REQ-001', title: 'An order needs an item', status: 'DRAFT_UNFORMALIZED', missing: false, empty: false, formalSpecState: 'NOT_CREATED' }] });
 });
 
 test('workspace A state never appears in workspace B', async () => {
@@ -134,7 +134,7 @@ test('a requirement with no text yet is marked empty', async () => {
 test('a requirement with text is not empty', async () => {
 	const project = { version: 1 as const, requirements: [{ id: 'REQ-001' }] };
 	const state = await loadProjectState(['file:///w'], async path =>
-		path.endsWith('project.json') ? JSON.stringify(project) : path.endsWith('REQ-001.md') ? 'A booking needs a seat' : undefined,
+		path.endsWith('project.json') ? JSON.stringify(project) : path.endsWith('REQ-001.md') ? 'An order needs an item' : undefined,
 		async () => undefined);
 	assert.equal((state as { rows: { empty: boolean }[] }).rows[0].empty, false);
 });

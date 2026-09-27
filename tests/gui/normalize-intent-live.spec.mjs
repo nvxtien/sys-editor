@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 //   SYS_LIVE_SERVER_PORT=<port of the running sidex-server> npx playwright test normalize-intent-live
 const port = process.env.SYS_LIVE_SERVER_PORT;
 const platformRoot = process.env.SYS_PLATFORM_ROOT ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../sys-platform');
-const REQUIREMENT = 'A booking request must contain at least one seat.\n';
+const REQUIREMENT = 'An order request must contain at least one item.\n';
 
 test.skip(!port, 'set SYS_LIVE_SERVER_PORT to the running sidex-server port');
 test.setTimeout(120_000);
@@ -97,7 +97,7 @@ test('Normalize intent reaches the real server on its dynamic port, saves and re
 	const request = await normalizeRequest;
 	expect(new URL(request.url()).port).toBe(port);
 	expect(new URL(request.url()).port).not.toBe('7433');
-	expect(JSON.parse(request.postData()).intent).toContain('A booking request must contain at least one seat.');
+	expect(JSON.parse(request.postData()).intent).toContain('An order request must contain at least one item.');
 	const response = await normalizeResponse;
 	expect(response.status()).toBe(200);
 	const requestId = JSON.parse(request.postData()).requestId;
@@ -119,7 +119,7 @@ test('Normalize intent reaches the real server on its dynamic port, saves and re
 	const review = fs.readFileSync(reviewFile, 'utf8');
 	expect(review).toContain('## Inputs');
 	expect(review).toContain('Generated view — do not edit');
-	expect(review).toContain('> A booking request must contain at least one seat.');
+	expect(review).toContain('> An order request must contain at least one item.');
 	expect(review).not.toMatch(/^\s*[{}]/m);
 	await expect(page.getByRole('tab', { name: /REQ-001\.intent\.review\.md/ })).toBeVisible({ timeout: 15_000 });
 	const stages = traces.filter(line => line.includes(`id=${requestId}`)).map(line => line.match(/stage=(\w+)/)[1]);
@@ -265,7 +265,7 @@ test('editing the requirement file makes the GUI show the approved intent as sta
 	const before = await openWorkbench(page, root, 'anthropic/claude-haiku-4-5-20251001');
 	await expect(before.workbench.getByRole('button', { name: 'Generate Formal Spec' })).toHaveCount(1);
 
-	fs.writeFileSync(path.join(root, '.sys', 'requirements', 'REQ-001.md'), 'A booking request must contain at least two seats.\n');
+	fs.writeFileSync(path.join(root, '.sys', 'requirements', 'REQ-001.md'), 'An order request must contain at least two items.\n');
 	expect((await coreJson(root, ['lifecycle', 'REQ-001'])).formalSpec.state).toBe('STALE');
 
 	const after = await openWorkbench(await (await browser.newContext()).newPage(), root, 'anthropic/claude-haiku-4-5-20251001');

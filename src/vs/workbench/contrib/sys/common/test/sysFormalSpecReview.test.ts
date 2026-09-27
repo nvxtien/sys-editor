@@ -51,8 +51,8 @@ test('says so when a list is empty instead of showing a blank section', () => {
 });
 
 test('shows a bound operation as a fact and reflects draft versus approved state', () => {
-	const draft = renderFormalSpecReview(record({ operation: fact('BookingService.createBooking', 'SPECIFIED') }), undefined);
-	assert.ok(draft.includes('BookingService.createBooking — stated by you'));
+	const draft = renderFormalSpecReview(record({ operation: fact('OrderService.createOrder', 'SPECIFIED') }), undefined);
+	assert.ok(draft.includes('OrderService.createOrder — stated by you'));
 	assert.ok(draft.includes('Status: DRAFT — not yet confirmed'));
 	const approved = renderFormalSpecReview(record({}, 'x'), undefined);
 	assert.ok(approved.includes('Status: CONFIRMED'));

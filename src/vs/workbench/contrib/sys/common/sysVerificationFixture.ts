@@ -1,12 +1,12 @@
 import { VerificationProject } from './sysVerification.js';
 
 /**
- * Cinema Booking pilot data, shaped exactly like the platform's proven
- * E2E semantic proof (precondition/collection, state/effect, relational,
- * and a compound rule with mixed obligation outcomes).
+ * Sample verification data covering the shapes the Verification view must render:
+ * precondition/collection, state/effect, relational, and a compound rule with
+ * mixed obligation outcomes.
  */
-export const CINEMA_BOOKING_VERIFICATION_PROJECT: VerificationProject = {
-	projectId: 'cinema-booking',
+export const SAMPLE_VERIFICATION_PROJECT: VerificationProject = {
+	projectId: 'sample-project',
 	contractStatus: 'READY',
 	rules: [
 		{
@@ -18,14 +18,14 @@ export const CINEMA_BOOKING_VERIFICATION_PROJECT: VerificationProject = {
 					id: 'B1-precondition',
 					kind: 'PRECONDITION',
 					disposition: 'SYNCED',
-					governed: { summary: 'requestedSeats must be non-empty', expression: 'NonEmpty(requestedSeats)', provenance: 'SPECIFIED' },
-					recovered: { summary: 'guard rejects when the requested list has no elements', expression: 'requestedSeats.length > 0', evidence: ['requestedSeats.length == 0 => reject'], provenance: 'DERIVED' },
+					governed: { summary: 'requestedItems must be non-empty', expression: 'NonEmpty(requestedItems)', provenance: 'SPECIFIED' },
+					recovered: { summary: 'guard rejects when the requested list has no elements', expression: 'requestedItems.length > 0', evidence: ['requestedItems.length == 0 => reject'], provenance: 'DERIVED' },
 					why: 'recovered emptiness guard exactly represents the negation of governed non-emptiness',
 					reasons: [],
 					completeness: 'COMPLETE',
 					anchors: [
-						{ kind: 'SOURCE', label: 'BookingService.createBooking', file: 'BookingService.java', symbol: 'createBooking' },
-						{ kind: 'SPEC', label: 'booking.spec:12' }
+						{ kind: 'SOURCE', label: 'OrderService.createOrder', file: 'OrderService.java', symbol: 'createOrder' },
+						{ kind: 'SPEC', label: 'order.spec:12' }
 					]
 				}
 			]
@@ -39,52 +39,52 @@ export const CINEMA_BOOKING_VERIFICATION_PROJECT: VerificationProject = {
 					id: 'B3-cardinality',
 					kind: 'PRECONDITION',
 					disposition: 'SYNCED',
-					governed: { summary: 'requestedSeats.size must be >= 1', expression: 'Cardinality(requestedSeats) >= 1', provenance: 'SPECIFIED' },
-					recovered: { summary: 'recovered size check matches the governed lower bound', expression: 'requestedSeats.size() >= 1', provenance: 'DERIVED' },
+					governed: { summary: 'requestedItems.size must be >= 1', expression: 'Cardinality(requestedItems) >= 1', provenance: 'SPECIFIED' },
+					recovered: { summary: 'recovered size check matches the governed lower bound', expression: 'requestedItems.size() >= 1', provenance: 'DERIVED' },
 					why: 'recovered cardinality check is proof-equivalent to the governed bound',
 					reasons: [],
 					completeness: 'COMPLETE',
 					anchors: [
-						{ kind: 'SOURCE', label: 'BookingService.createBooking', file: 'BookingService.java', symbol: 'createBooking' },
-						{ kind: 'SPEC', label: 'booking.spec:14' }
+						{ kind: 'SOURCE', label: 'OrderService.createOrder', file: 'OrderService.java', symbol: 'createOrder' },
+						{ kind: 'SPEC', label: 'order.spec:14' }
 					]
 				}
 			]
 		},
 		{
 			id: 'B2',
-			title: 'Requested seats distinct by Seat.id',
+			title: 'Requested seats distinct by Item.id',
 			aggregateDisposition: 'SYNCED',
 			obligations: [
 				{
 					id: 'B2-distinctness',
 					kind: 'RELATIONAL',
 					disposition: 'SYNCED',
-					governed: { summary: 'requestedSeats must be distinct by Seat.id', expression: 'DistinctBy(requestedSeats, Seat.id)', provenance: 'SPECIFIED' },
+					governed: { summary: 'requestedItems must be distinct by Item.id', expression: 'DistinctBy(requestedItems, Item.id)', provenance: 'SPECIFIED' },
 					recovered: {
 						summary: 'duplicate exists when two requested seats share the same id',
-						expression: 'ExistsDuplicateBy(requestedSeats, Seat.id)',
+						expression: 'ExistsDuplicateBy(requestedItems, Item.id)',
 						evidence: [
-							'i ∈ [0, |requestedSeats|)',
-							'j ∈ [i+1, |requestedSeats|)',
-							'requestedSeats[i].id == requestedSeats[j].id',
+							'i ∈ [0, |requestedItems|)',
+							'j ∈ [i+1, |requestedItems|)',
+							'requestedItems[i].id == requestedItems[j].id',
 							'Return(true)'
 						],
 						provenance: 'DERIVED'
 					},
-					why: 'violation(DistinctBy(requestedSeats, Seat.id)) <=> ExistsDuplicateBy(requestedSeats, Seat.id); duplicate witness exactly represents violation of governed distinctness',
+					why: 'violation(DistinctBy(requestedItems, Item.id)) <=> ExistsDuplicateBy(requestedItems, Item.id); duplicate witness exactly represents violation of governed distinctness',
 					reasons: [],
 					completeness: 'BOUNDED',
 					anchors: [
-						{ kind: 'SOURCE', label: 'BookingService.hasDuplicate', file: 'BookingService.java', symbol: 'hasDuplicate' },
-						{ kind: 'SPEC', label: 'booking.spec:20' }
+						{ kind: 'SOURCE', label: 'OrderService.hasDuplicate', file: 'OrderService.java', symbol: 'hasDuplicate' },
+						{ kind: 'SPEC', label: 'order.spec:20' }
 					]
 				}
 			]
 		},
 		{
 			id: 'B8',
-			title: 'Booking status guarded transition',
+			title: 'Order status guarded transition',
 			aggregateDisposition: 'CONFLICTED',
 			obligations: [
 				{
@@ -97,35 +97,35 @@ export const CINEMA_BOOKING_VERIFICATION_PROJECT: VerificationProject = {
 					reasons: ['NOT_OBSERVED_IN_RECOVERED_OPERATION_SCOPE'],
 					completeness: 'UNKNOWN',
 					anchors: [
-						{ kind: 'SPEC', label: 'booking.spec:28' }
+						{ kind: 'SPEC', label: 'order.spec:28' }
 					]
 				},
 				{
 					id: 'B8-effect',
 					kind: 'EFFECT',
 					disposition: 'SYNCED',
-					governed: { summary: 'booking.status becomes CONFIRMED', expression: 'booking.status := BookingStatus.CONFIRMED', provenance: 'SPECIFIED' },
-					recovered: { summary: 'recovered mutation sets the confirmed status exactly', expression: 'booking.status = BookingStatus.CONFIRMED', provenance: 'DERIVED' },
+					governed: { summary: 'order.status becomes CONFIRMED', expression: 'order.status := OrderStatus.CONFIRMED', provenance: 'SPECIFIED' },
+					recovered: { summary: 'recovered mutation sets the confirmed status exactly', expression: 'order.status = OrderStatus.CONFIRMED', provenance: 'DERIVED' },
 					why: 'recovered exact state mutation matches the governed effect',
 					reasons: [],
 					completeness: 'COMPLETE',
 					anchors: [
-						{ kind: 'SOURCE', label: 'BookingService.confirmBooking', file: 'BookingService.java', symbol: 'confirmBooking' },
-						{ kind: 'SPEC', label: 'booking.spec:30' }
+						{ kind: 'SOURCE', label: 'OrderService.confirmOrder', file: 'OrderService.java', symbol: 'confirmOrder' },
+						{ kind: 'SPEC', label: 'order.spec:30' }
 					]
 				}
 			]
 		},
 		{
 			id: 'hall-consistency',
-			title: 'Hall consistency',
+			title: 'Warehouse consistency',
 			aggregateDisposition: 'PARTIAL',
 			obligations: [
 				{
 					id: 'hall-consistency-obligation',
 					kind: 'RELATIONAL',
 					disposition: 'UNSUPPORTED',
-					governed: { summary: 'requested hall must match showtime hall', expression: 'Hall(request) == Hall(showtime)', provenance: 'SPECIFIED' },
+					governed: { summary: 'requested warehouse must match schedule warehouse', expression: 'Warehouse(request) == Warehouse(schedule)', provenance: 'SPECIFIED' },
 					recovered: undefined,
 					why: undefined,
 					reasons: ['UNSUPPORTED_SEMANTIC_CLASS'],
@@ -143,7 +143,7 @@ export const CINEMA_BOOKING_VERIFICATION_PROJECT: VerificationProject = {
 					id: 'occupancy-obligation',
 					kind: 'RELATIONAL',
 					disposition: 'UNSUPPORTED',
-					governed: { summary: 'occupied seats must not exceed hall capacity', expression: 'Occupancy(hall) <= Capacity(hall)', provenance: 'SPECIFIED' },
+					governed: { summary: 'occupied items must not exceed warehouse capacity', expression: 'Occupancy(warehouse) <= Capacity(warehouse)', provenance: 'SPECIFIED' },
 					recovered: undefined,
 					why: undefined,
 					reasons: ['UNSUPPORTED_SEMANTIC_CLASS'],
@@ -153,15 +153,15 @@ export const CINEMA_BOOKING_VERIFICATION_PROJECT: VerificationProject = {
 			]
 		},
 		{
-			id: 'past-showtime',
-			title: 'Past-showtime rule',
+			id: 'past-schedule',
+			title: 'Past-schedule rule',
 			aggregateDisposition: 'UNSUPPORTED',
 			obligations: [
 				{
-					id: 'past-showtime-obligation',
+					id: 'past-schedule-obligation',
 					kind: 'PRECONDITION',
 					disposition: 'UNSUPPORTED',
-					governed: { summary: 'booking must not target a showtime already in the past', expression: 'Showtime(booking) >= Now()', provenance: 'SPECIFIED' },
+					governed: { summary: 'order must not target a schedule already in the past', expression: 'Schedule(order) >= Now()', provenance: 'SPECIFIED' },
 					recovered: undefined,
 					why: undefined,
 					reasons: ['UNSUPPORTED_SEMANTIC_CLASS'],

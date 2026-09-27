@@ -8,8 +8,8 @@ import { parseFormalSpec, serializeFormalSpec } from '../sysFormalSpec.js';
 const draft = parseFormalSpec({
 	version: 1,
 	requirementId: 'REQ-001',
-	intentStatement: { value: 'A booking request must contain at least one seat.', provenance: 'SPECIFIED' },
-	scope: { value: 'Booking creation', provenance: 'DERIVED' },
+	intentStatement: { value: 'An order request must contain at least one item.', provenance: 'SPECIFIED' },
+	scope: { value: 'Order creation', provenance: 'DERIVED' },
 	operation: { value: 'UNKNOWN', provenance: 'UNKNOWN' },
 	inputs: [{ value: 'requestedSeats', provenance: 'INFERRED' }],
 	constraints: [{ value: 'requestedSeats must contain at least one element', provenance: 'SPECIFIED' }],
@@ -66,10 +66,10 @@ test('an operation rule still parses its operation fact and needs no entities', 
 	const rule = parseFormalSpec({
 		version: 1, requirementId: 'REQ-001', kind: 'OPERATION_RULE',
 		intentStatement: { value: 'x', provenance: 'SPECIFIED' }, scope: { value: 'x', provenance: 'SPECIFIED' },
-		operation: { value: 'create booking', provenance: 'SPECIFIED' },
+		operation: { value: 'create order', provenance: 'SPECIFIED' },
 		inputs: [], constraints: [], effects: [], failureBehavior: [], unknowns: []
 	}, 'REQ-001');
-	assert.equal(rule.operation?.value, 'create booking');
+	assert.equal(rule.operation?.value, 'create order');
 	assert.equal(rule.entities, undefined);
 });
 
@@ -120,7 +120,7 @@ test('a malformed list is still rejected, absent is not the same as wrong', () =
 	const base = {
 		version: 1, requirementId: 'REQ-001', kind: 'OPERATION_RULE',
 		intentStatement: { value: 'x', provenance: 'SPECIFIED' }, scope: { value: 'x', provenance: 'SPECIFIED' },
-		operation: { value: 'create booking', provenance: 'SPECIFIED' }, unknowns: []
+		operation: { value: 'create order', provenance: 'SPECIFIED' }, unknowns: []
 	};
 	assert.throws(() => parseFormalSpec({ ...base, inputs: 'not a list' }, 'REQ-001'), /invalid inputs/);
 	assert.throws(() => parseFormalSpec({ ...base, inputs: [{ value: 'x' }] }, 'REQ-001'), /invalid inputs/);

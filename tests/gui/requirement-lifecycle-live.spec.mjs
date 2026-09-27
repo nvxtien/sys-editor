@@ -15,7 +15,7 @@ const sysCore = path.join(platformRoot, 'sys-core', 'target', 'debug', 'sys-core
 test.skip(!port, 'set SYS_LIVE_SERVER_PORT to the running sidex-server port');
 test.setTimeout(120_000);
 
-const REQUIREMENT = 'A booking request must contain at least one seat.\n';
+const REQUIREMENT = 'An order request must contain at least one item.\n';
 
 function emptyWorkspace() {
 	const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sys-lifecycle-'));
@@ -137,7 +137,7 @@ test('a deleted requirement leaves nothing behind for the next one to inherit', 
 	core(root, ['requirement', 'save', 'REQ-001']);
 	execFileSync(sysCore, ['formal-spec', 'accept', 'REQ-001'], {
 		cwd: root, encoding: 'utf8',
-		input: JSON.stringify({ version: 1, requirementId: 'REQ-001', kind: 'OPERATION_RULE', intentStatement: { value: 'x', provenance: 'SPECIFIED' }, scope: { value: 'x', provenance: 'SPECIFIED' }, operation: { value: 'create booking', provenance: 'SPECIFIED' }, inputs: [], constraints: [], effects: [], failureBehavior: [], unknowns: [] })
+		input: JSON.stringify({ version: 1, requirementId: 'REQ-001', kind: 'OPERATION_RULE', intentStatement: { value: 'x', provenance: 'SPECIFIED' }, scope: { value: 'x', provenance: 'SPECIFIED' }, operation: { value: 'create order', provenance: 'SPECIFIED' }, inputs: [], constraints: [], effects: [], failureBehavior: [], unknowns: [] })
 	});
 	expect(fs.existsSync(path.join(root, '.sys', 'core', 'intents', 'REQ-001.json'))).toBe(true);
 

@@ -57,11 +57,6 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 	title: nls.localize('sysVerificationConfig', 'Sys Verification'),
 	type: 'object',
 	properties: {
-		'sys.demoMode': {
-			type: 'boolean',
-			default: false,
-			description: nls.localize('sysDemoMode', 'Show the Cinema Booking demo and the configured verification manifest. Off by default: a workspace shows only its own Sys project state.')
-		},
 		'sys.verification.dataSource': {
 			type: 'string',
 			enum: ['live', 'fixture'],

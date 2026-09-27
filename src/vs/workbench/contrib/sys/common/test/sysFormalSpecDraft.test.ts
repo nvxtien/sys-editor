@@ -7,13 +7,13 @@ test('normalizes only the requirement and never carries a source operation', asy
 	let request: Record<string, unknown> | undefined;
 	globalThis.fetch = async (_input, init) => {
 		request = JSON.parse(String(init?.body));
-		return new Response(JSON.stringify({ formalSpec: JSON.stringify({ version: 1, requirementId: 'REQ-001', kind: 'OPERATION_RULE', intentStatement: { value: 'seat', provenance: 'SPECIFIED' }, scope: { value: 'booking', provenance: 'DERIVED' }, operation: { value: 'create booking', provenance: 'SPECIFIED' }, inputs: [], constraints: [], effects: [], failureBehavior: [], unknowns: ['exception type'] }) }), { status: 200 });
+		return new Response(JSON.stringify({ formalSpec: JSON.stringify({ version: 1, requirementId: 'REQ-001', kind: 'OPERATION_RULE', intentStatement: { value: 'item', provenance: 'SPECIFIED' }, scope: { value: 'order', provenance: 'DERIVED' }, operation: { value: 'create order', provenance: 'SPECIFIED' }, inputs: [], constraints: [], effects: [], failureBehavior: [], unknowns: ['exception type'] }) }), { status: 200 });
 	};
 	try {
-		const result = await requestFormalSpec('http://sidex/', 'm', 'REQ-001', 'A booking needs a seat.');
-		assert.equal(result.operation.value, 'create booking');
+		const result = await requestFormalSpec('http://sidex/', 'm', 'REQ-001', 'An order needs an item.');
+		assert.equal(result.operation.value, 'create order');
 		assert.equal(request?.model, 'm');
-		assert.equal(request?.intent, 'A booking needs a seat.');
+		assert.equal(request?.intent, 'An order needs an item.');
 		// Normalization takes the requirement alone; no source symbol is ever sent with it.
 		assert.equal('operation' in (request ?? {}), false);
 	} finally { globalThis.fetch = originalFetch; }

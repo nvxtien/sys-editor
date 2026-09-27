@@ -30,15 +30,15 @@ func TestNormalizeIntentReturnsTheFormalSpecAndSendsNoSourceBinding(t *testing.T
 	rr := httptest.NewRecorder()
 	// An "operation" in the request is a leftover from manual source binding and must be ignored:
 	// what code implements an intent is sys-platform's to recover, never the author's to declare.
-	h.NormalizeIntent(rr, normalizeRequest(`{"model":"openrouter/test-model","intent":"A booking needs a seat.","operation":"BookingService.createBooking"}`))
+	h.NormalizeIntent(rr, normalizeRequest(`{"model":"openrouter/test-model","intent":"An order needs an item.","operation":"OrderService.createOrder"}`))
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
 	}
 	user := providerBody["messages"].([]any)[1].(map[string]any)["content"].(string)
-	if strings.Contains(user, "BookingService.createBooking") {
+	if strings.Contains(user, "OrderService.createOrder") {
 		t.Fatalf("a source symbol reached the model: %q", user)
 	}
-	if user != "A booking needs a seat." {
+	if user != "An order needs an item." {
 		t.Fatalf("the model was sent more than the requirement: %q", user)
 	}
 }

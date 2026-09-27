@@ -15,7 +15,7 @@ test('the workbench asks for no class, method, symbol or source root', () => {
 	const source = view();
 	assert.equal(/Class\.method/i.test(source), false);
 	assert.equal(/ClassName\.methodName/.test(source), false);
-	assert.equal(/BookingService\.createBooking/.test(source), false);
+	assert.equal(/OrderService\.createOrder/.test(source), false);
 	assert.equal(/validateTargetOperation/.test(source), false);
 	assert.equal(/Source root|source-root|Code file to update|Source file containing/.test(source), false);
 });

@@ -81,12 +81,6 @@ export class SysVerificationWorkbenchView extends ViewPane {
 			themeService,
 			hoverService
 		);
-		this._register(this.configurationService.onDidChangeConfiguration(e => {
-			if (e.affectsConfiguration('sys.demoMode') && this.bodyContainer) {
-				this.loadState = 'IDLE';
-				this.renderBody(this.bodyContainer);
-			}
-		}));
 		this._register(this.dataProvider.onDidChangeWorkspaceRun(() => void this.load()));
 	}
 

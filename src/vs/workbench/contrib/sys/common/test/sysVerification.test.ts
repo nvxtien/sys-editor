@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { dispositionLabel, filterRulesByDisposition, pickStableSelection } from '../sysVerification.js';
-import { CINEMA_BOOKING_VERIFICATION_PROJECT } from '../sysVerificationFixture.js';
+import { SAMPLE_VERIFICATION_PROJECT } from '../sysVerificationFixture.js';
 
-const rules = CINEMA_BOOKING_VERIFICATION_PROJECT.rules;
+const rules = SAMPLE_VERIFICATION_PROJECT.rules;
 const find = (id: string) => rules.find(r => r.id === id)!;
 
 test('B1/B3 precondition and B2 relational rules are SYNCED end to end', () => {
@@ -11,8 +11,8 @@ test('B1/B3 precondition and B2 relational rules are SYNCED end to end', () => {
 	assert.equal(find('B3').aggregateDisposition, 'SYNCED');
 	const b2 = find('B2');
 	assert.equal(b2.aggregateDisposition, 'SYNCED');
-	assert.equal(b2.obligations[0].governed?.expression, 'DistinctBy(requestedSeats, Seat.id)');
-	assert.equal(b2.obligations[0].recovered?.expression, 'ExistsDuplicateBy(requestedSeats, Seat.id)');
+	assert.equal(b2.obligations[0].governed?.expression, 'DistinctBy(requestedItems, Item.id)');
+	assert.equal(b2.obligations[0].recovered?.expression, 'ExistsDuplicateBy(requestedItems, Item.id)');
 	assert.ok(b2.obligations[0].recovered?.evidence && b2.obligations[0].recovered.evidence.length > 0);
 });
 
