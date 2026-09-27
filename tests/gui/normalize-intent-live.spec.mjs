@@ -105,8 +105,8 @@ test('Normalize intent reaches the real server on its dynamic port, saves and re
 	expect(Object.keys(request.headers()).filter(name => name.startsWith('x-sys'))).toEqual([]);
 	expect(response.headers()['x-sys-request-id']).toBe(requestId);
 
-	await expect.poll(async () => (await coreJson(root, ['lifecycle', 'REQ-001'])).structuredIntent.state, { timeout: 15_000 }).toBe('DRAFT');
-	const saved = await coreJson(root, ['intent', 'show', 'REQ-001']);
+	await expect.poll(async () => (await coreJson(root, ['lifecycle', 'REQ-001'])).formalSpec.state, { timeout: 15_000 }).toBe('DRAFT');
+	const saved = await coreJson(root, ['formal-spec', 'show', 'REQ-001']);
 	expect(saved.draft.requirementId).toBe('REQ-001');
 	expect(fs.readFileSync(path.join(root, '.sys', 'requirements', 'REQ-001.md'), 'utf8')).toBe(REQUIREMENT);
 	expect(fs.existsSync(path.join(root, '.sys', 'intents', 'REQ-001.intent.json')), 'the editor keeps no intent file of its own').toBe(false);
@@ -136,7 +136,7 @@ test('Normalize intent shows a clear error and saves nothing when the provider i
 
 	await expect(workbench).toContainText('Normalize intent failed', { timeout: 30_000 });
 	await expect(workbench).toContainText('not connected');
-	expect((await coreJson(root, ['lifecycle', 'REQ-001'])).structuredIntent.state, 'nothing may be saved when the provider fails').toBe('NOT_CREATED');
+	expect((await coreJson(root, ['lifecycle', 'REQ-001'])).formalSpec.state, 'nothing may be saved when the provider fails').toBe('NOT_CREATED');
 	await expect(workbench.getByRole('button', { name: 'Normalize intent' })).toHaveCount(1);
 });
 
@@ -151,7 +151,7 @@ test('Normalize intent recovers when the server restarted on a new port after th
 
 	await expect(workbench).toContainText('Review intent', { timeout: 60_000 });
 	// The retry reached the live port: sys-core holds the intent. The editor keeps no intent file of its own.
-	expect((await coreJson(root, ['intent', 'show', 'REQ-001'])).draft.requirementId).toBe('REQ-001');
+	expect((await coreJson(root, ['formal-spec', 'show', 'REQ-001'])).draft.requirementId).toBe('REQ-001');
 	expect(fs.existsSync(path.join(root, '.sys', 'intents', 'REQ-001.intent.json'))).toBe(false);
 	expect(await page.evaluate(() => window.__endpointCalls)).toBeGreaterThanOrEqual(2);
 });
@@ -161,7 +161,7 @@ const UNBOUND = fact('UNKNOWN', 'UNKNOWN');
 const BOUND = fact('BookService.createBook', 'OBSERVED');
 
 function draftOf(kind, operation) {
-	// Key order matches parseStructuredIntent, so approvedContent equals serializeStructuredIntent(draft).
+	// Key order matches parseFormalSpec, so approvedContent equals serializeFormalSpec(draft).
 	return { version: 1, requirementId: 'REQ-001', ...(kind ? { kind } : {}), intentStatement: fact('s'), scope: fact('s'), operation, inputs: [], constraints: [], effects: [], failureBehavior: [], unknowns: [] };
 }
 
@@ -176,12 +176,12 @@ const coreJson = async (root, args) => JSON.parse(await core(root, args));
 // The lifecycle lives only in sys-core; the editor keeps no approval state of its own to seed.
 async function seedIntent(root, draft) {
 	await core(root, ['requirement', 'save', 'REQ-001'], REQUIREMENT);
-	await core(root, ['intent', 'accept', 'REQ-001'], JSON.stringify(draft));
+	await core(root, ['formal-spec', 'accept', 'REQ-001'], JSON.stringify(draft));
 }
 
 async function seedApprovedIntent(root, kind, operation) {
 	await seedIntent(root, draftOf(kind, operation));
-	await core(root, ['intent', 'approve-current', 'REQ-001']);
+	await core(root, ['formal-spec', 'approve-current', 'REQ-001']);
 }
 
 const CASES = [
@@ -213,7 +213,7 @@ test('a real provider classifies the Category/Book requirement as a non-operatio
 	const { workbench } = await openWorkbench(page, root, 'anthropic/claude-sonnet-4.6');
 	await workbench.getByRole('button', { name: 'Normalize intent' }).click();
 	await expect(workbench).toContainText('Confirm intent', { timeout: 100_000 });
-	const saved = await coreJson(root, ['intent', 'show', 'REQ-001']);
+	const saved = await coreJson(root, ['formal-spec', 'show', 'REQ-001']);
 	// Data model and relationship are both reasonable readings; an operation rule is not.
 	expect(['DATA_MODEL', 'RELATIONSHIP']).toContain(saved.draft.kind);
 	expect(fs.readFileSync(path.join(root, '.sys', 'intents', 'REQ-001.intent.review.md'), 'utf8')).toContain('— ⚠ model’s classification, please check');
@@ -250,9 +250,9 @@ test('an approval made through another client (the CLI adapter) is what the GUI 
 	await expect(first.workbench.getByRole('button', { name: 'Confirm intent' })).toHaveCount(1);
 	await expect(first.workbench.getByRole('button', { name: 'Generate Formal Spec' })).toHaveCount(0);
 
-	const identity = (await coreJson(root, ['intent', 'show', 'REQ-001'])).identity;
-	await core(root, ['intent', 'approve-current', 'REQ-001']);
-	expect((await coreJson(root, ['lifecycle', 'REQ-001'])).structuredIntent.identity).toBe(identity);
+	const identity = (await coreJson(root, ['formal-spec', 'show', 'REQ-001'])).identity;
+	await core(root, ['formal-spec', 'approve-current', 'REQ-001']);
+	expect((await coreJson(root, ['lifecycle', 'REQ-001'])).formalSpec.identity).toBe(identity);
 
 	const second = await openWorkbench(await (await browser.newContext()).newPage(), root, 'anthropic/claude-haiku-4-5-20251001');
 	await expect(second.workbench.getByRole('button', { name: 'Generate Formal Spec' })).toHaveCount(1);
@@ -266,7 +266,7 @@ test('editing the requirement file makes the GUI show the approved intent as sta
 	await expect(before.workbench.getByRole('button', { name: 'Generate Formal Spec' })).toHaveCount(1);
 
 	fs.writeFileSync(path.join(root, '.sys', 'requirements', 'REQ-001.md'), 'A booking request must contain at least two seats.\n');
-	expect((await coreJson(root, ['lifecycle', 'REQ-001'])).structuredIntent.state).toBe('STALE');
+	expect((await coreJson(root, ['lifecycle', 'REQ-001'])).formalSpec.state).toBe('STALE');
 
 	const after = await openWorkbench(await (await browser.newContext()).newPage(), root, 'anthropic/claude-haiku-4-5-20251001');
 	await expect(after.workbench.getByRole('button', { name: 'Normalize intent' })).toHaveCount(1);
@@ -302,14 +302,14 @@ test('Approve intent approves the exact requirement text in sys-core', async ({ 
 test('Confirm intent approves the exact reviewed identity in sys-core after an explicit dialog', async ({ page }) => {
 	const root = makeWorkspace();
 	await seedIntent(root, draftOf('OPERATION_RULE', BOUND));
-	const shown = await coreJson(root, ['intent', 'show', 'REQ-001']);
+	const shown = await coreJson(root, ['formal-spec', 'show', 'REQ-001']);
 	const { workbench } = await openWorkbench(page, root, 'anthropic/claude-haiku-4-5-20251001');
 	await workbench.getByRole('button', { name: 'Confirm intent' }).click();
 	await expect(page.locator('.monaco-dialog-box')).toContainText('Confirm this Structured Intent?');
-	expect((await coreJson(root, ['lifecycle', 'REQ-001'])).structuredIntent.state, 'nothing is approved before the dialog is answered').toBe('DRAFT');
+	expect((await coreJson(root, ['lifecycle', 'REQ-001'])).formalSpec.state, 'nothing is approved before the dialog is answered').toBe('DRAFT');
 	await page.locator('.monaco-dialog-box').getByRole('button', { name: 'Confirm intent' }).click();
-	await expect.poll(async () => (await coreJson(root, ['lifecycle', 'REQ-001'])).structuredIntent.state, { timeout: 15_000 }).toBe('APPROVED');
-	expect((await coreJson(root, ['lifecycle', 'REQ-001'])).structuredIntent.identity).toBe(shown.identity);
+	await expect.poll(async () => (await coreJson(root, ['lifecycle', 'REQ-001'])).formalSpec.state, { timeout: 15_000 }).toBe('APPROVED');
+	expect((await coreJson(root, ['lifecycle', 'REQ-001'])).formalSpec.identity).toBe(shown.identity);
 	await expect(workbench.getByRole('button', { name: 'Generate Formal Spec' })).toHaveCount(1, { timeout: 15_000 });
 });
 

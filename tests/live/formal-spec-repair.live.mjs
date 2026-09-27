@@ -48,14 +48,14 @@ const core = (args, input) => post('/v1/sys/core', { workspace: proj, args, ...(
 
 const fact = (value, provenance = 'SPECIFIED') => ({ value, provenance });
 await core(['requirement', 'save', 'REQ-001'], REQUIREMENT);
-await core(['intent', 'accept', 'REQ-001'], JSON.stringify({
+await core(['formal-spec', 'accept', 'REQ-001'], JSON.stringify({
 	version: 1, requirementId: 'REQ-001', kind: 'OPERATION_RULE',
 	intentStatement: fact('Creating a Book is rejected when its category does not exist.'), scope: fact('Book creation', 'DERIVED'),
 	operation: fact('BookService.createBook', 'OBSERVED'),
 	inputs: [fact('category_id')], constraints: [fact('A Book must belong to exactly one existing Category.')], effects: [fact('The Book is stored with its category_id.', 'DERIVED')],
 	failureBehavior: [fact('Reject the creation when the category does not exist.')], unknowns: ['exception type']
 }));
-await core(['intent', 'approve-current', 'REQ-001']);
+await core(['formal-spec', 'approve-current', 'REQ-001']);
 const context = await core(['spec', 'prepare', 'REQ-001']);
 
 let accepted = 0;

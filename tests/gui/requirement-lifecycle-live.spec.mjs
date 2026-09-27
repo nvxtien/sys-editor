@@ -135,7 +135,7 @@ test('a deleted requirement leaves nothing behind for the next one to inherit', 
 
 	// Give it an intent through sys-core, the same state a real normalize would leave.
 	core(root, ['requirement', 'save', 'REQ-001']);
-	execFileSync(sysCore, ['intent', 'accept', 'REQ-001'], {
+	execFileSync(sysCore, ['formal-spec', 'accept', 'REQ-001'], {
 		cwd: root, encoding: 'utf8',
 		input: JSON.stringify({ version: 1, requirementId: 'REQ-001', kind: 'OPERATION_RULE', intentStatement: { value: 'x', provenance: 'SPECIFIED' }, scope: { value: 'x', provenance: 'SPECIFIED' }, operation: { value: 'create booking', provenance: 'SPECIFIED' }, inputs: [], constraints: [], effects: [], failureBehavior: [], unknowns: [] })
 	});
@@ -213,7 +213,7 @@ test('Normalize intent classifies a data model and writes a review a person can 
 	expect(page_).not.toMatch(/not bound/i);
 
 	// sys-core holds the intent, and the editor keeps no copy of its own.
-	const shown = JSON.parse(core(root, ['intent', 'show', 'REQ-001']));
+	const shown = JSON.parse(core(root, ['formal-spec', 'show', 'REQ-001']));
 	expect(shown.draft.requirementId).toBe('REQ-001');
 	expect(fs.existsSync(path.join(root, '.sys', 'intents', 'REQ-001.intent.json'))).toBe(false);
 
@@ -295,7 +295,7 @@ test('Confirm intent writes code into the project’s source tree and opens it',
 	expect(fs.readFileSync(path.join(src, 'App.java'), 'utf8')).toBe(APP_JAVA);
 
 	// Approval is the governed record and is made before any code is asked for.
-	expect(JSON.parse(core(root, ['intent', 'show', 'REQ-001'])).state).toBe('APPROVED');
+	expect(JSON.parse(core(root, ['formal-spec', 'show', 'REQ-001'])).state).toBe('APPROVED');
 	await expect(page.locator('.tabs-container').getByText(written[0])).toBeVisible({ timeout: 20_000 });
 });
 
@@ -318,7 +318,7 @@ test('a generation never replaces a source file the user already wrote', async (
 	// model behaviour may break: the file the user wrote is still theirs, byte for byte.
 	await expect.poll(() => javaFiles(root).length > 2 || fs.existsSync(path.join(root, '.sys', 'intents', 'REQ-001.intent.review.md')), { timeout: 180_000 }).toBe(true);
 	expect(fs.readFileSync(path.join(src, 'Category.java'), 'utf8')).toBe(mine);
-	expect(JSON.parse(core(root, ['intent', 'show', 'REQ-001'])).state).toBe('APPROVED');
+	expect(JSON.parse(core(root, ['formal-spec', 'show', 'REQ-001'])).state).toBe('APPROVED');
 });
 
 // A project whose language the editor cannot name gets no guessed code, and the approval still
@@ -337,5 +337,5 @@ test('a project with no build file it recognizes is told so, and stays confirmed
 	// row must never show the platform's own code, which is what the review page was cleaned of.
 	await expect(workbench.getByText(/Could not tell what language this project is written in/)).toBeVisible({ timeout: 60_000 });
 	await expect(workbench.getByText(/UNKNOWN_PROJECT_LANGUAGE/)).toHaveCount(0);
-	expect(JSON.parse(core(root, ['intent', 'show', 'REQ-001'])).state).toBe('APPROVED');
+	expect(JSON.parse(core(root, ['formal-spec', 'show', 'REQ-001'])).state).toBe('APPROVED');
 });
