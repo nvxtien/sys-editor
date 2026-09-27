@@ -7,7 +7,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { VSBuffer } from '../../../../base/common/buffer.js';
 import { URI } from '../../../../base/common/uri.js';
-import { EMPTY_PROJECT, SYS_PROJECT_FILE, SysProject, SysProjectState, addRequirement, loadProjectState, removeRequirement, requirementFile, serializeProject, setPlatformRoot, specFile } from '../common/sysProject.js';
+import { EMPTY_PROJECT, SYS_PROJECT_FILE, SysProject, SysProjectState, addRequirement, loadProjectState, removeRequirement, requirementFile, serializeProject, setPlatformRoot } from '../common/sysProject.js';
 import { isSysArtifactState, parseLifecycle, SysLifecycle } from '../common/sysLifecycle.js';
 import { parseFormalizationCapability, parseStructuredIntent, serializeStructuredIntent, SysFormalizationCapability, SysStructuredIntent, SysStructuredIntentRecord } from '../common/sysStructuredIntent.js';
 import { Verification01Manifest } from '../common/sysManifest.js';
@@ -28,7 +28,6 @@ export interface ISysProjectService {
 	/** Creates an empty requirement file and returns it, ready to be opened in the editor. */
 	createRequirement(): Promise<URI>;
 	resourceOf(id: string): URI;
-	resourceOfSpec(id: string): URI;
 	/**
 	 * Regenerates the plain-language review page from the Structured Intent JSON and returns its
 	 * resource. `scenarios` is an optional Gherkin projection shown alongside; it is rendered, never
@@ -36,17 +35,14 @@ export interface ISysProjectService {
 	 */
 	writeStructuredIntentReview(id: string, scenarios?: string): Promise<URI>;
 	/** Creates an empty .spec file (if absent) and returns it, ready to be opened in the editor. */
-	createSpec(id: string): Promise<URI>;
 	/** Approves the exact current requirement text in sys-core. */
 	approveRequirement(id: string): Promise<void>;
 	readStructuredIntent(id: string): Promise<SysStructuredIntentRecord | undefined>;
 	saveRequirement(id: string, raw: string): Promise<void>;
 	prepareStructuredIntentContext(id: string): Promise<string>;
-	prepareFormalSpecContext(id: string): Promise<string>;
 	/** Saves the requirement text and the model's candidate in sys-core as a new draft (any earlier approval is revoked there). */
 	writeStructuredIntent(id: string, draft: SysStructuredIntent): Promise<void>;
 	approveStructuredIntent(id: string): Promise<void>;
-	approveSpec(id: string): Promise<void>;
 	deleteRequirement(id: string): Promise<void>;
 	setPlatformRoot(path: string | undefined): Promise<void>;
 	/** '' from getState() when not configured; the READY/NO_SYS_PROJECT_YET project's platformRoot. */
@@ -142,10 +138,6 @@ class SysProjectService extends Disposable implements ISysProjectService {
 		return URI.joinPath(this.folders()[0], requirementFile(id));
 	}
 
-	resourceOfSpec(id: string): URI {
-		return URI.joinPath(this.folders()[0], specFile(id));
-	}
-
 	async writeStructuredIntentReview(id: string, scenarios?: string): Promise<URI> {
 		const record = await this.readStructuredIntent(id);
 		if (!record) { throw new Error('Structured Intent has not been normalized yet.'); }
@@ -181,15 +173,6 @@ class SysProjectService extends Disposable implements ISysProjectService {
 			await this.files.writeFile(resource, VSBuffer.fromString(file.code.endsWith('\n') ? file.code : file.code + '\n'));
 		}
 		return targets.map(target => target.resource);
-	}
-
-	async createSpec(id: string): Promise<URI> {
-		const resource = this.resourceOfSpec(id);
-		if (!await this.files.exists(resource)) {
-			await this.files.writeFile(resource, VSBuffer.fromString(''));
-			this._onDidChange.fire();
-		}
-		return resource;
 	}
 
 	/** Only "no project yet" or a valid project is writable; malformed/multi-root/no-workspace state is never overwritten. */
@@ -273,22 +256,8 @@ class SysProjectService extends Disposable implements ISysProjectService {
 		return this.coreResponse(['intent', 'prepare', id]);
 	}
 
-	async prepareFormalSpecContext(id: string): Promise<string> {
-		return this.coreResponse(['spec', 'prepare', id]);
-	}
-
 	async approveStructuredIntent(id: string): Promise<void> {
 		await this.core(['intent', 'approve-current', id]);
-		this._onDidChange.fire();
-	}
-
-	async approveSpec(id: string): Promise<void> {
-		const spec = await this.read(this.resourceOfSpec(id).toString());
-		if (!spec?.trim()) { throw new Error('Formal Spec is empty.'); }
-		const intent = await this.readStructuredIntent(id);
-		const capability = await this.formalizationCapability(id);
-		if (!intent || intent.state !== 'APPROVED' || capability?.outcome !== 'FORMAL_SPEC_SUPPORTED') { throw new Error('Approve a Structured Intent whose kind the platform can formalize before approving the Formal Spec.'); }
-		await this.core(['spec', 'approve-current', id]);
 		this._onDidChange.fire();
 	}
 
@@ -311,7 +280,8 @@ class SysProjectService extends Disposable implements ISysProjectService {
 		const project = await this.writable();
 		const ignoreMissing = (e: unknown) => { if (!(e instanceof FileOperationError && e.fileOperationResult === FileOperationResult.FILE_NOT_FOUND)) { throw e; } };
 		await this.files.del(this.resourceOf(id)).catch(ignoreMissing);
-		await this.files.del(this.resourceOfSpec(id)).catch(ignoreMissing);
+		// A workspace that predates the freeze still has a .spec beside the requirement.
+		await this.files.del(URI.joinPath(this.folders()[0], '.sys', 'specs', `${id}.spec`)).catch(ignoreMissing);
 		await this.files.del(URI.joinPath(this.folders()[0], '.sys', 'intents', `${id}.intent.review.md`)).catch(ignoreMissing);
 		// Generated code is ordinary project source, not a lifecycle artifact: deleting a
 		// requirement does not delete source files the user may since have built on.

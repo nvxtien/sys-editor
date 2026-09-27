@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as project from '../sysProject.js';
 import * as intent from '../sysStructuredIntent.js';
-import { EMPTY_PROJECT, addRequirement, loadProjectState, parseProject, removeRequirement, serializeProject, setPlatformRoot, specFile, titleOf } from '../sysProject.js';
+import { EMPTY_PROJECT, addRequirement, loadProjectState, parseProject, removeRequirement, serializeProject, setPlatformRoot, titleOf } from '../sysProject.js';
 import { SysLifecycle } from '../sysLifecycle.js';
 
 const files = (m: Record<string, string>) => async (p: string) => m[p];
@@ -39,7 +39,7 @@ test('ids are sequential, stable and independent of text; removal never renumber
 test('persist and reload: project.json + requirement file + core lifecycle give the same id, title and honest DRAFT status', async () => {
 	const p = addRequirement(EMPTY_PROJECT).project;
 	const state = await loadProjectState(['/a'], files({ [A]: serializeProject(p), '/a/.sys/requirements/REQ-001.md': '# A booking needs a seat\nmore' }), core());
-	assert.deepEqual(state, { kind: 'READY', project: p, rows: [{ id: 'REQ-001', title: 'A booking needs a seat', status: 'DRAFT_UNFORMALIZED', missing: false, empty: false, hasSpec: false, structuredIntentState: 'NOT_CREATED', formalSpecState: 'NOT_CREATED' }] });
+	assert.deepEqual(state, { kind: 'READY', project: p, rows: [{ id: 'REQ-001', title: 'A booking needs a seat', status: 'DRAFT_UNFORMALIZED', missing: false, empty: false, structuredIntentState: 'NOT_CREATED' }] });
 });
 
 test('workspace A state never appears in workspace B', async () => {
@@ -50,12 +50,11 @@ test('workspace A state never appears in workspace B', async () => {
 
 test('every state on a row is exactly what sys-core reported', async () => {
 	const p = addRequirement(EMPTY_PROJECT).project;
-	const reported = lifecycle('REQ-001', { requirement: { present: true, approved: true, identity: 'sha256:r' }, structuredIntent: { state: 'APPROVED', identity: 'sha256:i' }, formalSpec: { state: 'STALE', identity: 'sha256:s' } });
+	const reported = lifecycle('REQ-001', { requirement: { present: true, approved: true, identity: 'sha256:r' }, structuredIntent: { state: 'APPROVED', identity: 'sha256:i' } });
 	const state = await loadProjectState(['/a'], files({ [A]: serializeProject(p), '/a/.sys/requirements/REQ-001.md': 'x' }), core({ 'REQ-001': reported }));
 	const row = (state as { rows: Record<string, unknown>[] }).rows[0];
 	assert.equal(row.status, 'APPROVED_UNFORMALIZED');
 	assert.equal(row.structuredIntentState, 'APPROVED');
-	assert.equal(row.formalSpecState, 'STALE');
 });
 
 test('approval fields left in project.json by older editors are ignored and dropped, never trusted', async () => {
@@ -70,14 +69,14 @@ test('approval fields left in project.json by older editors are ignored and drop
 test('when sys-core cannot answer the row says so and invents no state', async () => {
 	const p = addRequirement(EMPTY_PROJECT).project;
 	const state = await loadProjectState(['/a'], files({ [A]: serializeProject(p), '/a/.sys/requirements/REQ-001.md': 'x' }), noCore);
-	assert.deepEqual((state as { rows: unknown }).rows, [{ id: 'REQ-001', title: 'x', status: 'DRAFT_UNFORMALIZED', missing: false, empty: false, hasSpec: false, lifecycleUnavailable: true }]);
+	assert.deepEqual((state as { rows: unknown }).rows, [{ id: 'REQ-001', title: 'x', status: 'DRAFT_UNFORMALIZED', missing: false, empty: false, lifecycleUnavailable: true }]);
 });
 
 test('a requirement file deleted by hand is shown as missing, not hidden or approved', async () => {
 	const p = addRequirement(EMPTY_PROJECT).project;
 	const gone = lifecycle('REQ-001', { requirement: { present: false, approved: false, identity: null } });
 	const state = await loadProjectState(['/a'], files({ [A]: serializeProject(p) }), core({ 'REQ-001': gone }));
-	assert.deepEqual((state as { rows: unknown }).rows, [{ id: 'REQ-001', title: '(file missing)', status: 'DRAFT_UNFORMALIZED', missing: true, empty: false, hasSpec: false, structuredIntentState: 'NOT_CREATED', formalSpecState: 'NOT_CREATED' }]);
+	assert.deepEqual((state as { rows: unknown }).rows, [{ id: 'REQ-001', title: '(file missing)', status: 'DRAFT_UNFORMALIZED', missing: true, empty: false, structuredIntentState: 'NOT_CREATED' }]);
 });
 
 test('titleOf uses the first non-empty line without markdown heading marks', () => {
@@ -108,16 +107,11 @@ test('a non-string platformRoot in a hand-edited file is MALFORMED_SYS_PROJECT',
 	assert.equal((await loadProjectState(['/a'], files({ [A]: '{"version":1,"requirements":[],"platformRoot":7}' }), core())).kind, 'MALFORMED_SYS_PROJECT');
 });
 
-test('a requirement without a .spec file shows hasSpec: false; creating the file (any content) flips it true', async () => {
-	const p = addRequirement(EMPTY_PROJECT).project;
-	const noSpec = await loadProjectState(['/a'], files({ [A]: serializeProject(p), '/a/.sys/requirements/REQ-001.md': 'x' }), core());
-	assert.equal((noSpec as { rows: { hasSpec: boolean }[] }).rows[0].hasSpec, false);
-	const withSpec = await loadProjectState(['/a'], files({ [A]: serializeProject(p), '/a/.sys/requirements/REQ-001.md': 'x', [`/a/${specFile('REQ-001')}`]: '' }), core());
-	assert.equal((withSpec as { rows: { hasSpec: boolean }[] }).rows[0].hasSpec, true);
-});
 
 test('the editor keeps no lifecycle rules of its own: approval, staleness and generation gates live in sys-core', () => {
-	for (const gone of ['approveRequirement', 'statusOf', 'structuredIntentFile', 'SYS_INTENTS_DIR']) {
+	// specFile and SYS_SPECS_DIR went with the frozen grammar, and hasSpec with them: the row no
+	// longer reads a file per requirement to answer a question about an artifact that is gone.
+	for (const gone of ['approveRequirement', 'statusOf', 'structuredIntentFile', 'SYS_INTENTS_DIR', 'specFile', 'SYS_SPECS_DIR']) {
 		assert.ok(!(gone in project), `sysProject still exports ${gone}`);
 	}
 	for (const gone of ['structuredIntentState', 'approveStructuredIntent', 'formalSpecState', 'canGenerateFormalSpec', 'formalizationCapability']) {

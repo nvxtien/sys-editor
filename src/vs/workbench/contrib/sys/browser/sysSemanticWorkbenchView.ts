@@ -15,7 +15,6 @@ import { IViewDescriptorService } from '../../../common/views.js';
 import { ViewPane, IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { ISysProjectService } from './sysProjectService.js';
 import { SysRequirementRow } from '../common/sysProject.js';
-import { buildManifest, specOperation } from '../common/sysManifest.js';
 import { ISysVerificationDataProvider } from './sysVerificationProviderService.js';
 import { SYS_VERIFICATION_VIEW_ID } from '../common/sysViewIds.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
