@@ -294,6 +294,35 @@ difference between "checked and fine" and "never wired up".
 
 ---
 
+## Case 09 — Hovering a type asks about the concept, not the line
+
+**Do** — hover the class name in `Category.java`.
+
+**See** — everything governed about the concept, the same summary the intent page gives, from the
+other side:
+
+```
+Category
+
+✓ Category is identified — Category.java
+— A Category name is never empty — nothing in the code says this yet
+```
+
+**Why it matters** — the declaration is the most obvious place to ask "what is governed about
+this?", and it was the one place with no answer. Answering only on witness lines left the
+symmetry with Case 07 broken in exactly the spot a reader looks first.
+
+The three questions and where each is asked:
+
+| question | asked at | case |
+|---|---|---|
+| what constrains this line? | a line of code | 01, 02, 03 |
+| what is governed about this concept? | a type name in code | 09 |
+| what is governed about this concept? | a concept in the intent | 07 |
+| where is this realised? | either | 07, 08 |
+
+---
+
 ## What the prototype has already changed
 
 Two findings, both from using it rather than reading it:

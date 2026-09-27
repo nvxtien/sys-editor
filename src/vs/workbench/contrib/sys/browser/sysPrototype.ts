@@ -245,6 +245,18 @@ export class SysPrototypeContribution extends Disposable implements IWorkbenchCo
 
 		this._register(languageFeatures.hoverProvider.register(ANY_LANGUAGE, {
 			provideHover: (model, position) => {
+				// A type name is the concept itself, and "what is governed about this?" is the
+				// question a reader has at the declaration. Answering only on witness lines left
+				// the most obvious place to ask as the one place with no answer.
+				const word = model.getWordAtPosition(position);
+				const about = word ? SYS_PROTOTYPE_OBLIGATIONS.filter(o => o.concept === word.word) : [];
+				if (word && about.length) {
+					return {
+						range: new Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn),
+						contents: [{ value: realisedIn(word.word, about, model.uri), isTrusted: true }]
+					};
+				}
+
 				const here = obligationsFor(model)
 					.flatMap(o => locate(model, o))
 					.filter(l => l.range.containsPosition(position));

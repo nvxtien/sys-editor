@@ -375,3 +375,34 @@ test('Case 08b — the requirement shown is the one in this workspace', async ({
 	await expect(hover.getByRole('link', { name: /Open REQ-002/ })).toBeVisible();
 	await expect(hover).not.toContainText('REQ-001');
 });
+
+/**
+ * CASE 09 — Hovering a type in code asks about the concept, not the line.
+ *
+ * Do:   hover the class name `Category` in Category.java
+ * See:  everything governed about the concept, with verdicts, the same summary the intent page
+ *       gives — from the other side
+ * Why:  the declaration is the most obvious place to ask "what is governed about this?", and it
+ *       was the one place with no answer. Answering only on witness lines made the symmetry
+ *       with Case 07 incomplete in exactly the spot a reader looks first.
+ */
+test('Case 09 — hovering a type name answers about the concept', async ({ page }) => {
+	const { root } = javaWorkspace();
+	fs.writeFileSync(path.join(root, 'Category.java'),
+		'package com.example;\n\npublic class Category {\n    private int id;\n    private String name;\n}\n');
+
+	const editor = await open(page, root, 'Category.java');
+	await expect(editor.getByText('class Category')).toBeVisible({ timeout: 30_000 });
+
+	// Without a Java language contribution Monaco renders the line as one span, so the word has
+	// to be aimed at by measurement rather than by token. "Category" sits about three quarters
+	// along "public class Category {".
+	const line = editor.getByText('public class Category').first();
+	const box = await line.boundingBox();
+	await line.hover({ position: { x: box.width * 0.75, y: box.height / 2 } });
+	const hover = page.locator('.monaco-hover').filter({ hasText: 'Category' }).first();
+	await expect(hover).toContainText('Category is identified', { timeout: 15_000 });
+	// Including the one with nowhere to point — the common case, answered rather than omitted.
+	await expect(hover).toContainText('A Category name is never empty');
+	await expect(hover).toContainText('nothing in the code says this yet');
+});
