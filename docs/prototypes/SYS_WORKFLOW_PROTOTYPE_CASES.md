@@ -304,9 +304,18 @@ other side:
 ```
 Category
 
-✓ Category is identified — Category.java
+✓ Category is identified — here
 — A Category name is never empty — nothing in the code says this yet
+
+Open REQ-002
 ```
+
+**The link points away from where the reader already is.** Standing in the intent it offers the
+code; standing in the code it offers the intent. The first version offered `Category.java` to
+someone reading `Category.java` — a reference that goes nowhere, which is the same silent
+uselessness as a link that does not render. Naming the file you are in tells the reader nothing;
+naming the *others* is the only part that does, which is why several files still appear when
+several realise the concept.
 
 **Why it matters** — the declaration is the most obvious place to ask "what is governed about
 this?", and it was the one place with no answer. Answering only on witness lines left the

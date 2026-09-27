@@ -253,7 +253,7 @@ export class SysPrototypeContribution extends Disposable implements IWorkbenchCo
 				if (word && about.length) {
 					return {
 						range: new Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn),
-						contents: [{ value: realisedIn(word.word, about, model.uri), isTrusted: true }]
+						contents: [{ value: realisedIn(word.word, about, model.uri, 'code'), isTrusted: true }]
 					};
 				}
 
@@ -281,7 +281,7 @@ export class SysPrototypeContribution extends Disposable implements IWorkbenchCo
 				if (!about.length) { return undefined; }
 				return {
 					range: new Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn),
-					contents: [{ value: realisedIn(word.word, about, model.uri), isTrusted: true, supportHtml: false }]
+					contents: [{ value: realisedIn(word.word, about, model.uri, 'intent'), isTrusted: true, supportHtml: false }]
 				};
 			}
 		}));
@@ -337,21 +337,41 @@ export class SysPrototypeContribution extends Disposable implements IWorkbenchCo
 }
 
 /**
- * What a concept is realised by, and how each thing said about it is holding up. One concept can
- * be realised by several files — the map to code is not one to one, and listing them all is how
- * the reader sees that rather than being told it.
+ * What a concept is governed by, and how each thing said about it is holding up.
+ *
+ * The link points away from wherever the reader already is: standing in the intent, it offers the
+ * code; standing in the code, it offers the intent. Offering a link to the file you have open is
+ * a reference that goes nowhere, which is the same silent uselessness as one that does not render.
+ *
+ * One concept can be realised by several files. Listing them is how the reader sees the map is
+ * not one to one, rather than being told so.
  */
-function realisedIn(concept: string, about: readonly SysObligation[], page: URI): string {
-	const root = page.path.split('/.sys/')[0];
+function realisedIn(concept: string, about: readonly SysObligation[], from: URI, standingIn: 'intent' | 'code'): string {
+	const root = from.path.split('/.sys/')[0].split('/src/')[0];
 	const mark = (verdict: string) => verdict === 'SATISFIED' ? '✓' : verdict === 'CONTRADICTED' ? '✗' : '—';
+	const here = from.path.split('/').pop();
 	const lines = [`**${concept}**`, ''];
 	for (const obligation of about) {
-		const where = obligation.verdict === 'NOT_OBSERVED'
+		let where: string;
+		if (obligation.verdict === 'NOT_OBSERVED') {
 			// No witness, so nothing to point at. Saying so is the honest answer, and it is the
 			// common one on real code.
-			? 'nothing in the code says this yet'
-			: obligation.files.map(file => `[${file}](${URI.file(`${root}/src/main/java/com/example/${file}`).toString()})`).join(', ');
+			where = 'nothing in the code says this yet';
+		} else if (standingIn === 'intent') {
+			where = obligation.files.map(file => `[${file}](${URI.file(`${root}/src/main/java/com/example/${file}`).toString()})`).join(', ');
+		} else {
+			// Naming the file you are already in tells the reader nothing; naming the others is
+			// the only part that does.
+			const elsewhere = obligation.files.filter(file => file !== here);
+			where = elsewhere.length ? `also in ${elsewhere.join(', ')}` : 'here';
+		}
 		lines.push(`${mark(obligation.verdict)} ${obligation.says} — ${where}`);
+	}
+	if (standingIn === 'code') {
+		const requirement = discoveredRequirement ?? about[0]?.requirement;
+		if (requirement) {
+			lines.push('', `[Open ${requirement}](${URI.file(`${root}/.sys/intents/${requirement}.intent.review.md`).toString()})`);
+		}
 	}
 	return lines.join('\n\n');
 }

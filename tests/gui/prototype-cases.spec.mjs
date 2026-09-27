@@ -405,4 +405,8 @@ test('Case 09 — hovering a type name answers about the concept', async ({ page
 	// Including the one with nowhere to point — the common case, answered rather than omitted.
 	await expect(hover).toContainText('A Category name is never empty');
 	await expect(hover).toContainText('nothing in the code says this yet');
+	// The link points away from where the reader already is: offering Category.java to someone
+	// standing in Category.java is a reference that goes nowhere.
+	await expect(hover.getByRole('link', { name: /Open REQ/ })).toBeVisible();
+	await expect(hover.getByRole('link', { name: /Category\.java/ })).toHaveCount(0);
 });
