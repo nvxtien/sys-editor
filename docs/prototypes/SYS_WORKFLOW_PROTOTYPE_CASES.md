@@ -230,6 +230,61 @@ important thing to watch for while clicking.
 
 ---
 
+## Case 07 — From the intent, point at the code
+
+**Do** — open an intent review page and hover a concept name, `Book`.
+
+**See** —
+
+```
+Book
+
+✓ Book has a title — Book.java
+✗ A Book cannot exist without its Category — Book.java
+```
+
+and for `Category`, a line with nowhere to point:
+
+```
+— A Category name is never empty — nothing in the code says this yet
+```
+
+**Why it matters** — reading code, the question is "what constrains this line". Reading an intent
+it is the mirror: "is this real, and where?". Without an answer the intent page is a document
+nobody can check, and a document nobody can check rots into fiction — which is what happened to
+every SRS in every company.
+
+One concept lists several files when several realise it. The reader **sees** that the map is not
+one to one instead of being told so.
+
+**What would disprove the design** — if the answer is usually "nothing in the code says this yet",
+the intent is running ahead of the code and the page is aspiration rather than record. Worth
+knowing which it is.
+
+---
+
+## Case 08 — From the code, reach the intent
+
+**Do** — hover a governed line in `Book.java`.
+
+**See** — the hover ends with a link:
+
+```
+Open REQ-001
+```
+
+**Why it matters** — the mirror of Case 07. From an intent you reach the code; from the code you
+reach the intent. A reference you cannot follow is a citation nobody checks, and the pair is what
+makes the two one thing rather than two that drift apart.
+
+**A hazard this case exposed.** The link only renders if the hover's markdown is trusted. That is
+safe here because every word of the content is ours. A real verdict carries text from the
+ontology, and text from a store is **data**: trusting it would make a `command:` link written into
+a requirement's wording executable. The real implementation must escape it, or keep the content
+untrusted and link some other way.
+
+---
+
 ## What the prototype has already changed
 
 Two findings, both from using it rather than reading it:
@@ -239,7 +294,10 @@ Two findings, both from using it rather than reading it:
 2. **A marker needs no language; a hover and a code action do.** Registering for `language: 'java'`
    in a fork with no Java language contribution left the mark visible with no reason behind it and
    no actions on it — the worst kind of failure, because it looks like it is working.
-3. **A `ServicesAccessor` is only valid while a command runs synchronously.** Every one of these
+3. **A markdown link nested inside `**bold**` does not render as a link**, and an untrusted
+   hover does not render one at all. Both fail silently, leaving text that looks like a reference
+   and cannot be followed.
+4. **A `ServicesAccessor` is only valid while a command runs synchronously.** Every one of these
    actions awaits a dialog, and reaching for a service afterwards throws. From the user's side the
    action simply did nothing — no error, no dialog. Services are now taken before the first await.
 

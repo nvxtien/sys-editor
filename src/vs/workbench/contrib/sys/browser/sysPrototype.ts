@@ -14,6 +14,7 @@
  * Delete this file and the fixture together when the real thing lands.
  */
 import { Disposable } from '../../../../base/common/lifecycle.js';
+import { URI } from '../../../../base/common/uri.js';
 import { IMarkerService, IMarkerData, MarkerSeverity } from '../../../../platform/markers/common/markers.js';
 import { IModelService } from '../../../../editor/common/services/model.js';
 import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
@@ -33,6 +34,7 @@ const OWNER = 'sys.prototype';
 // squiggle visible with no reason behind it and no actions on it. Which file an obligation is
 // about is decided by the fixture, not by a language id.
 const ANY_LANGUAGE = { scheme: '*', pattern: '**/*' };
+const INTENT_PAGE = { scheme: '*', pattern: '**/*.intent.review.md' };
 
 const GOVERN = 'sys.prototype.governThis';
 const RETRACT = 'sys.prototype.retractObligation';
@@ -220,7 +222,28 @@ export class SysPrototypeContribution extends Disposable implements IWorkbenchCo
 					.flatMap(o => locate(model, o))
 					.filter(l => l.range.containsPosition(position));
 				if (!here.length) { return undefined; }
-				return { range: here[0].range, contents: here.map(l => ({ value: hoverFor(l), isTrusted: false })) };
+				// Trusted so the requirement renders as a link a reader can follow. Safe here only
+				// because every word of this content is ours. A real verdict carries text from the
+				// ontology, and text from a store is data: trusting it would make a `command:`
+				// link in a requirement's wording executable. Escape it there, or keep it untrusted
+				// and link some other way.
+				return { range: here[0].range, contents: here.map(l => ({ value: hoverFor(l, model.uri), isTrusted: true })) };
+			}
+		}));
+
+		// Reading an intent, the question is the mirror of the one asked while reading code: not
+		// "what constrains this line" but "is this real, and where?". Without an answer the intent
+		// page is a document nobody can check, which is how specifications rot.
+		this._register(languageFeatures.hoverProvider.register(INTENT_PAGE, {
+			provideHover: (model, position) => {
+				const word = model.getWordAtPosition(position);
+				if (!word) { return undefined; }
+				const about = SYS_PROTOTYPE_OBLIGATIONS.filter(o => o.concept === word.word);
+				if (!about.length) { return undefined; }
+				return {
+					range: new Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn),
+					contents: [{ value: realisedIn(word.word, about, model.uri), isTrusted: true, supportHtml: false }]
+				};
 			}
 		}));
 
@@ -274,10 +297,49 @@ export class SysPrototypeContribution extends Disposable implements IWorkbenchCo
 	}
 }
 
-function hoverFor({ obligation, note }: Located): string {
+/**
+ * What a concept is realised by, and how each thing said about it is holding up. One concept can
+ * be realised by several files — the map to code is not one to one, and listing them all is how
+ * the reader sees that rather than being told it.
+ */
+function realisedIn(concept: string, about: readonly SysObligation[], page: URI): string {
+	const root = page.path.split('/.sys/')[0];
+	const mark = (verdict: string) => verdict === 'SATISFIED' ? '✓' : verdict === 'CONTRADICTED' ? '✗' : '—';
+	const lines = [`**${concept}**`, ''];
+	for (const obligation of about) {
+		const where = obligation.verdict === 'NOT_OBSERVED'
+			// No witness, so nothing to point at. Saying so is the honest answer, and it is the
+			// common one on real code.
+			? 'nothing in the code says this yet'
+			: obligation.files.map(file => `[${file}](${URI.file(`${root}/src/main/java/com/example/${file}`).toString()})`).join(', ');
+		lines.push(`${mark(obligation.verdict)} ${obligation.says} — ${where}`);
+	}
+	return lines.join('\n\n');
+}
+
+/**
+ * The intent page a requirement is reviewed on. Derived from the source path, which is a guess a
+ * real verdict would not need: it would carry the requirement's own uri.
+ */
+function intentPage(source: URI, requirement: string): URI {
+	const [beforeSrc] = source.path.split('/src/');
+	// A source tree gives the root away; a file sitting at the root does not, so fall back to its
+	// own folder. Both are guesses. A real verdict carries the requirement's own uri and guesses
+	// nothing.
+	const root = beforeSrc !== source.path ? beforeSrc : source.path.slice(0, source.path.lastIndexOf('/'));
+	return URI.file(`${root}/.sys/intents/${requirement}.intent.review.md`);
+}
+
+function hoverFor({ obligation, note }: Located, source: URI): string {
 	const verdict = obligation.verdict === 'CONTRADICTED' ? '✗ broken' : '✓ held';
+	// The requirement is a link, so the mirror of Case 07 holds: from code you reach the intent
+	// exactly as from the intent you reach the code. A reference you cannot follow is a citation
+	// nobody checks.
+	const page = intentPage(source, obligation.requirement);
 	const lines = [`**Sys · ${obligation.requirement}** — ${verdict}`, '', obligation.says];
 	if (note) { lines.push('', `Here: ${note}`); }
+	// On its own line, not nested in bold: a link inside emphasis is not rendered as one.
+	lines.push('', `[Open ${obligation.requirement}](${page.toString()})`);
 	if (obligation.decision) {
 		// The reason travels with the obligation, because it is what a person needs at the moment
 		// they are deciding whether to change the code or change the requirement.

@@ -25,6 +25,8 @@ export interface SysWitness {
 export interface SysObligation {
 	readonly id: string;
 	readonly requirement: string;
+	/** The concept this is about, so an intent page can ask "where is this realised?". */
+	readonly concept: string;
 	/** The obligation as a person reads it — never a predicate name, never a code. */
 	readonly says: string;
 	readonly verdict: SysVerdict;
@@ -40,6 +42,7 @@ export const SYS_PROTOTYPE_OBLIGATIONS: readonly SysObligation[] = [
 	{
 		id: 'st:book-needs-category',
 		requirement: 'REQ-001',
+		concept: 'Book',
 		says: 'A Book cannot exist without its Category',
 		verdict: 'CONTRADICTED',
 		files: ['Book.java'],
@@ -58,6 +61,7 @@ export const SYS_PROTOTYPE_OBLIGATIONS: readonly SysObligation[] = [
 	{
 		id: 'st:category-identified',
 		requirement: 'REQ-001',
+		concept: 'Category',
 		says: 'Category is identified',
 		verdict: 'SATISFIED',
 		files: ['Category.java'],
@@ -66,6 +70,7 @@ export const SYS_PROTOTYPE_OBLIGATIONS: readonly SysObligation[] = [
 	{
 		id: 'st:book-has-title',
 		requirement: 'REQ-001',
+		concept: 'Book',
 		says: 'Book has a title',
 		verdict: 'SATISFIED',
 		files: ['Book.java'],
@@ -76,6 +81,7 @@ export const SYS_PROTOTYPE_OBLIGATIONS: readonly SysObligation[] = [
 		// the source honours or breaks cannot be a diagnostic, because there is no line to mark.
 		id: 'st:category-name-not-empty',
 		requirement: 'REQ-001',
+		concept: 'Category',
 		says: 'A Category name is never empty',
 		verdict: 'NOT_OBSERVED',
 		files: ['Category.java'],

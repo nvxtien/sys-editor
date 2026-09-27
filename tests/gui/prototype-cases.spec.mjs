@@ -296,3 +296,60 @@ test('Case 06c — without a reason it stays an observation, not an obligation',
 	await expect(page.getByText(/observation, not governed/)).toBeVisible({ timeout: 15_000 });
 	await expect(page.getByText(/nothing would enforce it/)).toBeVisible();
 });
+
+/**
+ * CASE 07 — From the intent, point at the code.
+ *
+ * Do:   open the intent review page and hover a concept name — `Book`
+ * See:  what realises it, and how each thing said about it is holding up, with the files linked
+ * Why:  reading code, the question is "what constrains this line". Reading an intent it is the
+ *       mirror: "is this real, and where?". Without an answer the intent page is a document
+ *       nobody can check, which is how specifications rot into fiction.
+ *
+ *       One concept lists several files when several realise it. The reader sees the map is not
+ *       one to one rather than being told so.
+ */
+test('Case 07 — hovering a concept in the intent points at the code', async ({ page }) => {
+	const { root } = javaWorkspace();
+	// At the root, not under .sys: the hover provider matches the file name, so where it sits is
+	// not part of the claim, and a dot folder is one more thing for the harness to fight.
+	fs.writeFileSync(path.join(root, 'REQ-001.intent.review.md'),
+		'# REQ-001 — Structured Intent review\n\n## Entities\n\n### Category\n\n- id: INT\n\n### Book\n\n- title: string\n');
+
+	await open(page, root, 'REQ-001.intent.review.md');
+	const editor = page.locator('.monaco-editor').first();
+
+	// Aimed past the "### " so the pointer lands on the word: a hover needs a word under it, and
+	// the centre of the line is the marker, not the name.
+	await editor.getByText('### Book').first().hover({ position: { x: 50, y: 6 } });
+	const hover = page.locator('.monaco-hover').first();
+	await expect(hover).toContainText('Book', { timeout: 15_000 });
+	// Held, broken and unobserved are all answered — including the one with nowhere to point.
+	await expect(hover).toContainText('Book has a title');
+	await expect(hover).toContainText('Book.java');
+	await expect(hover).toContainText('A Book cannot exist without its Category');
+});
+
+/**
+ * CASE 08 — From the code, reach the intent.
+ *
+ * Do:   hover a governed line in Book.java
+ * See:  the requirement is a link to the intent page it was reviewed on
+ * Why:  the mirror of Case 07. From an intent you reach the code; from the code you reach the
+ *       intent. A reference you cannot follow is a citation nobody checks — and the pair is what
+ *       makes the two documents one thing rather than two that drift apart.
+ */
+test('Case 08 — the hover links back to the intent it came from', async ({ page }) => {
+	const { root } = javaWorkspace();
+	fs.mkdirSync(path.join(root, '.sys', 'intents'), { recursive: true });
+	fs.writeFileSync(path.join(root, '.sys', 'intents', 'REQ-001.intent.review.md'), '# REQ-001\n\n### Book\n');
+
+	const editor = await open(page, root, 'Book.java');
+	await expect(editor.locator('.squiggly-error').first()).toBeVisible({ timeout: 30_000 });
+
+	await editor.getByText('public Book()').first().hover();
+	const hover = page.locator('.monaco-hover').filter({ hasText: 'Sys ·' }).first();
+	await expect(hover).toContainText('REQ-001', { timeout: 15_000 });
+	// The hover also carries the editor's own "View Problem" link, so name the one we added.
+	await expect(hover.getByRole('link', { name: /Open REQ-001/ })).toBeVisible();
+});
