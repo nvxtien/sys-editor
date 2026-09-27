@@ -26,7 +26,7 @@ import { IQuickInputService } from '../../../../platform/quickinput/common/quick
 import { IEditorService, SIDE_GROUP } from '../../../services/editor/common/editorService.js';
 import { requestGeneratedCode } from '../common/sysGeneratedCode.js';
 // PROTOTYPE — remove with sysPrototype.ts and sysPrototypeFixture.ts.
-import { renderSysNeedsMe } from './sysPrototypeNeedsMe.js';
+import { readGoverned, SysStatement } from '../common/sysOntology.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { isSysWorkspaceMissing, validateDraftCandidate } from '../common/sysPlatformFlow.js';
@@ -184,7 +184,7 @@ export class SysSemanticWorkbenchView extends ViewPane {
 			case 'READY': {
 				// PROTOTYPE — fake verdicts, first because it is the thing that needs an answer.
 				// Remove this line with the prototype files.
-				renderSysNeedsMe(parent, this._section('Needs you'), resource => void this.editorService.openEditor({ resource }), this.workspaceContextService.getWorkspace().folders[0]?.uri);
+				void this._renderGoverned(parent, state.project.platformRoot);
 				const section = DOM.append(parent, this._section('Requirements'));
 				DOM.append(section, $('p')).textContent = 'Save a plain-language requirement, generate a draft Formal Spec, review and approve it, then inspect the independently verified code proposal before applying.';
 				for (const row of state.rows) {
@@ -194,6 +194,56 @@ export class SysSemanticWorkbenchView extends ViewPane {
 				if (this.sectionError) { DOM.append(section, $('p.sys-error-message')).textContent = this.sectionError; }
 				this._renderPlatformRow(parent, state.project.platformRoot);
 			}
+		}
+	}
+
+	/**
+	 * What sys-platform says this workspace governs. The editor asks and shows; the statements,
+	 * the sentences and the state are all the platform's.
+	 *
+	 * No verdict appears, because none has been earned: these statements have never met any code.
+	 * Showing `governed, not checked` is the honest answer, and it is a different thing from a
+	 * green tick.
+	 */
+	private async _renderGoverned(parent: HTMLElement, platformRoot: string | undefined): Promise<void> {
+		const section = DOM.append(parent, this._section('Governed'));
+		const workspace = this.workspaceContextService.getWorkspace().folders[0]?.uri.fsPath;
+		if (!platformRoot || !workspace) {
+			DOM.append(section, $('p')).textContent = 'Set the Sys Platform root to see what this workspace governs.';
+			return;
+		}
+		const note = DOM.append(section, $('p'));
+		note.textContent = 'Reading from sys-platform…';
+
+		const result = await readGoverned(new TaskProcessTransport(this.taskService, this.fileService), platformRoot, workspace);
+		if (result.kind === 'UNAVAILABLE') {
+			// A view that cannot reach the platform says so. An empty list and a broken pipe look
+			// identical to a reader, and only one of them means "nothing is governed".
+			note.textContent = `Could not read what this workspace governs: ${result.reason}`;
+			return;
+		}
+
+		const { statements, concepts, unreadable, note: platformNote } = result.governed;
+		if (platformNote) { note.textContent = platformNote; return; }
+		note.textContent = `${statements.length} statement${statements.length === 1 ? '' : 's'} across ${concepts.length} concept${concepts.length === 1 ? '' : 's'}, none checked against code yet.`;
+
+		for (const concept of concepts) {
+			const about = statements.filter((statement: SysStatement) => statement.concepts.includes(concept));
+			const row = DOM.append(section, $('div.sys-req-row'));
+			DOM.append(DOM.append(row, $('div.sys-req-main')), $('span.sys-req-title')).textContent = concept;
+			// The cognitive bound is a design signal: more than a person can hold in one sitting
+			// means the concept is doing too much, not that anything is slow.
+			DOM.append(row, $('div.sys-req-status')).textContent =
+				`${about.length} statement${about.length === 1 ? '' : 's'}${about.length > 10 ? ' — more than one sitting holds; consider splitting' : ''}`;
+			for (const statement of about) {
+				DOM.append(row, $('div.sys-req-binding')).textContent = statement.says;
+			}
+		}
+
+		for (const bad of unreadable) {
+			// Named, not dropped: a statement missing because a file failed to parse looks exactly
+			// like one nobody ever wrote.
+			DOM.append(section, $('p.sys-error-message')).textContent = `${bad.requirement} could not be read: ${bad.reason}`;
 		}
 	}
 
