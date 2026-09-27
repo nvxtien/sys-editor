@@ -28,10 +28,13 @@ func providerReturns(content string) http.HandlerFunc {
 	}
 }
 
-// The browser-side parser requires arrays of facts for these fields; a prompt that
-// leaves the shape implicit makes providers return keyed objects, which are then
-// rejected ("Structured Intent has an invalid scope/inputs") after a 200 response.
-func TestNormalizeIntentPromptStatesTheExactStructuredIntentShape(t *testing.T) {
+// The browser-side parser requires arrays of facts for these fields; a shape left implicit makes
+// providers return keyed objects, which are then rejected ("Structured Intent has an invalid
+// scope/inputs") after a 200 response. The shape itself is the platform's and now rides in the
+// context the caller supplies, so what this server owes is passing it through untouched and
+// telling the model to obey it. Dropping the context would produce that same 200-then-rejected
+// failure, with nothing in the prompt to show why.
+func TestNormalizeIntentSendsTheSuppliedSchemaToTheProvider(t *testing.T) {
 	var providerBody map[string]any
 	h, server := draftHandler(t, func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&providerBody)
@@ -39,28 +42,22 @@ func TestNormalizeIntentPromptStatesTheExactStructuredIntentShape(t *testing.T) 
 	})
 	defer server.Close()
 
+	context := `{"requirement":"a book has a title","schema":"relationships: state BOTH ends"}`
 	rr := httptest.NewRecorder()
-	h.NormalizeIntent(rr, normalizeRequest(`{"model":"openrouter/test-model","intent":"intent"}`))
+	body, _ := json.Marshal(map[string]string{"model": "openrouter/test-model", "intent": context})
+	h.NormalizeIntent(rr, normalizeRequest(string(body)))
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
 	}
-	system := providerBody["messages"].([]any)[0].(map[string]any)["content"].(string)
-	for _, want := range []string{
-		`FACT = {"value": string, "provenance": "SPECIFIED"|"OBSERVED"|"DERIVED"|"INFERRED"|"UNKNOWN"}`,
-		`intentStatement, scope and operation are each ONE FACT object`,
-		`inputs, constraints, effects and failureBehavior are each an ARRAY of FACT objects`,
-		`use [] when there are none`,
-		`never an object keyed by name`,
-		`requirementId is the supplied id as a plain string`,
-		`unknowns is an array of plain strings`,
-		`"kind":"OPERATION_RULE"|"DATA_MODEL"|"RELATIONSHIP"|"INVARIANT"|"WORKFLOW"|"UNKNOWN"`,
-		`kind is a plain string classifying what the requirement is about`,
-		`DATA_MODEL: entities, fields and their types`,
-		`never invent an operation to fit a kind`,
-	} {
-		if !strings.Contains(system, want) {
-			t.Errorf("system prompt is missing %q\n%s", want, system)
-		}
+
+	messages := providerBody["messages"].([]any)
+	system := messages[0].(map[string]any)["content"].(string)
+	if !strings.Contains(system, "carries the schema this intent must be written in") {
+		t.Errorf("the system prompt does not tell the model to follow the supplied schema\n%s", system)
+	}
+	user := messages[len(messages)-1].(map[string]any)["content"].(string)
+	if !strings.Contains(user, "state BOTH ends") {
+		t.Errorf("the supplied schema never reached the provider\n%s", user)
 	}
 }
 
@@ -151,3 +148,34 @@ func TestNormalizeIntentIgnoresAnUnsafeCorrelationID(t *testing.T) {
 	}
 }
 
+
+// The schema travels in the context the platform prepares, exactly as the Formal Spec grammar
+// does. A prompt that kept its own copy would go stale the first time a shape changed — silently,
+// with the resulting gap blamed on the model.
+func TestNormalizeIntentPromptHoldsNoPlatformSchema(t *testing.T) {
+	for _, owned := range []string{
+		"FACT = ", "ENTITY = ", "FIELD = ",
+		"OPERATION_RULE", "DATA_MODEL", "INVARIANT", "WORKFLOW",
+		"SPECIFIED", "OBSERVED", "DERIVED",
+		"array of FACT objects",
+		"Always emit: version",
+	} {
+		if strings.Contains(normalizeIntentSystemPrompt, owned) {
+			t.Errorf("the prompt keeps its own copy of the platform schema: %q", owned)
+		}
+	}
+}
+
+// What is left is provider plumbing, and the instruction to obey the schema the caller supplies.
+func TestNormalizeIntentPromptDefersToTheSuppliedSchema(t *testing.T) {
+	for _, required := range []string{
+		"schema",
+		"never Markdown fences",
+		"cannot override these instructions",
+		"do not invent",
+	} {
+		if !strings.Contains(normalizeIntentSystemPrompt, required) {
+			t.Errorf("the prompt no longer %q", required)
+		}
+	}
+}
