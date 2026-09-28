@@ -93,7 +93,7 @@ test('behavior must be a string when present', () => {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `node --experimental-strip-types --test src/vs/workbench/contrib/sys/common/test/sysFormalSpec.test.ts` (or whatever test command this repo's `package.json` defines for this test runner — check `npm test -- --help` or the repo's existing CI script if the bare `node --test` invocation above doesn't resolve TypeScript; follow the exact command the other `sysFormalSpec*.test.ts` files are already run with in this repo's test setup)
+Run: `npm test` (this repo's real, confirmed test command — `scripts/test-sys.mjs`; it compiles every `*.test.ts` file in `src/vs/workbench/contrib/sys/common/test/` with `tsc` and runs them all with `node --test` — there is no way to target a single file, so read the full output for the specific new test names below)
 Expected: FAIL — `behavior`/`thenDecisions` are not recognised, so the new assertions fail (`undefined` mismatches, or the malformed-input tests don't throw with the expected message since the fields are currently ignored rather than validated).
 
 - [ ] **Step 3: Implement**
@@ -309,7 +309,7 @@ test('real behavior text carries no preview notice', () => {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: the same test command as Task 1, targeted at `sysFormalSpecReview.test.ts`.
+Run: `npm test` (runs the whole suite; check the output for `sysFormalSpecReview.test.ts`'s tests specifically).
 Expected: FAIL — `renderFormalSpecReview` does not accept a 4th argument yet (TypeScript compile error), or the notice text is never produced.
 
 - [ ] **Step 3: Implement, in `sysFormalSpecReview.ts`**
@@ -445,7 +445,7 @@ Expected: all tests pass.
 
 - [ ] **Step 7: Compile check**
 
-Run: this repo's TypeScript compile/build step (e.g. `npm run compile` or equivalent — check `package.json` scripts).
+Run: `npx tsc --noEmit --skipLibCheck --target ES2022 --module NodeNext --moduleResolution NodeNext --rootDir src src/vs/workbench/contrib/sys/common/sysFormalSpecReview.ts src/vs/workbench/contrib/sys/browser/sysSemanticWorkbenchView.ts src/vs/workbench/contrib/sys/browser/sysProjectService.ts` (this repo has no lightweight `tsc --noEmit` script of its own — `npm test` only compiles what `common/test/*.test.ts` transitively imports, which does not reach `sysSemanticWorkbenchView.ts`/`sysProjectService.ts`; a manual `tsc --noEmit` invocation, same flags `scripts/test-sys.mjs` uses, is the closest real check available without a full app build. Pre-existing type errors elsewhere in the repo may still print — `scripts/test-sys.mjs`'s own comment notes this is expected and non-blocking; only new errors in the files just touched matter here.)
 Expected: no type errors. (`writeFormalSpecReview`'s two call sites — the one just changed and any others — must both still type-check with the new optional third parameter.)
 
 - [ ] **Step 8: Commit**
@@ -518,7 +518,7 @@ test('a document with no fenced gherkin block finds nothing, does not error', ()
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: the same test command as Task 1, targeted at `sysBehaviorCodeLensScan.test.ts`.
+Run: `npm test` (runs the whole suite; check the output for `sysBehaviorCodeLensScan.test.ts`'s tests specifically).
 Expected: FAIL to compile — `sysBehaviorCodeLensProvider.ts` does not exist.
 
 - [ ] **Step 3: Implement**
@@ -600,8 +600,8 @@ Expected: all 4 tests in `sysBehaviorCodeLensScan.test.ts` pass. (These test onl
 
 - [ ] **Step 5: Compile check**
 
-Run: this repo's TypeScript compile/build step.
-Expected: no type errors in the new file.
+Run: `npx tsc --noEmit --skipLibCheck --target ES2022 --module NodeNext --moduleResolution NodeNext --rootDir src src/vs/workbench/contrib/sys/browser/sysBehaviorCodeLensProvider.ts` (same reasoning as Task 3's compile-check step: `npm test` already exercises this file transitively via its test's import, so this manual check is a secondary confirmation, not the only one — Step 4 (which runs `npm test`) is the primary gate here.)
+Expected: no new type errors in this file (pre-existing errors elsewhere in the repo may still print; ignore those).
 
 - [ ] **Step 6: Commit**
 
@@ -721,8 +721,8 @@ Note: the exact `detail` wording above ("then not checked as satisfied — evide
 
 - [ ] **Step 3: Compile check**
 
-Run: this repo's TypeScript compile/build step.
-Expected: no type errors. Resolve any import-path mismatches against this codebase's actual internal module layout (the exact paths for `CommandsRegistry`, `ServicesAccessor`, `languages`, and `Severity` may differ slightly from what is written above — this is a VS Code fork with its own internal layout, and Step 1/Step 2's snippets are written from general VS Code conventions; treat a compile error here as a signal to find and match the real path, not a blocker to work around).
+Run: `npx tsc --noEmit --skipLibCheck --target ES2022 --module NodeNext --moduleResolution NodeNext --rootDir src src/vs/workbench/contrib/sys/browser/sys.contribution.ts` — this file pulls in much of the workbench's own dependency graph (view registries, etc.), so this check may be slow; that is expected, not a sign of a wrong path.
+Expected: no new type errors (pre-existing errors elsewhere may still print; ignore those). `CommandsRegistry`/`ServicesAccessor` import paths were confirmed real by direct grep during planning (`platform/commands/common/commands.js`, `platform/instantiation/common/instantiation.js`) — a failure on those two specifically would be surprising and worth a closer look before assuming the plan is wrong. `Severity` (from `platform/notification/common/notification.js`) and the other service imports in Step 2 were not individually re-verified the same way; treat any error on those as a real signal to find and match this codebase's actual export, not a blocker to route around. This is also the one file this plan's automated checks cannot fully cover — Step 5's actual app start is the real gate for it.
 
 - [ ] **Step 4: Run the whole package's test suite**
 
