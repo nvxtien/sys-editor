@@ -32,6 +32,15 @@ export interface SysFormalSpecEntity {
 	readonly fields: readonly SysFormalSpecField[];
 }
 
+export interface SysFormalSpecThenDecision {
+	readonly scenario: string;
+	readonly then: {
+		readonly field: string;
+		readonly becomes: string;
+		readonly provenance: SysFormalSpecProvenance;
+	};
+}
+
 export interface SysFormalSpec {
 	readonly version: 1;
 	readonly requirementId: string;
@@ -50,6 +59,10 @@ export interface SysFormalSpec {
 	readonly effects: readonly SysFormalSpecFact[];
 	readonly failureBehavior: readonly SysFormalSpecFact[];
 	readonly unknowns: readonly string[];
+	/** Real Gherkin text, governed once confirmed. Absent in records written before this existed. */
+	readonly behavior?: string;
+	/** A scenario's optional structured Then, keyed by the scenario's own name. */
+	readonly thenDecisions?: readonly SysFormalSpecThenDecision[];
 }
 
 /** A Formal Spec as sys-core holds it; `state` and `identity` are core's, never derived here. */
@@ -89,6 +102,22 @@ function entities(value: unknown): readonly SysFormalSpecEntity[] {
 	});
 }
 
+function thenDecisions(value: unknown): readonly SysFormalSpecThenDecision[] {
+	if (!Array.isArray(value)) { throw new Error('Formal Spec has invalid thenDecisions'); }
+	return value.map(entry => {
+		const raw = entry as { scenario?: unknown; then?: unknown };
+		if (!raw || typeof raw !== 'object' || typeof raw.scenario !== 'string' || !raw.scenario.trim()) {
+			throw new Error('Formal Spec has invalid thenDecisions');
+		}
+		const then = raw.then as { field?: unknown; becomes?: unknown; provenance?: unknown };
+		if (!then || typeof then !== 'object' || typeof then.field !== 'string' || !then.field.trim()
+			|| typeof then.becomes !== 'string' || !provenance.has(then.provenance as SysFormalSpecProvenance)) {
+			throw new Error('Formal Spec has invalid thenDecisions');
+		}
+		return { scenario: raw.scenario, then: { field: then.field, becomes: then.becomes, provenance: then.provenance as SysFormalSpecProvenance } };
+	});
+}
+
 /**
  * Absent is not the same as wrong. A kind that states no inputs, effects or failures omits them —
  * the normalize prompt asks a data model to do exactly that — so a missing list is an empty one.
@@ -112,6 +141,9 @@ export function parseFormalSpec(value: unknown, requirementId: string, options: 
 		&& (!Array.isArray(raw.unknowns) || raw.unknowns.some(item => typeof item !== 'string'))) {
 		throw new Error('Formal Spec has invalid unknowns');
 	}
+	if (raw.behavior !== undefined && raw.behavior !== null && typeof raw.behavior !== 'string') {
+		throw new Error('Formal Spec has an invalid behavior');
+	}
 	return {
 		version: 1,
 		requirementId,
@@ -126,6 +158,8 @@ export function parseFormalSpec(value: unknown, requirementId: string, options: 
 		effects: facts(raw.effects, 'effects'),
 		failureBehavior: facts(raw.failureBehavior, 'failureBehavior'),
 		unknowns: (raw.unknowns as readonly string[] | undefined) ?? [],
+		...(typeof raw.behavior === 'string' ? { behavior: raw.behavior } : {}),
+		...(raw.thenDecisions === undefined ? {} : { thenDecisions: thenDecisions(raw.thenDecisions) }),
 	};
 }
 

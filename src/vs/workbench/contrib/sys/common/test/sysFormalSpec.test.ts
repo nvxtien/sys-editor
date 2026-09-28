@@ -134,3 +134,51 @@ test('unknowns may be absent too', () => {
 	}, 'REQ-001');
 	assert.deepEqual(intent.unknowns, []);
 });
+
+test('behavior and thenDecisions are absent by default and parse when present', () => {
+	const withoutThem = parseFormalSpec({
+		version: 1, requirementId: 'REQ-001', kind: 'OPERATION_RULE',
+		intentStatement: { value: 'x', provenance: 'SPECIFIED' }, scope: { value: 'x', provenance: 'SPECIFIED' },
+		operation: { value: 'cancel order', provenance: 'SPECIFIED' },
+		inputs: [], constraints: [], effects: [], failureBehavior: [], unknowns: []
+	}, 'REQ-001');
+	assert.equal(withoutThem.behavior, undefined);
+	assert.equal(withoutThem.thenDecisions, undefined);
+
+	const withThem = parseFormalSpec({
+		version: 1, requirementId: 'REQ-001', kind: 'OPERATION_RULE',
+		intentStatement: { value: 'x', provenance: 'SPECIFIED' }, scope: { value: 'x', provenance: 'SPECIFIED' },
+		operation: { value: 'cancel order', provenance: 'SPECIFIED' },
+		inputs: [], constraints: [], effects: [], failureBehavior: [], unknowns: [],
+		behavior: 'Feature: Order\n\n  @concept:Order\n  Scenario: Cancel order\n    Given a thing\n    When it happens\n    Then it changes\n',
+		thenDecisions: [{ scenario: 'Cancel order', then: { field: 'status', becomes: 'CANCELLED', provenance: 'SPECIFIED' } }]
+	}, 'REQ-001');
+	assert.match(withThem.behavior ?? '', /Feature: Order/);
+	assert.equal(withThem.thenDecisions?.[0].scenario, 'Cancel order');
+	assert.equal(withThem.thenDecisions?.[0].then.field, 'status');
+	assert.equal(withThem.thenDecisions?.[0].then.becomes, 'CANCELLED');
+	assert.equal(withThem.thenDecisions?.[0].then.provenance, 'SPECIFIED');
+});
+
+test('a malformed thenDecisions entry is rejected, never half-read', () => {
+	const base = {
+		version: 1, requirementId: 'REQ-001', kind: 'OPERATION_RULE',
+		intentStatement: { value: 'x', provenance: 'SPECIFIED' }, scope: { value: 'x', provenance: 'SPECIFIED' },
+		operation: { value: 'cancel order', provenance: 'SPECIFIED' },
+		inputs: [], constraints: [], effects: [], failureBehavior: [], unknowns: []
+	};
+	assert.throws(() => parseFormalSpec({ ...base, thenDecisions: 'not a list' }, 'REQ-001'), /invalid thenDecisions/);
+	assert.throws(() => parseFormalSpec({ ...base, thenDecisions: [{ scenario: '' }] }, 'REQ-001'), /invalid thenDecisions/);
+	assert.throws(() => parseFormalSpec({ ...base, thenDecisions: [{ scenario: 'x', then: { field: 'f', becomes: 'v' } }] }, 'REQ-001'), /invalid thenDecisions/);
+	assert.throws(() => parseFormalSpec({ ...base, thenDecisions: [{ scenario: 'x', then: { field: 'f', becomes: 'v', provenance: 'GUESSED' } }] }, 'REQ-001'), /invalid thenDecisions/);
+});
+
+test('behavior must be a string when present', () => {
+	const base = {
+		version: 1, requirementId: 'REQ-001', kind: 'OPERATION_RULE',
+		intentStatement: { value: 'x', provenance: 'SPECIFIED' }, scope: { value: 'x', provenance: 'SPECIFIED' },
+		operation: { value: 'cancel order', provenance: 'SPECIFIED' },
+		inputs: [], constraints: [], effects: [], failureBehavior: [], unknowns: []
+	};
+	assert.throws(() => parseFormalSpec({ ...base, behavior: 42 }, 'REQ-001'), /invalid behavior/);
+});
