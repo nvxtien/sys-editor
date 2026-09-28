@@ -19,8 +19,13 @@ function line(fact: SysFormalSpecFact): string {
  * Scenarios are multi-line Gherkin, so they are fenced and kept verbatim — `line()` would collapse
  * them to one line and `list()` would bullet them, and either makes them unreadable.
  */
-function scenarioSection(gherkin: string): string[] {
-	return ['## Scenarios', '', '```gherkin', gherkin.trimEnd(), '```', ''];
+function scenarioSection(gherkin: string, isPreview: boolean): string[] {
+	return [
+		'## Scenarios',
+		'',
+		...(isPreview ? ['⚠ preview only — not yet part of the confirmed Formal Spec', ''] : []),
+		'```gherkin', gherkin.trimEnd(), '```', ''
+	];
 }
 
 function entitySections(entities: readonly SysFormalSpecEntity[]): string[] {
@@ -52,7 +57,7 @@ function capabilityLines(capability: SysFormalizationCapability | undefined): st
  * A plain-language projection of the Formal Spec JSON for human review. It is derived from the
  * same record that gets confirmed, never edited, and never a second source of truth.
  */
-export function renderFormalSpecReview(record: SysFormalSpecRecord, capability: SysFormalizationCapability | undefined, scenarios?: string): string {
+export function renderFormalSpecReview(record: SysFormalSpecRecord, capability: SysFormalizationCapability | undefined, scenarios?: string, scenariosArePreview = false): string {
 	const d = record.draft;
 	const status = record.state === 'APPROVED' ? 'CONFIRMED' : record.state === 'STALE' ? 'STALE — the requirement changed after this was reviewed' : 'DRAFT — not yet confirmed';
 	const quoted = record.sourceRequirement.trim().split('\n').map(text => `> ${text}`).join('\n');
@@ -60,7 +65,7 @@ export function renderFormalSpecReview(record: SysFormalSpecRecord, capability: 
 	// operation; rendering it with the operation-rule layout asked the reader for an operation that
 	// does not exist. Sections a kind does not use are left out rather than shown empty.
 	const describesEntities = d.entities !== undefined || d.relationships !== undefined;
-	const scenarioLines = scenarios?.trim() ? scenarioSection(scenarios) : [];
+	const scenarioLines = scenarios?.trim() ? scenarioSection(scenarios, scenariosArePreview) : [];
 	const sections = describesEntities
 		? [
 			...scenarioLines,

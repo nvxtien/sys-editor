@@ -329,7 +329,7 @@ export class SysSemanticWorkbenchView extends ViewPane {
 			await this.projectService.writeFormalSpec(id, formalSpec);
 			sysTrace(requestId, 'saved', `requirement=${id}`);
 			const scenarios = await this._scenariosFor(id, httpUrl);
-			await this.editorService.openEditor({ resource: await this.projectService.writeFormalSpecReview(id, scenarios) });
+			await this.editorService.openEditor({ resource: await this.projectService.writeFormalSpecReview(id, scenarios?.text, scenarios?.isPreview) });
 			sysTrace(requestId, 'ui_refresh', 'row re-renders from .sys/intents');
 		} catch (error) {
 			sysTrace(requestId, 'failed', `error=${error instanceof Error ? error.message : String(error)}`);
@@ -349,19 +349,27 @@ export class SysSemanticWorkbenchView extends ViewPane {
 	 * identity of what was confirmed. Any failure yields undefined — a reviewer must always be able
 	 * to see what they are confirming, whatever the provider is doing.
 	 */
-	private async _scenariosFor(id: string, httpUrl?: string): Promise<string | undefined> {
+	/**
+	 * Real `behavior` first — it is governed, already stored, and needs no network call. Only when
+	 * a draft has none does this fall back to the LLM-generated preview, so a Formal Spec written
+	 * before `behavior` existed still gets a review page with scenarios on it.
+	 */
+	private async _scenariosFor(id: string, httpUrl?: string): Promise<{ readonly text: string; readonly isPreview: boolean } | undefined> {
+		const record = await this.projectService.readFormalSpec(id);
+		if (!record) { return undefined; }
+		if (record.draft.behavior?.trim()) { return { text: record.draft.behavior, isPreview: false }; }
+
 		const model = this.sidexChatService.serverModel;
 		if (!model) { return undefined; }
 		try {
-			const record = await this.projectService.readFormalSpec(id);
-			if (!record) { return undefined; }
 			if (httpUrl === undefined) {
 				const configuredServerUrl = this.configurationService.getValue<string>('sidex.chat.serverUrl');
 				const endpoint = configuredServerUrl?.trim() ? await resolveServerEndpoint() : await waitForServerEndpoint();
 				if (!endpoint.running && !configuredServerUrl?.trim()) { return undefined; }
 				httpUrl = serverHttpUrl(configuredServerUrl);
 			}
-			return await requestFormalSpecScenarios(httpUrl, model, serializeFormalSpec(record.draft));
+			const preview = await requestFormalSpecScenarios(httpUrl, model, serializeFormalSpec(record.draft));
+			return preview ? { text: preview, isPreview: true } : undefined;
 		} catch {
 			return undefined;
 		}

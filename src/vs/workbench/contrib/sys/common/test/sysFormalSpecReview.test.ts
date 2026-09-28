@@ -73,3 +73,14 @@ test('says when the requirement changed after the intent was reviewed', () => {
 	const stale = renderFormalSpecReview({ ...record(), state: 'STALE' }, undefined);
 	assert.ok(stale.includes('Status: STALE — the requirement changed after this was reviewed'));
 });
+
+test('a preview scenario is marked as a preview, not presented as governed', () => {
+	const text = renderFormalSpecReview(record(), undefined, 'Feature: X\n\n  Scenario: Y\n    Given a\n    When b\n    Then c\n', true);
+	assert.ok(text.includes('⚠ preview only — not yet part of the confirmed Formal Spec'));
+});
+
+test('real behavior text carries no preview notice', () => {
+	const text = renderFormalSpecReview(record(), undefined, 'Feature: X\n\n  Scenario: Y\n    Given a\n    When b\n    Then c\n', false);
+	assert.ok(!text.includes('preview only'));
+	assert.ok(text.includes('Feature: X'));
+});

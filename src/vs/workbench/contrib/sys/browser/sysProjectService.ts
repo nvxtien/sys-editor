@@ -33,7 +33,7 @@ export interface ISysProjectService {
 	 * resource. `scenarios` is an optional Gherkin projection shown alongside; it is rendered, never
 	 * persisted into the intent, so reviewing never changes what was confirmed.
 	 */
-	writeFormalSpecReview(id: string, scenarios?: string): Promise<URI>;
+	writeFormalSpecReview(id: string, scenarios?: string, scenariosArePreview?: boolean): Promise<URI>;
 	/** Creates an empty .spec file (if absent) and returns it, ready to be opened in the editor. */
 	/** Approves the exact current requirement text in sys-core. */
 	approveRequirement(id: string): Promise<void>;
@@ -138,13 +138,13 @@ class SysProjectService extends Disposable implements ISysProjectService {
 		return URI.joinPath(this.folders()[0], requirementFile(id));
 	}
 
-	async writeFormalSpecReview(id: string, scenarios?: string): Promise<URI> {
+	async writeFormalSpecReview(id: string, scenarios?: string, scenariosArePreview = false): Promise<URI> {
 		const record = await this.readFormalSpec(id);
 		if (!record) { throw new Error('Formal Spec has not been normalized yet.'); }
 		const folder = URI.joinPath(this.folders()[0], '.sys', 'intents');
 		const resource = URI.joinPath(folder, `${id}.intent.review.md`);
 		await this.files.createFolder(folder);
-		await this.files.writeFile(resource, VSBuffer.fromString(renderFormalSpecReview(record, await this.formalizationCapability(id), scenarios)));
+		await this.files.writeFile(resource, VSBuffer.fromString(renderFormalSpecReview(record, await this.formalizationCapability(id), scenarios, scenariosArePreview)));
 		return resource;
 	}
 
