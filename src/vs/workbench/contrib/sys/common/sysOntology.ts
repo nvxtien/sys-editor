@@ -21,10 +21,11 @@ export interface SysStatement {
 	readonly state: string;
 }
 
-/** A concept carrying more statements than a person can hold in one sitting. The bound and the
- *  count are both the platform's: the editor renders this row, it does not decide it. */
+/** A governed subject — a concept or an operation — carrying more statements than a person can
+ *  hold in one sitting. The bound and the count are both the platform's: the editor renders this
+ *  row, it does not decide it. */
 export interface SysCrowdedConcept {
-	readonly concept: string;
+	readonly subject: string;
 	readonly count: number;
 }
 

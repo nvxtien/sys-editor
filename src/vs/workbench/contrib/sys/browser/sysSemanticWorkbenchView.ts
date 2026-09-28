@@ -171,12 +171,13 @@ export class SysSemanticWorkbenchView extends ViewPane {
 		note.textContent = `${plural(statements.length, 'statement')} across ${plural(concepts.length, 'concept')}, none checked against code yet.`;
 
 		// Over budget, and how much, is the platform's answer — computed there so every client
-		// renders the same one instead of each deciding for itself what "too crowded" means.
-		for (const { concept, count } of crowded ?? []) {
+		// renders the same one instead of each deciding for itself what "too crowded" means. The
+		// subject is a concept or an operation; both hit the same cognitive limit.
+		for (const { subject, count } of crowded ?? []) {
 			const row = DOM.append(section, $('div.sys-req-row'));
-			DOM.append(DOM.append(row, $('div.sys-req-main')), $('span.sys-req-title')).textContent = concept;
+			DOM.append(DOM.append(row, $('div.sys-req-main')), $('span.sys-req-title')).textContent = subject;
 			DOM.append(row, $('div.sys-req-status')).textContent =
-				`${plural(count, 'statement')} — more than one sitting holds. Consider splitting the concept.`;
+				`${plural(count, 'statement')} — more than one sitting holds. Consider splitting it.`;
 		}
 
 		for (const bad of unreadable) {

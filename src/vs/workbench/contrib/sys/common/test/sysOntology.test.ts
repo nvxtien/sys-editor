@@ -61,10 +61,10 @@ test('nothing claims a verdict the platform did not give', async () => {
 // Which concepts are over budget, and by how much, is the platform's answer -- the editor
 // renders this list, it computes nothing about what "too crowded" means.
 test('a crowded concept from the platform is carried home unchanged', async () => {
-	const report = JSON.stringify({ ...JSON.parse(REPORT), crowded: [{ concept: 'Book', count: 13 }] });
+	const report = JSON.stringify({ ...JSON.parse(REPORT), crowded: [{ subject: 'Book', count: 13 }] });
 	const result = await readGoverned(transport({ exitCode: 0, stdout: report, stderr: '' }), '/p', '/w');
 	if (result.kind !== 'READ') { throw new Error('expected READ'); }
-	assert.deepEqual(result.governed.crowded, [{ concept: 'Book', count: 13 }]);
+	assert.deepEqual(result.governed.crowded, [{ subject: 'Book', count: 13 }]);
 });
 
 // An older system-ontology sends no crowded field at all; the editor must still read the reply.
