@@ -47,6 +47,53 @@ export function systemOntologyBinary(platformRoot: string): string {
 
 export type SysGovernedResult = { readonly kind: 'READ'; readonly governed: SysGoverned } | { readonly kind: 'UNAVAILABLE'; readonly reason: string };
 
+export interface SysCandidateFunction {
+	readonly name: string;
+	readonly file: string;
+	readonly parameters: readonly (readonly [string, string])[];
+	readonly location: unknown;
+	readonly thenObserved?: boolean;
+}
+
+export interface SysScenarioCandidates {
+	readonly scenario: string;
+	readonly candidates: readonly SysCandidateFunction[];
+	/** Present when this scenario's own candidate search came up empty — why, not just that. */
+	readonly reason?: string;
+}
+
+export interface SysCandidatesResult {
+	readonly scenarios: readonly SysScenarioCandidates[];
+	/** Present when no scenario at all governs the requested operation. */
+	readonly reason?: string;
+}
+
+export type SysCandidatesReadResult = { readonly kind: 'READ'; readonly result: SysCandidatesResult } | { readonly kind: 'UNAVAILABLE'; readonly reason: string };
+
+/**
+ * Candidate functions for one operation's scenarios — real declarations, narrowed by class and
+ * type, never a claim about which one is right. Mirrors `readGoverned`'s shape exactly: every
+ * failure yields UNAVAILABLE with a reason, never a throw.
+ */
+export async function readCandidates(transport: Pick<VerificationTransport, 'run'>, platformRoot: string, workspace: string, operation: string, timeoutMs = 30000): Promise<SysCandidatesReadResult> {
+	let result;
+	try {
+		result = await transport.run(systemOntologyBinary(platformRoot), ['candidates', workspace, operation], timeoutMs);
+	} catch (error) {
+		return { kind: 'UNAVAILABLE', reason: error instanceof Error ? error.message : String(error) };
+	}
+	if (result.exitCode !== 0) {
+		return { kind: 'UNAVAILABLE', reason: result.stderr.trim().slice(0, 300) || `exit ${result.exitCode}` };
+	}
+	try {
+		const parsed = JSON.parse(result.stdout) as SysCandidatesResult;
+		if (!Array.isArray(parsed.scenarios)) { throw new Error('no scenarios array'); }
+		return { kind: 'READ', result: parsed };
+	} catch (error) {
+		return { kind: 'UNAVAILABLE', reason: `system-ontology returned something unreadable: ${error instanceof Error ? error.message : String(error)}` };
+	}
+}
+
 /**
  * Every failure yields UNAVAILABLE with a reason rather than throwing: a view that cannot reach
  * the platform must say so, not disappear.

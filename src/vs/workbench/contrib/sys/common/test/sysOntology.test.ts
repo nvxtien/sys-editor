@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { governedAbout, readGoverned, systemOntologyBinary } from '../sysOntology.js';
+import { governedAbout, readCandidates, readGoverned, systemOntologyBinary } from '../sysOntology.js';
 
 const transport = (result: { exitCode: number; stdout: string; stderr: string }) => ({
 	run: async (...args: unknown[]) => { seen.push(args); return result; }
@@ -72,4 +72,35 @@ test('a reply from a core that predates the budget field still parses', async ()
 	const result = await readGoverned(transport({ exitCode: 0, stdout: REPORT, stderr: '' }), '/p', '/w');
 	if (result.kind !== 'READ') { throw new Error('expected READ'); }
 	assert.equal(result.governed.crowded, undefined);
+});
+
+test('readCandidates reads a successful scenarios list', async () => {
+	const transport = { run: async () => ({ exitCode: 0, stdout: JSON.stringify({ scenarios: [{ scenario: 'Cancel order', candidates: [{ name: 'Order.cancel', file: 'Order.java', parameters: [], location: null, thenObserved: true }] }] }), stderr: '' }) };
+	const result = await readCandidates(transport, '/platform', '/workspace', 'cancel order');
+	assert.equal(result.kind, 'READ');
+	if (result.kind === 'READ') {
+		assert.equal(result.result.scenarios[0].scenario, 'Cancel order');
+		assert.equal(result.result.scenarios[0].candidates[0].name, 'Order.cancel');
+		assert.equal(result.result.scenarios[0].candidates[0].thenObserved, true);
+	}
+});
+
+test('readCandidates reports UNAVAILABLE on a non-zero exit', async () => {
+	const transport = { run: async () => ({ exitCode: 1, stdout: '', stderr: 'boom' }) };
+	const result = await readCandidates(transport, '/platform', '/workspace', 'cancel order');
+	assert.equal(result.kind, 'UNAVAILABLE');
+	if (result.kind === 'UNAVAILABLE') { assert.match(result.reason, /boom/); }
+});
+
+test('readCandidates reports UNAVAILABLE on unreadable output', async () => {
+	const transport = { run: async () => ({ exitCode: 0, stdout: 'not json', stderr: '' }) };
+	const result = await readCandidates(transport, '/platform', '/workspace', 'cancel order');
+	assert.equal(result.kind, 'UNAVAILABLE');
+});
+
+test('readCandidates passes the operation as its own argument, not concatenated', async () => {
+	let capturedArgs: readonly string[] = [];
+	const transport = { run: async (_bin: string, args: readonly string[]) => { capturedArgs = args; return { exitCode: 0, stdout: JSON.stringify({ scenarios: [] }), stderr: '' }; } };
+	await readCandidates(transport, '/platform', '/workspace', 'cancel order');
+	assert.deepEqual(capturedArgs, ['candidates', '/workspace', 'cancel order']);
 });
