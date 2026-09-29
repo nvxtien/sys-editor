@@ -145,6 +145,15 @@ test('behavior and thenDecisions are absent by default and parse when present', 
 	assert.equal(withoutThem.behavior, undefined);
 	assert.equal(withoutThem.thenDecisions, undefined);
 
+	const withNullThenDecisions = parseFormalSpec({
+		version: 1, requirementId: 'REQ-001', kind: 'OPERATION_RULE',
+		intentStatement: { value: 'x', provenance: 'SPECIFIED' }, scope: { value: 'x', provenance: 'SPECIFIED' },
+		operation: { value: 'cancel order', provenance: 'SPECIFIED' },
+		inputs: [], constraints: [], effects: [], failureBehavior: [], unknowns: [],
+		thenDecisions: null
+	}, 'REQ-001');
+	assert.equal(withNullThenDecisions.thenDecisions, undefined);
+
 	const withThem = parseFormalSpec({
 		version: 1, requirementId: 'REQ-001', kind: 'OPERATION_RULE',
 		intentStatement: { value: 'x', provenance: 'SPECIFIED' }, scope: { value: 'x', provenance: 'SPECIFIED' },

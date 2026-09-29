@@ -159,7 +159,8 @@ export function parseFormalSpec(value: unknown, requirementId: string, options: 
 		failureBehavior: facts(raw.failureBehavior, 'failureBehavior'),
 		unknowns: (raw.unknowns as readonly string[] | undefined) ?? [],
 		...(typeof raw.behavior === 'string' ? { behavior: raw.behavior } : {}),
-		...(raw.thenDecisions === undefined ? {} : { thenDecisions: thenDecisions(raw.thenDecisions) }),
+		// Loose equality is deliberate here: treat both `undefined` and a serialized `null` as absent.
+		...(raw.thenDecisions == null ? {} : { thenDecisions: thenDecisions(raw.thenDecisions) }),
 	};
 }
 
