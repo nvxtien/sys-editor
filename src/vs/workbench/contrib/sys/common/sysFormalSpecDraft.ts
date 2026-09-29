@@ -1,52 +1,45 @@
-import { SysDraftRepair } from './sysFormalSpecRepair.js';
-import { SYS_INTENT_KIND_LABEL, SysFormalizationCapability } from './sysStructuredIntent.js';
+import { parseFormalSpec, SysFormalSpec } from './sysFormalSpec.js';
 
-export function assertSysDraftServerAvailable(running: boolean, configuredUrl: string | undefined, serverError?: string | null): void {
-	if (!configuredUrl?.trim() && !running) {
-		const detail = serverError?.trim();
-		throw new Error(detail
-			? `SideX server is not running: ${detail}`
-			: 'SideX server is not running. Open SideX Settings → Models and save provider settings to restart it, then try again.');
-	}
+export function newSysRequestId(): string {
+	return `sys-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function assertSysDraftFormalizable(capability: SysFormalizationCapability): void {
-	switch (capability.outcome) {
-		case 'FORMAL_SPEC_SUPPORTED': return;
-		case 'OPERATION_UNSPECIFIED':
-			throw new Error('This Structured Intent states no operation, and a Formal Spec must declare one. Clarify which operation the requirement governs and normalize again.');
-		case 'PLATFORM_FORMAL_SPEC_GAP':
-			throw new Error(`PLATFORM_FORMAL_SPEC_GAP: the current Sys Platform grammar does not represent this ${SYS_INTENT_KIND_LABEL[capability.kind].toLowerCase()} intent yet. Its confirmed Structured Intent remains the governed record.`);
-		case 'NOT_FORMALIZABLE':
-			throw new Error('The current Sys Platform grammar cannot represent anything this Structured Intent states.');
-	}
+export function sysTrace(requestId: string, stage: string, detail = ''): void {
+	console.info(`[SYS_NORMALIZE_INTENT] id=${requestId} stage=${stage}${detail ? ` ${detail}` : ''}`);
 }
 
-export async function requestSysFormalSpecDraft(httpUrl: string, model: string, intent: string, repair?: SysDraftRepair): Promise<string> {
+export async function requestFormalSpec(httpUrl: string, model: string, requirementId: string, intent: string, requestId: string = newSysRequestId()): Promise<SysFormalSpec> {
+	const url = `${httpUrl.replace(/\/+$/, '')}/v1/sys/normalize-intent`;
+	sysTrace(requestId, 'request_sent', `url=${url} model=${model}`);
 	let response: Response;
 	try {
-		response = await fetch(`${httpUrl.replace(/\/+$/, '')}/v1/sys/draft-spec`, {
+		response = await fetch(url, {
 			method: 'POST',
+			// The id rides in the body: a custom header would need a CORS preflight allowance the server does not grant.
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ model, intent, ...(repair ? { repair: { previousDraft: repair.previousDraft, error: repair.error } } : {}) }),
+			body: JSON.stringify({ model, intent, requestId }),
 			signal: AbortSignal.timeout(90_000)
 		});
 	} catch (error) {
-		throw new Error(`SideX draft request failed: ${error instanceof Error ? error.message : String(error)}. Check SideX Settings → Models and that the SideX server is running.`);
+		sysTrace(requestId, 'request_failed', `error=${error instanceof Error ? error.message : String(error)}`);
+		throw new Error(`SideX intent normalization failed: ${error instanceof Error ? error.message : String(error)}. Check SideX Settings → Models.`);
 	}
-
-	let body: { draftSpec?: unknown; error?: unknown };
-	try {
-		body = await response.json();
-	} catch {
-		throw new Error('SideX returned an invalid draft response.');
-	}
+	sysTrace(requestId, 'response', `status=${response.status}`);
+	let body: { formalSpec?: unknown; error?: unknown };
+	try { body = await response.json(); } catch { throw new Error('SideX returned an invalid Formal Spec response.'); }
 	if (!response.ok) {
-		const detail = typeof body.error === 'string' ? body.error : `HTTP ${response.status}`;
-		throw new Error(`SideX could not draft a Formal Spec: ${detail}. Check SideX Settings → Models.`);
+		throw new Error(`SideX could not normalize the requirement: ${typeof body.error === 'string' ? body.error : `HTTP ${response.status}`}`);
 	}
-	if (typeof body.draftSpec !== 'string' || !body.draftSpec.trim()) {
-		throw new Error('SideX returned an empty Formal Spec draft.');
+	if (typeof body.formalSpec !== 'string') { throw new Error('SideX returned no Formal Spec.'); }
+	let value: unknown;
+	try { value = JSON.parse(body.formalSpec); } catch { throw new Error('SideX returned invalid Formal Spec JSON.'); }
+	try {
+		const parsed = parseFormalSpec(value, requirementId, { requireKind: true });
+		sysTrace(requestId, 'parsed');
+		return parsed;
+	} catch (error) {
+		const reason = error instanceof Error ? error.message : String(error);
+		sysTrace(requestId, 'rejected', `reason=${reason}`);
+		throw new Error(`The model's answer does not match the Formal Spec contract (${reason}). Nothing was saved; try Normalize intent again or pick another model.`);
 	}
-	return body.draftSpec;
 }

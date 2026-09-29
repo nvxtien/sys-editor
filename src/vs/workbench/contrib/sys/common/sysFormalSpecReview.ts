@@ -1,6 +1,6 @@
-import { formalizationNote, SYS_INTENT_KIND_LABEL, SysFormalizationCapability, SysIntentEntity, SysIntentFact, SysIntentProvenance, SysStructuredIntentRecord } from './sysStructuredIntent.js';
+import { formalizationNote, SYS_FORMAL_SPEC_KIND_LABEL, SysFormalizationCapability, SysFormalSpecEntity, SysFormalSpecFact, SysFormalSpecProvenance, SysFormalSpecRecord } from './sysFormalSpec.js';
 
-const PROVENANCE: Record<SysIntentProvenance, string> = {
+const PROVENANCE: Record<SysFormalSpecProvenance, string> = {
 	SPECIFIED: 'stated by you',
 	OBSERVED: 'observed in the source code',
 	DERIVED: 'derived from what you stated',
@@ -10,7 +10,7 @@ const PROVENANCE: Record<SysIntentProvenance, string> = {
 
 const oneLine = (text: string) => text.replace(/\s*\n\s*/g, ' ').trim();
 
-function line(fact: SysIntentFact): string {
+function line(fact: SysFormalSpecFact): string {
 	const value = fact.provenance === 'UNKNOWN' && fact.value.trim().toUpperCase() === 'UNKNOWN' ? 'Not stated' : oneLine(fact.value);
 	return `${value} — ${PROVENANCE[fact.provenance]}`;
 }
@@ -19,11 +19,16 @@ function line(fact: SysIntentFact): string {
  * Scenarios are multi-line Gherkin, so they are fenced and kept verbatim — `line()` would collapse
  * them to one line and `list()` would bullet them, and either makes them unreadable.
  */
-function scenarioSection(gherkin: string): string[] {
-	return ['## Scenarios', '', '```gherkin', gherkin.trimEnd(), '```', ''];
+function scenarioSection(gherkin: string, isPreview: boolean): string[] {
+	return [
+		'## Scenarios',
+		'',
+		...(isPreview ? ['⚠ preview only — not yet part of the confirmed Formal Spec', ''] : []),
+		'```gherkin', gherkin.trimEnd(), '```', ''
+	];
 }
 
-function entitySections(entities: readonly SysIntentEntity[]): string[] {
+function entitySections(entities: readonly SysFormalSpecEntity[]): string[] {
 	return entities.flatMap(entity => [
 		`### ${entity.name}`,
 		'',
@@ -32,7 +37,7 @@ function entitySections(entities: readonly SysIntentEntity[]): string[] {
 	]);
 }
 
-function list(facts: readonly SysIntentFact[]): string {
+function list(facts: readonly SysFormalSpecFact[]): string {
 	return facts.length ? facts.map(fact => `- ${line(fact)}`).join('\n') : '_None stated._';
 }
 
@@ -49,10 +54,10 @@ function capabilityLines(capability: SysFormalizationCapability | undefined): st
 }
 
 /**
- * A plain-language projection of the Structured Intent JSON for human review. It is derived from the
+ * A plain-language projection of the Formal Spec JSON for human review. It is derived from the
  * same record that gets confirmed, never edited, and never a second source of truth.
  */
-export function renderStructuredIntentReview(record: SysStructuredIntentRecord, capability: SysFormalizationCapability | undefined, scenarios?: string): string {
+export function renderFormalSpecReview(record: SysFormalSpecRecord, capability: SysFormalizationCapability | undefined, scenarios?: string, scenariosArePreview = false): string {
 	const d = record.draft;
 	const status = record.state === 'APPROVED' ? 'CONFIRMED' : record.state === 'STALE' ? 'STALE — the requirement changed after this was reviewed' : 'DRAFT — not yet confirmed';
 	const quoted = record.sourceRequirement.trim().split('\n').map(text => `> ${text}`).join('\n');
@@ -60,7 +65,7 @@ export function renderStructuredIntentReview(record: SysStructuredIntentRecord, 
 	// operation; rendering it with the operation-rule layout asked the reader for an operation that
 	// does not exist. Sections a kind does not use are left out rather than shown empty.
 	const describesEntities = d.entities !== undefined || d.relationships !== undefined;
-	const scenarioLines = scenarios?.trim() ? scenarioSection(scenarios) : [];
+	const scenarioLines = scenarios?.trim() ? scenarioSection(scenarios, scenariosArePreview) : [];
 	const sections = describesEntities
 		? [
 			...scenarioLines,
@@ -77,7 +82,7 @@ export function renderStructuredIntentReview(record: SysStructuredIntentRecord, 
 			'## Failure behavior', '', list(d.failureBehavior), ''
 		];
 	return [
-		`# ${d.requirementId} — Structured Intent review`,
+		`# ${d.requirementId} — Formal Spec review`,
 		'',
 		`Status: ${status}`,
 		'',
@@ -85,7 +90,7 @@ export function renderStructuredIntentReview(record: SysStructuredIntentRecord, 
 		'',
 		'## Kind',
 		'',
-		d.kind ? `${SYS_INTENT_KIND_LABEL[d.kind]} — ⚠ model’s classification, please check` : `${SYS_INTENT_KIND_LABEL.OPERATION_RULE} — recorded before kinds existed`,
+		d.kind ? `${SYS_FORMAL_SPEC_KIND_LABEL[d.kind]} — ⚠ model’s classification, please check` : `${SYS_FORMAL_SPEC_KIND_LABEL.OPERATION_RULE} — recorded before kinds existed`,
 		'',
 		...capabilityLines(capability),
 		'## Intent',

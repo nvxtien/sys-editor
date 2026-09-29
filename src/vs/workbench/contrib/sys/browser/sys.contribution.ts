@@ -8,10 +8,28 @@ import { Extensions as ViewExtensions, IViewContainersRegistry, IViewsRegistry, 
 import { Extensions as ConfigurationExtensions, IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { SysSemanticWorkbenchView } from './sysSemanticWorkbenchView.js';
 import { SysVerificationWorkbenchView } from './sysVerificationWorkbenchView.js';
-import './sysSemanticSnapshotService.js';
-import './sysIntentActionService.js';
 import './sysVerificationProviderService.js';
 import './sysProjectService.js';
+
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../common/contributions.js';
+import type { IWorkbenchContribution } from '../../../common/contributions.js';
+import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
+import { SysBehaviorCodeLensProvider } from './sysBehaviorCodeLensProvider.js';
+import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
+import { ServicesAccessor, IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { ISysProjectService } from './sysProjectService.js';
+import { TaskProcessTransport } from './sysVerificationProviderService.js';
+import { ISideXTaskService } from '../../../../platform/sidex/common/sidexTaskService.js';
+import { IFileService } from '../../../../platform/files/common/files.js';
+import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
+import { INotificationService, Severity } from '../../../../platform/notification/common/notification.js';
+import { IEditorService } from '../../../services/editor/common/editorService.js';
+import { URI } from '../../../../base/common/uri.js';
+import { readCandidates, SysCandidateFunction } from '../common/sysOntology.js';
+import { ISearchService } from '../../../services/search/common/search.js';
+import { QueryBuilder } from '../../../services/search/common/queryBuilder.js';
 
 import { SYS_VIEW_CONTAINER_ID, SYS_VIEW_ID, SYS_VERIFICATION_VIEW_ID } from '../common/sysViewIds.js';
 export { SYS_VIEW_CONTAINER_ID, SYS_VIEW_ID, SYS_VERIFICATION_VIEW_ID };
@@ -57,11 +75,6 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 	title: nls.localize('sysVerificationConfig', 'Sys Verification'),
 	type: 'object',
 	properties: {
-		'sys.demoMode': {
-			type: 'boolean',
-			default: false,
-			description: nls.localize('sysDemoMode', 'Show the Cinema Booking demo and the configured verification manifest. Off by default: a workspace shows only its own Sys project state.')
-		},
 		'sys.verification.dataSource': {
 			type: 'string',
 			enum: ['live', 'fixture'],
@@ -83,5 +96,87 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 			default: 60000,
 			description: nls.localize('sysVerificationTimeout', 'Timeout for a live verification run, in milliseconds.')
 		}
+	}
+});
+
+class SysBehaviorCodeLensContribution extends Disposable implements IWorkbenchContribution {
+	static readonly ID = 'workbench.contrib.sysBehaviorCodeLens';
+
+	constructor(@ILanguageFeaturesService languageFeatures: ILanguageFeaturesService) {
+		super();
+		this._register(languageFeatures.codeLensProvider.register(
+			{ pattern: '**/*.intent.review.md' },
+			new SysBehaviorCodeLensProvider()
+		));
+	}
+}
+
+registerWorkbenchContribution2(SysBehaviorCodeLensContribution.ID, SysBehaviorCodeLensContribution, WorkbenchPhase.AfterRestored);
+
+CommandsRegistry.registerCommand('sys.pointToCode', async (accessor: ServicesAccessor, requirementId: string, scenarioName: string) => {
+	const projectService = accessor.get(ISysProjectService);
+	const workspaceContextService = accessor.get(IWorkspaceContextService);
+	const notificationService = accessor.get(INotificationService);
+	const quickInputService = accessor.get(IQuickInputService);
+	const editorService = accessor.get(IEditorService);
+	const searchService = accessor.get(ISearchService);
+	const instantiationService = accessor.get(IInstantiationService);
+
+	try {
+		const platformRoot = await projectService.getPlatformRoot();
+		const workspace = workspaceContextService.getWorkspace().folders[0]?.uri.fsPath;
+		if (!platformRoot || !workspace) {
+			notificationService.notify({ severity: Severity.Info, message: 'Set the Sys Platform root (Semantic Workbench view) before using Point to code.' });
+			return;
+		}
+
+		const record = await projectService.readFormalSpec(requirementId);
+		if (!record?.draft.operation?.value || record.state !== 'APPROVED') {
+			notificationService.notify({ severity: Severity.Info, message: 'This requirement has no confirmed operation yet.' });
+			return;
+		}
+
+		const transport = new TaskProcessTransport(accessor.get(ISideXTaskService), accessor.get(IFileService));
+		const result = await readCandidates(transport, platformRoot, workspace, record.draft.operation.value);
+		if (result.kind === 'UNAVAILABLE') {
+			notificationService.notify({ severity: Severity.Info, message: `Could not read candidates: ${result.reason}` });
+			return;
+		}
+
+		const scenario = result.result.scenarios.find(s => s.scenario === scenarioName);
+		if (!scenario || scenario.candidates.length === 0) {
+			notificationService.notify({ severity: Severity.Info, message: scenario?.reason ?? result.result.reason ?? 'No candidates found for this scenario.' });
+			return;
+		}
+
+		const picked = await quickInputService.pick(
+			scenario.candidates.map((candidate: SysCandidateFunction) => ({
+				label: candidate.name,
+				description: candidate.file,
+				detail: candidate.thenObserved ? 'then not checked as satisfied — evidence found, not verified' : undefined,
+				candidate
+			})),
+			{ placeHolder: `Candidates for "${scenarioName}"` }
+		);
+		if (!picked) { return; }
+
+		// picked.candidate.file is a bare basename (sys-platform builds it from source.file_name()),
+		// not a workspace-relative path, so it must be resolved via a workspace file search rather
+		// than joined directly onto the workspace root.
+		const queryBuilder = instantiationService.createInstance(QueryBuilder);
+		const searchResult = await searchService.fileSearch(
+			queryBuilder.file(workspaceContextService.getWorkspace().folders, {
+				filePattern: `**/${picked.candidate.file}`
+			})
+		);
+		if (searchResult.results.length === 0) {
+			notificationService.notify({ severity: Severity.Info, message: `Could not find ${picked.candidate.file} in this workspace.` });
+			return;
+		}
+		// Multiple matches (same basename in different packages): open the first one.
+		// Known, accepted limitation — see plan notes.
+		await editorService.openEditor({ resource: searchResult.results[0].resource });
+	} catch (error) {
+		notificationService.notify({ severity: Severity.Info, message: error instanceof Error ? error.message : String(error) });
 	}
 });

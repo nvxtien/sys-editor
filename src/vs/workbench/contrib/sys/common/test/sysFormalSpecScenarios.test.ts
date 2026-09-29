@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { requestIntentScenarios } from '../sysIntentScenarios.js';
+import { requestFormalSpecScenarios } from '../sysFormalSpecScenarios.js';
 
 const originalFetch = globalThis.fetch;
 
@@ -11,7 +11,7 @@ test('sends the intent JSON and returns the scenarios', async () => {
 		return new Response(JSON.stringify({ scenarios: 'Scenario: A\n  Given b' }), { status: 200 });
 	};
 	try {
-		const text = await requestIntentScenarios('http://sidex/', 'm', '{"kind":"DATA_MODEL"}');
+		const text = await requestFormalSpecScenarios('http://sidex/', 'm', '{"kind":"DATA_MODEL"}');
 		assert.equal(text, 'Scenario: A\n  Given b');
 		assert.equal(body?.model, 'm');
 		assert.equal(body?.intent, '{"kind":"DATA_MODEL"}');
@@ -28,7 +28,7 @@ test('a provider failure yields no scenarios instead of throwing', async () => {
 	]) {
 		globalThis.fetch = fail as typeof globalThis.fetch;
 		try {
-			assert.equal(await requestIntentScenarios('http://sidex/', 'm', '{}'), undefined);
+			assert.equal(await requestFormalSpecScenarios('http://sidex/', 'm', '{}'), undefined);
 		} finally { globalThis.fetch = originalFetch; }
 	}
 });
@@ -36,6 +36,6 @@ test('a provider failure yields no scenarios instead of throwing', async () => {
 test('an empty reply means the intent states no behaviour to show', async () => {
 	globalThis.fetch = async () => new Response(JSON.stringify({ scenarios: '   ' }), { status: 200 });
 	try {
-		assert.equal(await requestIntentScenarios('http://sidex/', 'm', '{}'), undefined);
+		assert.equal(await requestFormalSpecScenarios('http://sidex/', 'm', '{}'), undefined);
 	} finally { globalThis.fetch = originalFetch; }
 });

@@ -7,7 +7,7 @@ function installTauriFileBridge(page) {
 	return page.addInitScript(({ root }) => {
 		const files = new Map([
 			[`${root}/.sys/project.json`, JSON.stringify({ version: 1, requirements: [{ id: 'REQ-001' }] })],
-			[`${root}/.sys/requirements/REQ-001.md`, 'A booking request must contain at least one seat.\n']
+			[`${root}/.sys/requirements/REQ-001.md`, 'An order request must contain at least one item.\n']
 		]);
 		const directories = new Set([root]);
 		window.__SIDEX_TEST_FILES__ = files;
@@ -61,7 +61,7 @@ test('renders the governed requirement from disk', async ({ page }) => {
 
 	const workbench = page.locator('.sys-semantic-workbench').first();
 	await expect(workbench).toContainText('REQ-001', { timeout: 15_000 });
-	await expect(workbench).toContainText('A booking request must contain at least one seat.');
+	await expect(workbench).toContainText('An order request must contain at least one item.');
 	await expect(workbench).toContainText('No .spec file yet');
 });
 

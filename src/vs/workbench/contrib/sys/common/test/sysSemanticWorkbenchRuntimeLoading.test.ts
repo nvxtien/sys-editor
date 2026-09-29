@@ -27,7 +27,7 @@ const CINEMA_CUSTOMER_VALIDATION: SysIntentItem = {
 const CINEMA_STATUS_TRANSITION: SysIntentItem = {
 	id: 'status-transition-rules',
 	title: 'status transition rules',
-	question: 'The specification does not define when a booking can transition between statuses.',
+	question: 'The specification does not define when an order can transition between statuses.',
 	status: 'UNRESOLVED',
 	leftOpenByHuman: false,
 	governanceState: 'NOT_GOVERNED'

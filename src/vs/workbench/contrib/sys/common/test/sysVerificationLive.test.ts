@@ -201,7 +201,7 @@ test('live adapter sources contain no domain-specific branch or prose inference'
 	for (const f of [`${SYS}/common/sysVerificationWire.ts`, `${SYS}/common/sysVerificationLive.ts`, `${SYS}/browser/sysVerificationProviderService.ts`]) {
 		const src = fromRepo(f)
 			.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '')
-			.replace(/^.*CINEMA_BOOKING_VERIFICATION_PROJECT.*$/gm, ''); // explicit fixture mode is the only allowed reference
+			.replace(/^.*SAMPLE_VERIFICATION_PROJECT.*$/gm, ''); // explicit fixture mode is the only allowed reference
 		assert.doesNotMatch(src, /Booking|Cinema|Seat|['"]B[0-9]+['"]/i, f);
 		assert.doesNotMatch(src, /\.(match|includes|startsWith)\(.*(title|summary|why)/, f);
 	}

@@ -2,9 +2,8 @@ import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
-import { formalizationNote, parseFormalizationCapability, parseStructuredIntent, serializeStructuredIntent, SysFormalizationCapability, SysStructuredIntentRecord } from '../sysStructuredIntent.js';
-import { assertSysDraftFormalizable } from '../sysFormalSpecDraft.js';
-import { renderStructuredIntentReview } from '../sysStructuredIntentReview.js';
+import { formalizationNote, parseFormalizationCapability, parseFormalSpec, serializeFormalSpec, SysFormalizationCapability, SysFormalSpecRecord } from '../sysFormalSpec.js';
+import { renderFormalSpecReview } from '../sysFormalSpecReview.js';
 
 // Capability rules (which kind needs which context, what the platform can formalize) are owned by
 // sys-core and tested there (sys-core/tests/capability.rs). This file covers only what the editor
@@ -16,8 +15,8 @@ function raw(kind: unknown): Record<string, unknown> {
 	return { version: 1, requirementId: 'REQ-001', ...(kind === undefined ? {} : { kind }), intentStatement: fact('s'), scope: fact('s'), operation: fact('UNKNOWN', 'UNKNOWN'), inputs: [], constraints: [], effects: [], failureBehavior: [], unknowns: [] };
 }
 
-function record(kind: string | undefined, approvedContent?: string): SysStructuredIntentRecord {
-	return { sourceRequirement: 'r', draft: parseStructuredIntent(raw(kind), 'REQ-001'), state: approvedContent ? 'APPROVED' : 'DRAFT' };
+function record(kind: string | undefined, approvedContent?: string): SysFormalSpecRecord {
+	return { sourceRequirement: 'r', draft: parseFormalSpec(raw(kind), 'REQ-001'), state: approvedContent ? 'APPROVED' : 'DRAFT' };
 }
 
 const CAPABILITY: Record<string, SysFormalizationCapability> = {
@@ -31,13 +30,11 @@ test('an operation rule is offered generation even when its intent states no ope
 	// The Operation: declaration is semantic and the generator derives it from the intent statement.
 	// Gating on the operation field would block exactly the case generation exists to serve.
 	assert.equal(parseFormalizationCapability(CAPABILITY.ready).outcome, 'FORMAL_SPEC_SUPPORTED');
-	assert.doesNotThrow(() => assertSysDraftFormalizable(CAPABILITY.ready));
 });
 
 test('an unspecified-operation outcome reports a semantic gap, never a source binding', () => {
 	// sys-core reports this when generation itself could not ground an operation. It asks for the
 	// requirement to be clarified, never for a Class.method.
-	assert.throws(() => assertSysDraftFormalizable(CAPABILITY.unstated), /states no operation/);
 	const note = formalizationNote(CAPABILITY.unstated)!;
 	assert.match(note, /operation/i);
 	assert.doesNotMatch(note, /bind|binding|Class\.method/i);
@@ -45,21 +42,21 @@ test('an unspecified-operation outcome reports a semantic gap, never a source bi
 
 test('parses each semantic kind and rejects an unknown kind value', () => {
 	for (const kind of ['OPERATION_RULE', 'DATA_MODEL', 'RELATIONSHIP', 'INVARIANT', 'WORKFLOW', 'UNKNOWN']) {
-		assert.equal(parseStructuredIntent(raw(kind), 'REQ-001').kind, kind);
+		assert.equal(parseFormalSpec(raw(kind), 'REQ-001').kind, kind);
 	}
-	assert.throws(() => parseStructuredIntent(raw('CRUD'), 'REQ-001'), /Structured Intent has an invalid kind/);
-	assert.throws(() => parseStructuredIntent(raw(7), 'REQ-001'), /Structured Intent has an invalid kind/);
+	assert.throws(() => parseFormalSpec(raw('CRUD'), 'REQ-001'), /Formal Spec has an invalid kind/);
+	assert.throws(() => parseFormalSpec(raw(7), 'REQ-001'), /Formal Spec has an invalid kind/);
 });
 
 test('a record written before kinds existed still parses and keeps its exact serialization', () => {
-	const legacy = parseStructuredIntent(raw(undefined), 'REQ-001');
+	const legacy = parseFormalSpec(raw(undefined), 'REQ-001');
 	assert.equal(legacy.kind, undefined);
-	assert.ok(!serializeStructuredIntent(legacy).includes('"kind"'), 'approved content of legacy records must not change');
+	assert.ok(!serializeFormalSpec(legacy).includes('"kind"'), 'approved content of legacy records must not change');
 });
 
 test('a freshly normalized intent must state its kind', () => {
-	assert.throws(() => parseStructuredIntent(raw(undefined), 'REQ-001', { requireKind: true }), /Structured Intent has an invalid kind/);
-	assert.equal(parseStructuredIntent(raw('DATA_MODEL'), 'REQ-001', { requireKind: true }).kind, 'DATA_MODEL');
+	assert.throws(() => parseFormalSpec(raw(undefined), 'REQ-001', { requireKind: true }), /Formal Spec has an invalid kind/);
+	assert.equal(parseFormalSpec(raw('DATA_MODEL'), 'REQ-001', { requireKind: true }).kind, 'DATA_MODEL');
 });
 
 test('the capability reply from sys-core is accepted only in its exact contract shape', () => {
@@ -96,35 +93,32 @@ test('no note tells a user to bind an operation', () => {
 	assert.equal(formalizationNote(CAPABILITY.unknown), undefined);
 });
 
-test('a record written before kinds existed needs no binding to be formalizable', () => {
-	assert.equal(parseStructuredIntent(raw(undefined), 'REQ-001').kind, undefined);
-	assert.doesNotThrow(() => assertSysDraftFormalizable(parseFormalizationCapability(CAPABILITY.ready)));
+test('a record written before kinds existed still parses', () => {
+	assert.equal(parseFormalSpec(raw(undefined), 'REQ-001').kind, undefined);
 });
 
-test('drafting is refused with the reason that matches the outcome', () => {
-	assert.doesNotThrow(() => assertSysDraftFormalizable(CAPABILITY.ready));
-	assert.throws(() => assertSysDraftFormalizable(CAPABILITY.gap), /PLATFORM_FORMAL_SPEC_GAP/);
-	assert.throws(() => assertSysDraftFormalizable(CAPABILITY.unknown));
-});
+// The gate that refused drafting per outcome went with the controlled grammar it guarded: there is
+// no second artifact to draft. What the outcome still means -- whether the platform can govern
+// these facts -- reaches the reader through formalizationNote, covered above.
 
 test('the review page shows the kind as a model classification and the capability note from core', () => {
-	const gap = renderStructuredIntentReview(record('DATA_MODEL', 'x'), CAPABILITY.gap);
+	const gap = renderFormalSpecReview(record('DATA_MODEL', 'x'), CAPABILITY.gap);
 	assert.ok(gap.includes('## Kind'));
 	assert.ok(gap.includes('Data model — ⚠ model’s classification, please check'));
 	assert.ok(!gap.includes('PLATFORM_FORMAL_SPEC_GAP'), 'platform vocabulary leaked into the review page');
-	assert.ok(renderStructuredIntentReview(record('OPERATION_RULE'), CAPABILITY.ready).includes('A Formal Spec can be generated'));
+	assert.ok(renderFormalSpecReview(record('OPERATION_RULE'), CAPABILITY.ready).includes('A Formal Spec can be generated'));
 });
 
 test('the review page never claims a capability it could not read from core', () => {
-	const text = renderStructuredIntentReview(record('DATA_MODEL'), undefined);
+	const text = renderFormalSpecReview(record('DATA_MODEL'), undefined);
 	assert.ok(text.includes('could not be read from sys-core'));
 	assert.ok(!text.includes('A Formal Spec can be generated'));
 });
 
-const dataModelRecord = (): SysStructuredIntentRecord => ({
+const dataModelRecord = (): SysFormalSpecRecord => ({
 	sourceRequirement: 'This requirement designs the data model.',
 	state: 'DRAFT',
-	draft: parseStructuredIntent({
+	draft: parseFormalSpec({
 		version: 1, requirementId: 'REQ-001', kind: 'DATA_MODEL',
 		intentStatement: { value: 'Two entities', provenance: 'SPECIFIED' },
 		scope: { value: 'Category and Book', provenance: 'SPECIFIED' },
@@ -139,7 +133,7 @@ const dataModelRecord = (): SysStructuredIntentRecord => ({
 });
 
 test('a data model review shows entities and relationships, and no operation section', () => {
-	const page = renderStructuredIntentReview(dataModelRecord(), CAPABILITY.gap);
+	const page = renderFormalSpecReview(dataModelRecord(), CAPABILITY.gap);
 	assert.ok(page.includes('## Entities'), 'entities section missing');
 	assert.ok(page.includes('### Category'), 'entity heading missing');
 	assert.ok(page.includes('- id: INT'), 'field not rendered as name: type');
@@ -155,7 +149,7 @@ test('a data model review shows entities and relationships, and no operation sec
 });
 
 test('an operation rule review keeps the operation layout', () => {
-	const page = renderStructuredIntentReview(record('OPERATION_RULE'), CAPABILITY.ready);
+	const page = renderFormalSpecReview(record('OPERATION_RULE'), CAPABILITY.ready);
 	assert.ok(page.includes('## Operation'));
 	assert.ok(page.includes('## Inputs'));
 	assert.ok(page.includes('## Effects'));
@@ -163,7 +157,7 @@ test('an operation rule review keeps the operation layout', () => {
 });
 
 test('no review page ever says an operation is "not bound"', () => {
-	for (const page of [renderStructuredIntentReview(dataModelRecord(), CAPABILITY.gap), renderStructuredIntentReview(record('OPERATION_RULE'), CAPABILITY.ready)]) {
+	for (const page of [renderFormalSpecReview(dataModelRecord(), CAPABILITY.gap), renderFormalSpecReview(record('OPERATION_RULE'), CAPABILITY.ready)]) {
 		assert.doesNotMatch(page, /not bound/i);
 	}
 });
@@ -188,16 +182,22 @@ test('a platform gap is not narrated on the review page', () => {
 	assert.equal(formalizationNote(CAPABILITY.gap), undefined);
 });
 
-test('Add spec is offered only when the platform can formalize the intent', () => {
+/// The row offers nothing about the Formal Spec at all. Confirming an intent already generates
+/// code from it, so drafting a second artifact from the same facts asked a reader to review them
+/// twice in two vocabularies — and every one of those buttons was a dead end for an intent the
+/// grammar cannot represent. This replaces the older test that only required `Add spec` to be
+/// gated: the stronger fact is that there is no such button to gate.
+test('the requirement row offers no Formal Spec action at all', () => {
 	const source = readFileSync(join(process.cwd(), 'src/vs/workbench/contrib/sys/browser/sysSemanticWorkbenchView.ts'), 'utf8');
-	const addSpec = source.slice(source.indexOf("row.hasSpec ? 'Edit spec' : 'Add spec'") - 400, source.indexOf("row.hasSpec ? 'Edit spec' : 'Add spec'"));
-	assert.match(addSpec, /FORMAL_SPEC_SUPPORTED/, 'Add spec is not gated on the capability');
+	const offered = source.match(/this\._action\(actions, '[^']+'/g)?.map(call => call.replace(/.*'(.*)'/, '$1')) ?? [];
+	assert.deepEqual(offered.filter(label => /spec|verif/i.test(label)), [], `still offered: ${offered.join(', ')}`);
+	assert.ok(offered.includes('Delete') && offered.includes('Normalize intent'), `row lost its real actions: ${offered.join(', ')}`);
 });
 
-const withScenarios = (): SysStructuredIntentRecord => ({
+const withScenarios = (): SysFormalSpecRecord => ({
 	sourceRequirement: 'This requirement designs the data model.',
 	state: 'DRAFT',
-	draft: parseStructuredIntent({
+	draft: parseFormalSpec({
 		version: 1, requirementId: 'REQ-001', kind: 'DATA_MODEL',
 		intentStatement: { value: 'Two entities', provenance: 'SPECIFIED' },
 		scope: { value: 'Category and Book', provenance: 'SPECIFIED' },
@@ -214,7 +214,7 @@ const withScenarios = (): SysStructuredIntentRecord => ({
 
 test('scenarios are shown as readable Gherkin, in a fenced block', () => {
 	const gherkin = 'Scenario: Each Book belongs to exactly one Category\n  Given a Category with id 1 exists\n  When a Book is created with category_id 1\n  Then the Book is linked to exactly one Category';
-	const page = renderStructuredIntentReview(record('DATA_MODEL'), CAPABILITY.gap, gherkin);
+	const page = renderFormalSpecReview(record('DATA_MODEL'), CAPABILITY.gap, gherkin);
 	assert.ok(page.includes('## Scenarios'), 'no scenarios section');
 	assert.ok(page.includes('```gherkin'), 'scenarios are not fenced as gherkin');
 	assert.ok(page.includes('Scenario: Each Book belongs to exactly one Category'));
@@ -227,14 +227,14 @@ test('scenarios are shown as readable Gherkin, in a fenced block', () => {
 
 test('a review with no scenarios shows no scenarios section', () => {
 	// The provider may be down or the intent may state no behaviour: either way the page still opens.
-	assert.ok(!renderStructuredIntentReview(record('OPERATION_RULE'), CAPABILITY.ready).includes('## Scenarios'));
-	assert.ok(!renderStructuredIntentReview(record('OPERATION_RULE'), CAPABILITY.ready, undefined).includes('## Scenarios'));
-	assert.ok(renderStructuredIntentReview(record('OPERATION_RULE'), CAPABILITY.ready, undefined).includes('## Intent'));
+	assert.ok(!renderFormalSpecReview(record('OPERATION_RULE'), CAPABILITY.ready).includes('## Scenarios'));
+	assert.ok(!renderFormalSpecReview(record('OPERATION_RULE'), CAPABILITY.ready, undefined).includes('## Scenarios'));
+	assert.ok(renderFormalSpecReview(record('OPERATION_RULE'), CAPABILITY.ready, undefined).includes('## Intent'));
 });
 
 test('a review page never tells the author to clarify a requirement the platform cannot formalize', () => {
 	for (const capability of [CAPABILITY.unknown, CAPABILITY.gap]) {
-		const page = renderStructuredIntentReview(record('DATA_MODEL'), capability);
+		const page = renderFormalSpecReview(record('DATA_MODEL'), capability);
 		assert.doesNotMatch(page, /nothing to formalize yet/);
 		assert.doesNotMatch(page, /Clarify the requirement and normalize again/);
 	}
@@ -260,11 +260,11 @@ test('a running action shows it is running and cannot be started twice', () => {
 
 test('every path that opens the review page supplies its scenarios', () => {
 	const view = readFileSync(join(process.cwd(), 'src/vs/workbench/contrib/sys/browser/sysSemanticWorkbenchView.ts'), 'utf8');
-	const calls = [...view.matchAll(/writeStructuredIntentReview\(([^)]*)\)/g)].map(m => m[1]);
+	const calls = [...view.matchAll(/writeFormalSpecReview\(([^)]*)\)/g)].map(m => m[1]);
 	assert.ok(calls.length >= 1, 'expected at least the normalize path');
 	for (const args of calls) {
 		// Reaching the same page by normalizing and by reviewing must not give different pages.
-		assert.match(args, /scenarios/, `writeStructuredIntentReview(${args}) omits the scenarios`);
+		assert.match(args, /scenarios/, `writeFormalSpecReview(${args}) omits the scenarios`);
 	}
 });
 
@@ -312,15 +312,15 @@ test('a running action is visibly running, not just relabelled', () => {
 test('only an intent the platform can formalize is promised a Formal Spec', () => {
 	// Removing the gap paragraph made the page fall through to the default sentence, which promises
 	// generation for a kind that will never offer the button.
-	const supported = renderStructuredIntentReview(record('OPERATION_RULE'), CAPABILITY.ready);
+	const supported = renderFormalSpecReview(record('OPERATION_RULE'), CAPABILITY.ready);
 	assert.ok(supported.includes('A Formal Spec can be generated'), 'a supported kind says so');
 
 	for (const capability of [CAPABILITY.gap, CAPABILITY.unknown, gapWithConstructs]) {
-		const page = renderStructuredIntentReview(record('DATA_MODEL'), capability);
+		const page = renderFormalSpecReview(record('DATA_MODEL'), capability);
 		assert.ok(!page.includes('A Formal Spec can be generated'), 'promised generation the reader will not get');
 		assert.ok(!page.includes('PLATFORM_FORMAL_SPEC_GAP'), 'platform vocabulary is back');
 	}
 
 	// Core silent is still said out loud: an unread capability is not the same as a known gap.
-	assert.ok(renderStructuredIntentReview(record('DATA_MODEL'), undefined).includes('could not be read from sys-core'));
+	assert.ok(renderFormalSpecReview(record('DATA_MODEL'), undefined).includes('could not be read from sys-core'));
 });

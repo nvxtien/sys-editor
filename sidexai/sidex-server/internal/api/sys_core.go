@@ -108,12 +108,12 @@ func resolveSysCoreBinary(workspace string) (string, error) {
 func (h *Handler) SysCore(w http.ResponseWriter, r *http.Request) {
 	var req sysCoreRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.Args) == 0 {
-		writeDraftSpecError(w, http.StatusBadRequest, "workspace and sys-core arguments are required")
+		writeSysError(w, http.StatusBadRequest, "workspace and sys-core arguments are required")
 		return
 	}
 	binary, err := resolveSysCoreBinary(req.Workspace)
 	if err != nil {
-		writeDraftSpecError(w, http.StatusBadGateway, err.Error())
+		writeSysError(w, http.StatusBadGateway, err.Error())
 		return
 	}
 	output, err := runSysCoreWithInput(binary, req.Workspace, req.Args, req.Input)
@@ -126,7 +126,7 @@ func (h *Handler) SysCore(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte(err.Error()))
 			return
 		}
-		writeDraftSpecError(w, http.StatusBadGateway, err.Error())
+		writeSysError(w, http.StatusBadGateway, err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")

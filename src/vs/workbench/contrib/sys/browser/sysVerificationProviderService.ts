@@ -8,7 +8,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { ISideXTaskService } from '../../../../platform/sidex/common/sidexTaskService.js';
 import { isTauri } from '../../../../sidex-bridge.js';
 import { VerificationProject } from '../common/sysVerification.js';
-import { CINEMA_BOOKING_VERIFICATION_PROJECT } from '../common/sysVerificationFixture.js';
+import { SAMPLE_VERIFICATION_PROJECT } from '../common/sysVerificationFixture.js';
 import { ProcessResult, VerificationTransport, loadLiveVerification } from '../common/sysVerificationLive.js';
 import { VerificationTransportError } from '../common/sysVerificationWire.js';
 
@@ -112,7 +112,7 @@ class SysVerificationDataProvider extends Disposable implements ISysVerification
 		// the default path shows the current workspace's own last "Verify" run, or a clear not-configured error.
 		if (this.config.getValue<boolean>('sys.demoMode') === true) {
 			if (this.config.getValue<string>('sys.verification.dataSource') === 'fixture') {
-				return Promise.resolve({ ...CINEMA_BOOKING_VERIFICATION_PROJECT, dataSource: 'FIXTURE' });
+				return Promise.resolve({ ...SAMPLE_VERIFICATION_PROJECT, dataSource: 'FIXTURE' });
 			}
 			return loadLiveVerification(this.transport, {
 				platformBinary: this.config.getValue<string>('sys.verification.platformBinary') ?? '',
@@ -121,7 +121,7 @@ class SysVerificationDataProvider extends Disposable implements ISysVerification
 			});
 		}
 		if (!this.workspaceRun) {
-			return Promise.reject(new VerificationTransportError('NO_VERIFICATION_RUN', 'Run Verify on a requirement in Semantic Workbench to see a result here.'));
+			return Promise.reject(new VerificationTransportError('NO_VERIFICATION_RUN', 'No verification has been run for this workspace.'));
 		}
 		return loadLiveVerification(this.transport, { ...this.workspaceRun, timeoutMs: this.config.getValue<number>('sys.verification.timeoutMs') ?? 60000 });
 	}

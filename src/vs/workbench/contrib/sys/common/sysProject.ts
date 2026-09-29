@@ -6,18 +6,16 @@
  * Approval and staleness are not stored or derived here: sys-core owns them (see sysLifecycle.ts).
  */
 import { SysLifecycle } from './sysLifecycle.js';
-import { SysFormalizationCapability, SysFormalSpecState, SysStructuredIntentState } from './sysStructuredIntent.js';
+import { SysFormalizationCapability, SysFormalSpecState } from './sysFormalSpec.js';
 
 export const SYS_PROJECT_FILE = '.sys/project.json';
 export const SYS_REQUIREMENTS_DIR = '.sys/requirements';
 export const requirementFile = (id: string) => `${SYS_REQUIREMENTS_DIR}/${id}.md`;
-export const SYS_SPECS_DIR = '.sys/specs';
-export const specFile = (id: string) => `${SYS_SPECS_DIR}/${id}.spec`;
 
 export type SysRequirementStatus = 'DRAFT_UNFORMALIZED' | 'APPROVED_UNFORMALIZED';
 export interface SysRequirementRef { readonly id: string }
 export interface SysProject { readonly version: 1; readonly requirements: readonly SysRequirementRef[]; readonly platformRoot?: string }
-export interface SysRequirementRow { readonly id: string; readonly title: string; readonly status: SysRequirementStatus; readonly missing: boolean; /** The file exists but holds no text yet: nothing to normalize or approve. */ readonly empty: boolean; readonly hasSpec: boolean; readonly structuredIntentState?: SysStructuredIntentState; readonly formalization?: SysFormalizationCapability; readonly formalSpecState?: SysFormalSpecState; readonly lifecycleUnavailable?: true }
+export interface SysRequirementRow { readonly id: string; readonly title: string; readonly status: SysRequirementStatus; readonly missing: boolean; /** The file exists but holds no text yet: nothing to normalize or approve. */ readonly empty: boolean; readonly formalSpecState?: SysFormalSpecState; readonly formalization?: SysFormalizationCapability; readonly lifecycleUnavailable?: true }
 
 export type SysProjectState =
 	| { readonly kind: 'NO_WORKSPACE' }
@@ -93,7 +91,6 @@ export async function loadProjectState(
 		const rows: SysRequirementRow[] = [];
 		for (const ref of project.requirements) {
 			const body = await read(`${root}/${requirementFile(ref.id)}`);
-			const hasSpec = await read(`${root}/${specFile(ref.id)}`) !== undefined;
 			const lifecycle = await lifecycleOf(ref.id);
 			rows.push({
 				id: ref.id,
@@ -101,8 +98,7 @@ export async function loadProjectState(
 				status: lifecycle?.requirement.approved ? 'APPROVED_UNFORMALIZED' : 'DRAFT_UNFORMALIZED',
 				missing: body === undefined,
 				empty: body !== undefined && !body.trim(),
-				hasSpec,
-				...(lifecycle ? { structuredIntentState: lifecycle.structuredIntent.state, formalSpecState: lifecycle.formalSpec.state } : { lifecycleUnavailable: true as const })
+				...(lifecycle ? { formalSpecState: lifecycle.formalSpec.state } : { lifecycleUnavailable: true as const })
 			});
 		}
 		return { kind: 'READY', project, rows };

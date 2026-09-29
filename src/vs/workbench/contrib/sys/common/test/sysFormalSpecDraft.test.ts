@@ -1,99 +1,75 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { assertSysDraftFormalizable, assertSysDraftServerAvailable, requestSysFormalSpecDraft } from '../sysFormalSpecDraft.js';
-
-test('a supported capability drafts with no operation binding anywhere in sight', () => {
-	assert.doesNotThrow(() => assertSysDraftFormalizable({ kind: 'OPERATION_RULE', status: 'SUPPORTED', requiredContext: 'OPERATION', outcome: 'FORMAL_SPEC_SUPPORTED' }));
-});
-
-test('an unsupported kind reports the platform gap and never asks for a binding', () => {
-	assert.throws(
-		() => assertSysDraftFormalizable({ kind: 'DATA_MODEL', status: 'UNSUPPORTED', requiredContext: 'ENTITY_MODEL', outcome: 'PLATFORM_FORMAL_SPEC_GAP' }),
-		(error: Error) => /PLATFORM_FORMAL_SPEC_GAP/.test(error.message) && !/bind|binding|Class\.method/i.test(error.message)
-	);
-});
-
-test('an unformalizable intent blames the grammar, not the author', () => {
-	assert.throws(
-		() => assertSysDraftFormalizable({ kind: 'UNKNOWN', status: 'UNSUPPORTED', requiredContext: 'NONE', outcome: 'NOT_FORMALIZABLE' }),
-		(error: Error) => /grammar cannot represent/.test(error.message)
-			&& !/bind|binding|clarify/i.test(error.message)
-	);
-});
-
-test('the module exports no operation-binding assertion', async () => {
-	const module = await import('../sysFormalSpecDraft.js') as Record<string, unknown>;
-	assert.equal(module.assertSysDraftOperationBinding, undefined);
-});
-
-test('requires the local SideX server unless a custom server URL is configured', () => {
-	assert.throws(() => assertSysDraftServerAvailable(false, undefined), /SideX server is not running/);
-	assert.doesNotThrow(() => assertSysDraftServerAvailable(true, undefined));
-	assert.doesNotThrow(() => assertSysDraftServerAvailable(false, 'https://sidex.example'));
-});
+import { requestFormalSpec } from '../sysFormalSpecDraft.js';
 
 const originalFetch = globalThis.fetch;
-const replaceFetch = (fetch: typeof globalThis.fetch) => {
-	globalThis.fetch = fetch;
-	return () => { globalThis.fetch = originalFetch; };
-};
-
-test('sends the selected model and only the saved intent to the one-shot endpoint', async () => {
-	let requestUrl = '';
-	let requestInit: RequestInit | undefined;
-	const restore = replaceFetch(async (input, init) => {
-		requestUrl = String(input);
-		requestInit = init;
-		return new Response(JSON.stringify({ draftSpec: 'Requirement: Booking\n\nOperation: create booking\n\nThe operation is allowed when booking status is READY.' }), { status: 200 });
-	});
+test('normalizes only the requirement and never carries a source operation', async () => {
+	let request: Record<string, unknown> | undefined;
+	globalThis.fetch = async (_input, init) => {
+		request = JSON.parse(String(init?.body));
+		return new Response(JSON.stringify({ formalSpec: JSON.stringify({ version: 1, requirementId: 'REQ-001', kind: 'OPERATION_RULE', intentStatement: { value: 'item', provenance: 'SPECIFIED' }, scope: { value: 'order', provenance: 'DERIVED' }, operation: { value: 'create order', provenance: 'SPECIFIED' }, inputs: [], constraints: [], effects: [], failureBehavior: [], unknowns: ['exception type'] }) }), { status: 200 });
+	};
 	try {
-		const result = await requestSysFormalSpecDraft('http://127.0.0.1:7433/', 'openrouter/model-x', 'A booking must have one seat.');
-		assert.equal(result, 'Requirement: Booking\n\nOperation: create booking\n\nThe operation is allowed when booking status is READY.');
-		assert.equal(requestUrl, 'http://127.0.0.1:7433/v1/sys/draft-spec');
-		assert.equal(requestInit?.method, 'POST');
-		assert.equal(requestInit?.headers && (requestInit.headers as Record<string, string>)['Content-Type'], 'application/json');
-		assert.deepEqual(JSON.parse(String(requestInit?.body)), { model: 'openrouter/model-x', intent: 'A booking must have one seat.' });
-		assert.ok(requestInit?.signal instanceof AbortSignal);
-	} finally {
-		restore();
-	}
+		const result = await requestFormalSpec('http://sidex/', 'm', 'REQ-001', 'An order needs an item.');
+		assert.equal(result.operation.value, 'create order');
+		assert.equal(request?.model, 'm');
+		assert.equal(request?.intent, 'An order needs an item.');
+		// Normalization takes the requirement alone; no source symbol is ever sent with it.
+		assert.equal('operation' in (request ?? {}), false);
+	} finally { globalThis.fetch = originalFetch; }
 });
 
-test('preserves provider text for Platform validation', async () => {
-	const draft = '```text\nRequirement: Booking\n\nOperation: create booking\n```';
-	const restore = replaceFetch(async () => new Response(JSON.stringify({ draftSpec: draft }), { status: 200 }));
-	try {
-		assert.equal(await requestSysFormalSpecDraft('http://sidex', 'm', 'intent'), draft);
-	} finally {
-		restore();
-	}
+test('rejects provider output that is not a Formal Spec', async () => {
+	globalThis.fetch = async () => new Response(JSON.stringify({ formalSpec: JSON.stringify({ version: 1, requirementId: 'REQ-001' }) }), { status: 200 });
+	try { await assert.rejects(requestFormalSpec('http://sidex', 'm', 'REQ-001', 'intent'), /Formal Spec has (an )?invalid/); }
+	finally { globalThis.fetch = originalFetch; }
 });
 
-test('reports SideX error responses without treating them as a draft', async () => {
-	const restore = replaceFetch(async () => new Response(JSON.stringify({ error: 'provider request failed' }), { status: 502 }));
+function captureTraces(): { lines: string[]; restore: () => void } {
+	const original = console.info;
+	const lines: string[] = [];
+	console.info = (...args: unknown[]) => { lines.push(args.map(String).join(' ')); };
+	return { lines, restore: () => { console.info = original; } };
+}
+
+const fact = (value: string) => ({ value, provenance: 'SPECIFIED' });
+
+test('sends the correlation id in the body (no custom header, so no CORS preflight to fail) and traces each client stage', async () => {
+	let headers: Record<string, string> = {};
+	let body: Record<string, unknown> = {};
+	globalThis.fetch = async (_input, init) => {
+		headers = init?.headers as Record<string, string>;
+		body = JSON.parse(String(init?.body));
+		return new Response(JSON.stringify({ formalSpec: JSON.stringify({ version: 1, requirementId: 'REQ-001', kind: 'OPERATION_RULE', intentStatement: fact('a'), scope: fact('b'), operation: fact('c'), inputs: [], constraints: [], effects: [], failureBehavior: [], unknowns: [] }) }), { status: 200 });
+	};
+	const traces = captureTraces();
 	try {
-		await assert.rejects(requestSysFormalSpecDraft('http://sidex', 'm', 'intent'), /provider request failed/);
-	} finally {
-		restore();
-	}
+		await requestFormalSpec('http://127.0.0.1:55847', 'm', 'REQ-001', 'intent', 'req-42');
+		assert.equal(body.requestId, 'req-42');
+		assert.deepEqual(Object.keys(headers), ['Content-Type']);
+		assert.deepEqual(traces.lines.map(line => line.match(/stage=(\w+)/)?.[1]), ['request_sent', 'response', 'parsed']);
+		assert.ok(traces.lines.every(line => line.includes('id=req-42')));
+		assert.match(traces.lines[0], /url=http:\/\/127\.0\.0\.1:55847\/v1\/sys\/normalize-intent/);
+	} finally { traces.restore(); globalThis.fetch = originalFetch; }
 });
 
-test('rejects malformed JSON and responses without non-empty draftSpec', async () => {
-	for (const body of ['not json', '{}', JSON.stringify({ draftSpec: '  ' })]) {
-		const restore = replaceFetch(async () => new Response(body, { status: 200 }));
-		try {
-			await assert.rejects(requestSysFormalSpecDraft('http://sidex', 'm', 'intent'));
-		} finally {
-			restore();
-		}
-	}
+test('explains a contract violation instead of failing silently (object-keyed inputs from a real provider)', async () => {
+	globalThis.fetch = async () => new Response(JSON.stringify({ formalSpec: JSON.stringify({ version: 1, requirementId: 'REQ-001', kind: 'OPERATION_RULE', intentStatement: fact('a'), scope: fact('b'), operation: fact('c'), inputs: { Category_class: fact('x') }, constraints: [], effects: fact('e'), failureBehavior: fact('f'), unknowns: [] }) }), { status: 200 });
+	const traces = captureTraces();
+	try {
+		await assert.rejects(requestFormalSpec('http://sidex', 'm', 'REQ-001', 'intent', 'req-7'), /does not match the Formal Spec contract \(Formal Spec has an invalid inputs\)\. Nothing was saved/);
+		assert.ok(traces.lines.some(line => line.includes('id=req-7 stage=rejected')));
+	} finally { traces.restore(); globalThis.fetch = originalFetch; }
 });
 
-test('reports network and timeout failures as actionable SideX errors', async () => {
-	const restore = replaceFetch(async () => { throw new DOMException('The operation timed out', 'TimeoutError'); });
-	try {
-		await assert.rejects(requestSysFormalSpecDraft('http://sidex', 'm', 'intent'), /SideX/);
-	} finally {
-		restore();
-	}
+test('surfaces the backend error text when the provider fails', async () => {
+	globalThis.fetch = async () => new Response(JSON.stringify({ error: 'openai is not connected' }), { status: 502 });
+	try { await assert.rejects(requestFormalSpec('http://sidex', 'm', 'REQ-001', 'intent'), /SideX could not normalize the requirement: openai is not connected/); }
+	finally { globalThis.fetch = originalFetch; }
+});
+
+test('a normalized answer without a kind is rejected: a kind is never assumed for new intents', async () => {
+	globalThis.fetch = async () => new Response(JSON.stringify({ formalSpec: JSON.stringify({ version: 1, requirementId: 'REQ-001', intentStatement: fact('a'), scope: fact('b'), operation: fact('c'), inputs: [], constraints: [], effects: [], failureBehavior: [], unknowns: [] }) }), { status: 200 });
+	try { await assert.rejects(requestFormalSpec('http://sidex', 'm', 'REQ-001', 'intent'), /Formal Spec has an invalid kind\)\. Nothing was saved/); }
+	finally { globalThis.fetch = originalFetch; }
 });

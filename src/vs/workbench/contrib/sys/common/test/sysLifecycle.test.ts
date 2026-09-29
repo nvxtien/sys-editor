@@ -8,9 +8,8 @@ import { parseLifecycle, SysLifecycle } from '../sysLifecycle.js';
 const reply = (overrides: Record<string, unknown> = {}) => ({
 	requirementId: 'REQ-001',
 	requirement: { present: true, approved: false, identity: 'sha256:aa' },
-	structuredIntent: { state: 'DRAFT', identity: 'sha256:bb' },
-	formalSpec: { state: 'NOT_CREATED', identity: null },
-	status: 'INTENT_DRAFT',
+	formalSpec: { state: 'DRAFT', identity: 'sha256:bb' },
+	status: 'FORMAL_SPEC_DRAFT',
 	...overrides
 });
 
@@ -21,9 +20,9 @@ test('accepts the exact lifecycle contract from sys-core', () => {
 
 test('every artifact state is accepted and nothing else', () => {
 	for (const state of ['NOT_CREATED', 'DRAFT', 'APPROVED', 'STALE']) {
-		assert.equal(parseLifecycle(reply({ structuredIntent: { state, identity: null } })).structuredIntent.state, state);
+		assert.equal(parseLifecycle(reply({ formalSpec: { state, identity: null } })).formalSpec.state, state);
 	}
-	assert.throws(() => parseLifecycle(reply({ structuredIntent: { state: 'VERIFIED', identity: null } })), /invalid lifecycle/);
+	assert.throws(() => parseLifecycle(reply({ formalSpec: { state: 'VERIFIED', identity: null } })), /invalid lifecycle/);
 	assert.throws(() => parseLifecycle(reply({ formalSpec: { state: 'approved', identity: null } })), /invalid lifecycle/);
 });
 

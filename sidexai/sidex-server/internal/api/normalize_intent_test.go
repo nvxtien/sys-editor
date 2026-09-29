@@ -18,7 +18,7 @@ func normalizeRequest(body string) *http.Request {
 	return req
 }
 
-func TestNormalizeIntentReturnsTheStructuredIntentAndSendsNoSourceBinding(t *testing.T) {
+func TestNormalizeIntentReturnsTheFormalSpecAndSendsNoSourceBinding(t *testing.T) {
 	var providerBody map[string]any
 	h, server := draftHandler(t, func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&providerBody)
@@ -30,15 +30,15 @@ func TestNormalizeIntentReturnsTheStructuredIntentAndSendsNoSourceBinding(t *tes
 	rr := httptest.NewRecorder()
 	// An "operation" in the request is a leftover from manual source binding and must be ignored:
 	// what code implements an intent is sys-platform's to recover, never the author's to declare.
-	h.NormalizeIntent(rr, normalizeRequest(`{"model":"openrouter/test-model","intent":"A booking needs a seat.","operation":"BookingService.createBooking"}`))
+	h.NormalizeIntent(rr, normalizeRequest(`{"model":"openrouter/test-model","intent":"An order needs an item.","operation":"OrderService.createOrder"}`))
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
 	}
 	user := providerBody["messages"].([]any)[1].(map[string]any)["content"].(string)
-	if strings.Contains(user, "BookingService.createBooking") {
+	if strings.Contains(user, "OrderService.createOrder") {
 		t.Fatalf("a source symbol reached the model: %q", user)
 	}
-	if user != "A booking needs a seat." {
+	if user != "An order needs an item." {
 		t.Fatalf("the model was sent more than the requirement: %q", user)
 	}
 }
@@ -72,20 +72,7 @@ func TestNormalizeIntentCarriesNoSourceOperationBinding(t *testing.T) {
 	}
 }
 
-// A data model states entities, fields and relationships. Putting its fields in `inputs` and its
-// relationships in `constraints` named them wrongly, and an operation of UNKNOWN read as a question
-// the user still had to answer. The shape a kind uses is part of the contract.
-func TestNormalizeIntentPromptStatesTheKindAwareShape(t *testing.T) {
-	for _, want := range []string{
-		`ENTITY = {"name": string, "fields": [FIELD]}`,
-		`FIELD = {"name": string, "type": string, "provenance":`,
-		`DATA_MODEL: entities, fields and their types. Uses entities (required)`,
-		`relationships is an ARRAY of FACT objects`,
-		`"operation": null`,
-	} {
-		if !strings.Contains(normalizeIntentSystemPrompt, want) {
-			t.Errorf("prompt is missing %q", want)
-		}
-	}
-}
+// The kind-aware shape this once pinned here is the platform's, and the platform pins it:
+// system-ontology's schema tests, and sys-core's `the_intent_context_carries_the_schema_itself`.
+// Two copies of a contract is how one of them goes stale unnoticed.
 
